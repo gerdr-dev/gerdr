@@ -243,3 +243,32 @@ func TestFloatDocksUnderBrowser(t *testing.T) {
 		t.Fatal("floated over a docked Browser pane")
 	}
 }
+
+// pane.fit: a docked Browser pane's page size is kept on the pane (auto removes it); on a floating one it is the box's.
+func TestPaneFit(t *testing.T) {
+	browserOf := func(raw string) node {
+		var l node
+		_ = json.Unmarshal([]byte(raw), &l)
+		for _, p := range leaves(asNode(tabsOf(nodes(l["workspaces"])[0])[0]["root"])) {
+			if p["id"] == "p2" {
+				return asNode(p["browser"])
+			}
+		}
+		return nil
+	}
+	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", "default", "pane.fit", LayoutParams{ID: "p2", Fit: "pc"}); err == nil {
+		t.Fatal("set a page size on a conversation pane")
+	}
+	browser := strings.Replace(opsLayout, `"id":"p2","sessionId":"B"`, `"id":"p2","browser":{"project":"default"}`, 1)
+	pc, _ := apply(t, browser, call("pane.fit", LayoutParams{ID: "p2", Fit: "pc"}))
+	if b := browserOf(pc); b["fit"] != "pc" || b["project"] != "default" {
+		t.Fatalf("fit not on the pane: %v", b)
+	}
+	auto, _ := apply(t, pc, call("pane.fit", LayoutParams{ID: "p2", Fit: "auto"}))
+	if b := browserOf(auto); b["fit"] != nil {
+		t.Fatalf("auto kept a size: %v", b)
+	}
+	if _, _, err := ApplyLayout(json.RawMessage(browser), opsSessions, "A", "default", "pane.fit", LayoutParams{ID: "p2", Fit: "tv"}); err == nil {
+		t.Fatal("took an unknown fit")
+	}
+}

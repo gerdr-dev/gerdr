@@ -1,6 +1,20 @@
 import { create } from "zustand";
 import { api, type BrowserTab } from "../api";
-import { activeTab, activeWs, allLeaves, leaves, locateSession, rid, setPane, spaceOf, split, updateTab, type Layout, type PaneLeaf } from "../layout";
+import {
+  activeTab,
+  activeWs,
+  allLeaves,
+  leaves,
+  locateSession,
+  rid,
+  setPane,
+  spaceOf,
+  split,
+  updateTab,
+  type FloatFit,
+  type Layout,
+  type PaneLeaf,
+} from "../layout";
 import { get, setLayout } from "../store";
 
 // ---- Browser panes: a page of the project's own browser beside the chat (components/browser/, docs/dev/BROWSER-PANE.md) ----
@@ -151,6 +165,16 @@ export function noteBrowserURL(paneId: string, url: string) {
     const p = leavesOf(l).find((x) => x.id === paneId);
     if (!p?.browser || p.browser.url === url) return l;
     return setPane(l, paneId, { browser: { ...p.browser, url } });
+  });
+}
+
+/** A Browser pane's page size on every device (its ⋯ menu); undefined = auto, the pane's own size. */
+export function setBrowserFit(paneId: string, fit: FloatFit | undefined) {
+  setLayout((l) => {
+    const p = leavesOf(l).find((x) => x.id === paneId);
+    if (!p?.browser || p.browser.fit === fit) return l;
+    const { fit: _, ...rest } = p.browser;
+    return setPane(l, paneId, { browser: fit ? { ...rest, fit } : rest });
   });
 }
 

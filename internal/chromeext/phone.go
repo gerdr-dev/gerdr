@@ -42,6 +42,9 @@ type Fit struct {
 	W, H   int
 	Mobile bool
 	Device string `json:"-"` // "", "phone", "tablet"
+	// Pin: the person picked this size for the page in its pane's menu (any device, docked or not), so it wins over a
+	// remote viewer's phone layout. A floating pane's size doesn't: at its size the page ran below a phone's pane
+	Pin bool `json:"-"`
 }
 
 func (t *Tab) phone() *phoneLayout {
@@ -168,7 +171,9 @@ func (t *Tab) applyPhone() {
 		size = s
 	}
 	var want Fit
-	if !p.desktop && size[0] > 0 {
+	if p.fit != nil && p.fit.Pin {
+		want = *p.fit
+	} else if !p.desktop && size[0] > 0 {
 		want = Fit{W: size[0], H: size[1], Mobile: true}
 	} else if p.fit != nil {
 		want = *p.fit

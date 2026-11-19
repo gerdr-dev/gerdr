@@ -54,7 +54,7 @@ type LayoutParams struct {
 	Lines        int     `json:"lines,omitempty"`    // pane.read: how many of the last lines
 	Text         string  `json:"text,omitempty"`     // pane.send: what to type
 	NoEnter      bool    `json:"no_enter,omitempty"` // pane.send: don't press Enter after it
-	Fit          string  `json:"fit,omitempty"`      // pane.float: the page's size, pc / pad / mobile (ui/src/lib/layout.ts FLOAT_FITS)
+	Fit          string  `json:"fit,omitempty"`      // pane.float / pane.fit: the page's size, pc / pad / mobile (ui/src/lib/layout.ts FLOAT_FITS); pane.fit also auto
 }
 
 type node = map[string]any
@@ -285,6 +285,31 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 			return nil, errors.New("fit is pc, pad or mobile")
 		}
 		return c.setFloat(t, str(pn, "id"), method == "pane.float", p.Fit)
+	case "pane.fit":
+		// A Browser pane's page size on every device (its ⋯ menu): auto follows the pane (a phone gets its own
+		// layout), the others lay the page out at that size. A floating pane's is its box's (pane.float --fit)
+		_, t, pn, err := c.pane(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		b := asNode(pn["browser"])
+		if b == nil {
+			return nil, errors.New("not a Browser pane")
+		}
+		switch p.Fit {
+		case "auto", "":
+			delete(b, "fit")
+		case "pc", "pad", "mobile":
+			if f := asNode(asNode(t["float"])[str(pn, "id")]); f != nil {
+				f["fit"] = p.Fit
+			} else {
+				b["fit"] = p.Fit
+			}
+		default:
+			return nil, errors.New("fit is auto, pc, pad or mobile")
+		}
+		c.changed = true
+		return node{"ok": true}, nil
 	case "pane.swap":
 		_, ta, a, err := c.pane(p.ID)
 		if err != nil {
@@ -1214,6 +1239,16 @@ func (c *layoutCall) layoutView(w, t node) node {
 		walk(asNode(n["b"]), b)
 	}
 	walk(asNode(t["root"]), rect{0, 0, 1, 1})
+	// a docked Browser pane's page size (pane.fit); unset = auto
+	for _, l := range leaves(asNode(t["root"])) {
+		if fit := str(asNode(l["browser"]), "fit"); fit != "" {
+			for _, pv := range panes {
+				if pv["pane_id"] == l["id"] {
+					pv["fit"] = fit
+				}
+			}
+		}
+	}
 	// A floating pane's rect is where it floats, not its (empty) place in the split
 	if f := asNode(t["float"]); f != nil {
 		for _, pv := range panes {

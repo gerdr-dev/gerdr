@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import type { FloatFit } from "@/lib/layout";
 import { isNative, nativeNewPathWindow } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,8 @@ function PageBrowser({ project, tab, onTab, extra }: { project: string; tab?: nu
     [],
   );
   const [url, setURL] = useState<string>();
+  // the page's size picked in the ⋯ menu: kept while the panel is open (a panel's browser has no layout entry)
+  const [size, setSize] = useState<FloatFit>();
   return (
     <BrowserScreen
       project={project}
@@ -62,6 +65,8 @@ function PageBrowser({ project, tab, onTab, extra }: { project: string; tab?: nu
       focused
       onShow={onTab}
       onURL={setURL}
+      size={size}
+      onSize={setSize}
       onFocus={() => {}}
       headClassName="h-10"
       extra={extra}

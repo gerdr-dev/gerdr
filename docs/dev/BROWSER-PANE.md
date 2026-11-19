@@ -205,6 +205,14 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   parked App page sat on "hasn't drawn anything yet"), so after 0.5 s without one a screenshot stands in
   (`View.stillFrame`); and one cast feeds every viewer of a page, so it runs at the widest viewer's width (`caster`
   `widest`): it was the last one to ask, and a phone got the floating pane's 960 px pictures, blurry.
+- **A page size picked for any pane** (its ⋯ menu, every device; `PaneLeaf.browser.fit`, `gerdr pane fit`): Auto (unset)
+  is the pane's own size, and on a phone the phone layout above, with the browser's own user agent (asked for: no
+  reload when a phone looks). pc / pad / mobile lay the page out at that size like a floating pane (same `FLOAT_FITS`,
+  same user agents), shown as the stream's pictures, the App's real page kept off (it can't be scaled). Asked for on
+  the phone, which had no way to get a site's desktop page. Unlike a floating box's size it is pinned (`Fit.Pin`): it
+  wins over a remote viewer's phone layout, since the person on the phone picked it. The layout is shared, so every
+  device shows the page at that size; a desktop draws it at most at its own size and within the box, a phone
+  width-fit (its keyboard shortens the box) with pinch zoom.
 - **A pane closed closes its page.** Left open, pages piled up out of sight (each a whole renderer; a video played on
   with no pane to stop it). On every layout save (layout.json's `OnSet`, server/browserpanes.go), whatever closed the
   pane: a page whose pane is gone and that no pane shows is closed, unless the agent session that opened it (`gerdr

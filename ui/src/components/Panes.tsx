@@ -55,6 +55,7 @@ import {
   splitFocused,
   toggleFloatPane,
   toggleZoom,
+  setBrowserFit,
 } from "@/lib/actions";
 import {
   dockedRoot,
@@ -699,6 +700,8 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         paneId={pane.id}
         focused={focused}
         fit={tab.float?.[pane.id] ? fitOf(tab.float[pane.id]) : undefined}
+        size={b.fit}
+        onSize={(f) => setBrowserFit(pane.id, f)}
         onFitDrawn={fitDrawn}
         viewOnly={viewOnly}
         headClassName={cn(headH, !focused && many && "opacity-70")}

@@ -354,6 +354,8 @@ gerdr pane swap <pane> --target-pane <pane>
 gerdr pane float <pane> [--fit pc|pad|mobile]                  # float a Browser pane over the rest of its tab (picture-in-picture): its page
                                                                # laid out at a fixed desktop / tablet / phone size, shown as its stream; --fit again to change
 gerdr pane dock <pane>                                         # put a floating pane back in its place
+gerdr pane fit <pane> auto|pc|pad|mobile                       # a Browser pane's page size on every device (auto: the pane's own;
+                                                               # pc / pad / mobile: laid out at that size, shown scaled to the pane)
 gerdr tab move <tab> --workspace lb [--position 1]             # a whole tab, splits and all
 gerdr tab move <tab> --tab <other-tab> --split right           # merge it into another tab
 gerdr workspace move <ws> --position 1

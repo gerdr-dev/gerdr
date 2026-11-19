@@ -296,6 +296,16 @@ func paneCmd() *cobra.Command {
 	float.Flags().StringVar(&fit, "fit", "", "the page's size while floating: pc, pad or mobile")
 	cmd.AddCommand(float)
 	cmd.AddCommand(&cobra.Command{
+		Use: "fit <pane> auto|pc|pad|mobile",
+		Short: "A Browser pane's page size, on every device that shows it (the pane's ⋯ menu). auto: the pane's own size " +
+			"(a phone gets its phone layout); pc 1280x800, pad 820x1180, mobile 390x844: the page laid out at that size and shown scaled " +
+			"to the pane, pad / mobile also as that device to sites (the page reloads). On a floating pane it sets the floating size",
+		Args: cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, a []string) error {
+			return layoutCall("pane.fit", server.LayoutParams{ID: a[0], Fit: a[1]})
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
 		Use:   "dock <pane>",
 		Short: "Put a floating pane back in its place in the split",
 		Args:  cobra.ExactArgs(1),

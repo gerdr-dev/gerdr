@@ -12,7 +12,8 @@ import { t } from "./i18n";
  * session: whose folder it is (it may not exist yet, and its records are looked up by the session).
  * browser: a page of the project's own browser (components/browser/, docs/dev/BROWSER-PANE.md); tab is the backend's
  * page number (gerdr browser -t), unset until a page is opened in it. project: whose browser. url: where it last was,
- * to open again after Gerdr restarted (pages don't outlive the backend).
+ * to open again after Gerdr restarted (pages don't outlive the backend). fit: the page's size picked in its ⋯ menu,
+ * on every device showing it (FLOAT_FITS; unset = auto, the pane's own size); a floating pane's is its box's instead.
  */
 export type PaneLeaf = {
   type: "pane";
@@ -24,7 +25,7 @@ export type PaneLeaf = {
   term?: { id: string; cwd: string };
   /** host: on another computer (docs/dev/MULTIHOST.md) */
   file?: { path: string; host?: string; folder?: boolean; session?: string };
-  browser?: { project: string; tab?: number; url?: string };
+  browser?: { project: string; tab?: number; url?: string; fit?: FloatFit };
 };
 export type PaneSplit = { type: "split"; id: string; dir: "row" | "col"; ratio: number; a: PaneNode; b: PaneNode };
 export type PaneNode = PaneLeaf | PaneSplit;

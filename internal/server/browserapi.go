@@ -191,6 +191,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			Mobile bool `json:"mobile"`
 			// device: "phone" / "tablet" also makes the page that device to sites (user agent, client hints)
 			Device string `json:"device"`
+			// pin: picked for the page (the pane's page size, not a floating box's): wins over a phone's own layout
+			Pin bool `json:"pin"`
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
@@ -198,7 +200,7 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		}
 		var f *chromeext.Fit
 		if in.Width > 0 && in.Height > 0 {
-			f = &chromeext.Fit{W: min(in.Width, 4000), H: min(in.Height, 4000), Mobile: in.Mobile}
+			f = &chromeext.Fit{W: min(in.Width, 4000), H: min(in.Height, 4000), Mobile: in.Mobile, Pin: in.Pin}
 			if in.Device == "phone" || in.Device == "tablet" {
 				f.Device = in.Device
 			}

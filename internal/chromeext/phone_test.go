@@ -3,6 +3,7 @@ package chromeext
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -184,5 +185,49 @@ func TestFitDevice(t *testing.T) {
 	all = find("")
 	if !strings.Contains(strings.Join(all, "\n"), `Emulation.setUserAgentOverride {"userAgent":""}`) || !strings.Contains(strings.Join(all, "\n"), "Page.reload") {
 		t.Fatalf("docked: %v", all)
+	}
+}
+
+// A size picked for the page in its pane's menu (Pin) wins over a phone's own layout: the person on the phone asked
+// for the desktop page.
+func TestPinnedFit(t *testing.T) {
+	tab := newTab(2000003, "https://example.com/")
+	tab.Native = true
+	var mu sync.Mutex
+	var sizes []string
+	tab.send = func(_ context.Context, method string, p json.RawMessage) (json.RawMessage, error) {
+		if method == "Emulation.setDeviceMetricsOverride" {
+			var m struct{ Width, Height int }
+			json.Unmarshal(p, &m)
+			mu.Lock()
+			sizes = append(sizes, fmt.Sprintf("%dx%d", m.Width, m.Height))
+			mu.Unlock()
+		}
+		return json.RawMessage(`{}`), nil
+	}
+	last := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(sizes) == 0 {
+			return ""
+		}
+		return sizes[len(sizes)-1]
+	}
+	v := &View{t: tab}
+	tab.remoteSize(v, 390, 760)
+	if got := last(); got != "390x760" {
+		t.Fatalf("auto on a phone: %s", got)
+	}
+	tab.setFit(&Fit{W: 1280, H: 800, Pin: true})
+	if got := last(); got != "1280x800" {
+		t.Fatalf("pinned pc with a phone looking: %s", got)
+	}
+	tab.remoteSize(v, 390, 700) // the phone's keyboard: the pinned size stays
+	if got := last(); got != "1280x800" {
+		t.Fatalf("phone resized: %s", got)
+	}
+	tab.setFit(nil) // back to auto: the phone's layout
+	if got := last(); got != "390x700" {
+		t.Fatalf("auto again: %s", got)
 	}
 }

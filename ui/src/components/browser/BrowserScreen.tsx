@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, MoreHorizontal, Plus, RotateCw, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, Maximize, Monitor, MoreHorizontal, Plus, RotateCw, Smartphone, Tablet, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
@@ -60,6 +60,12 @@ type Props = {
   /** the pane floats over the others (Panes.tsx FloatPane): the page laid out at this fixed size (layout.FLOAT_FITS),
    *  not live there, a still scaled down from it every second (asked for) */
   fit?: FloatFit;
+  /** The page's size picked in the ⋯ menu, on every device showing the pane (PaneLeaf.browser.fit; unset = auto, the
+   *  pane's own size, a phone's own layout on a phone). Laid out at that size and shown scaled into the box as pictures,
+   *  like a floating pane (asked for: the desktop page on a phone, a phone's page on the desktop). onSize: pick one;
+   *  without it the menu doesn't offer sizes. Not while floating: the box's own fit is the size then */
+  size?: FloatFit;
+  onSize?: (f?: FloatFit) => void;
   /** a picture at fit's shape was just drawn (Panes.tsx FloatPane holds the box's old shape until then) */
   onFitDrawn?: (fit: FloatFit) => void;
   /** the page only shows: no clicks, keys or scrolling reach it (a floating pane shrunk small, Panes.tsx FloatViewOnly) */
@@ -112,6 +118,8 @@ export function BrowserScreen({
   onURL,
   onFocus,
   fit,
+  size,
+  onSize,
   onFitDrawn,
   viewOnly,
   headClassName,
@@ -165,26 +173,31 @@ export function BrowserScreen({
   fitRef.current = fit;
   const fitDrawn = useRef(onFitDrawn);
   fitDrawn.current = onFitDrawn;
-  const nativeView = canNative && owner === paneId && !floating;
+  // the size the page is laid out at: the floating box's, else the one picked for the pane; none = the pane's own
+  const fixed = fit ?? size;
+  const nativeView = canNative && owner === paneId && !fixed;
   // Floating: the page laid out at the picked size, whatever the box's (shrunk to it, sites showed their phone
   // layout). Cleared here only when it stops floating while shown, or the pane moves to another page; not when the
   // pane unmounts (its tab switched away and dropped): cleared then, the page went back to its docked shape and the
   // first still after switching back was that shape, a part of the box for a second (user report). Docked again, the
   // backend drops it anyway once the App shows the page (chromeext phone.go). Queued: a clear then a set land in order
+  // A size picked for the pane is pinned: it wins over a phone's own layout (chromeext phone.go), a floating box's doesn't
   const fitOn = useRef<number | null>(null);
   useEffect(() => {
     if (fitOn.current != null && fitOn.current !== tab) {
       queueFit(fitOn.current, null);
       fitOn.current = null;
     }
-    if (fit && tab && live) {
-      queueFit(tab, FLOAT_FITS[fit]);
+    if (fixed && tab && live) {
+      queueFit(tab, { ...FLOAT_FITS[fixed], pin: !fit });
       fitOn.current = tab;
     } else if (fitOn.current != null) {
-      queueFit(fitOn.current, null);
+      // back to the pane's own size: told again once the size is cleared (a headless window measured its frame
+      // against the fixed size meanwhile)
+      void queueFit(fitOn.current, null).then(() => sendWS({ t: "cfg", ...want() }));
       fitOn.current = null;
     }
-  }, [fit, tab, live]);
+  }, [fit, size, tab, live]);
   // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
   // retry. The App's real page would cover it, so it's kept out of sight meanwhile (read by the placing below)
   const failedRef = useRef(false);
@@ -574,11 +587,13 @@ export function BrowserScreen({
   }, [nativeView, tab]);
 
   // The page follows the pane's size (debounced: a drag of the split sends one resize at the end)
+  const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
     const el = boxRef.current;
     if (!el || !live) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ro = new ResizeObserver(() => {
+      setBoxSize({ w: el.clientWidth, h: el.clientHeight });
       clearTimeout(timer);
       timer = setTimeout(() => sendWS({ t: "cfg", ...want() }), 150);
     });
@@ -856,6 +871,15 @@ export function BrowserScreen({
   const shown = editing ? addr : (typed ?? page?.url ?? cur?.url ?? (gone ? (lastURL ?? "") : ""));
   const title = page?.title || (cur ? hostOf(cur.url) : "");
   const busy = opening || (live && (navigating || !!page?.loading));
+  // A picked size (docked): the picture no wider than the page (a phone's page on a desktop pane stays its size, not
+  // blown up), centred; on a desktop also no taller than the box, so the whole page shows. A phone keeps width-fit
+  // (the keyboard shortens the box, see the canvas) and pinch-zooms
+  let picStyle: React.CSSProperties | undefined;
+  if (size && !floating && boxSize.w > 0) {
+    const f = FLOAT_FITS[size];
+    const w = Math.min(boxSize.w, f.w, coarse ? Infinity : (boxSize.h * f.w) / f.h);
+    picStyle = { width: w, left: Math.max(0, (boxSize.w - w) / 2) };
+  }
 
   return (
     <>
@@ -967,6 +991,26 @@ export function BrowserScreen({
                 <XCircle /> {t("browser.closePage")}
               </DropdownMenuItem>
             )}
+            {/* The page's size, on every device showing this pane (a floating pane's is in its own items below) */}
+            {onSize && !floating && (
+              <>
+                <DropdownMenuSeparator />
+                {([undefined, "pc", "pad", "mobile"] as (FloatFit | undefined)[]).map((f) => {
+                  const Icon = f ? SIZE_ICONS[f] : Maximize;
+                  return (
+                    <DropdownMenuItem key={f ?? "auto"} onClick={() => onSize(f)}>
+                      <Icon /> {f ? t(`panes.fit.${f}`) : t("browser.fitAuto")}
+                      {f && (
+                        <span className="ml-auto text-[11px] text-muted-foreground">
+                          {FLOAT_FITS[f].w}×{FLOAT_FITS[f].h}
+                        </span>
+                      )}
+                      {f === size ? <Check className={cn(!f && "ml-auto")} /> : <span className="size-4" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </>
+            )}
             {paneItems && <DropdownMenuSeparator />}
             {paneItems}
           </DropdownMenuContent>
@@ -987,7 +1031,7 @@ export function BrowserScreen({
               // Width-fit and top-aligned, not "contain": a phone's keyboard makes the pane shorter, and fitting the
               // whole picture into that shrank it (and the page under the finger) mid-tap
               className={cn("absolute top-0 left-0 h-auto w-full touch-none", !hasPic && "invisible", viewOnly && "pointer-events-none")}
-              style={zoom.s !== 1 ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.s})`, transformOrigin: "0 0" } : undefined}
+              style={{ ...picStyle, ...(zoom.s !== 1 ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.s})`, transformOrigin: "0 0" } : {}) }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -1077,10 +1121,13 @@ function cssHex(color: string): string | null {
   return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
 }
 
+const SIZE_ICONS: Record<FloatFit, typeof Monitor> = { pc: Monitor, pad: Tablet, mobile: Smartphone };
+
 // One request at a time per page, so a clear and the next set (another size picked) land in that order
 const fitQueue = new Map<number, Promise<unknown>>();
-function queueFit(tab: number, f: { w: number; h: number; mobile: boolean; device?: string } | null) {
+function queueFit(tab: number, f: { w: number; h: number; mobile: boolean; device?: string; pin?: boolean } | null) {
   const next = (fitQueue.get(tab) ?? Promise.resolve()).then(() => api.browserFit(tab, f).catch(() => {}));
   fitQueue.set(tab, next);
   void next.finally(() => fitQueue.get(tab) === next && fitQueue.delete(tab));
+  return next;
 }
