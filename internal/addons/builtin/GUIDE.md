@@ -57,6 +57,11 @@ All fields optional; a store only lists folders that have one.
 | `pending` | `true`: the UI half may read and answer what agents wait on the person for (`g.sessions.pending` / `answer`); see [Answering for the person](#answering-for-the-person). |
 | `i18n` | The texts above in other languages; see [Languages](#languages). |
 
+Gerdr reads `addon.json` leniently: a misspelled field is dropped, an unknown setting type becomes a text box, an i18n
+entry for a key that isn't there is never used, and none of it is an error. After every change to it run
+`gerdr addon check <id>` (or `gerdr addon check ./folder`): it lists each such mistake with where it is, and exits 1
+while there are any.
+
 ## Languages
 
 Gerdr's interface is in Chinese or English (Settings → General → Language; it follows the system by default). Write the
@@ -544,6 +549,9 @@ add-on serves every GitLab and never needs to know who waits.
 
 ## Debugging
 
+- `gerdr addon check <id>`: what's wrong in its `addon.json` (unknown fields, wrong types and defaults, a select
+  without options, i18n for keys that don't exist, missing icon / screenshot files). `gerdr addon list` shows the same
+  under `problems`.
 - Settings → Add-ons → Installed: compile errors, what `setup` or a hook threw, a service's status and last error.
 - The page's devtools console: errors are logged as `[gerdr addon <id>]`. In a browser, its devtools; in the
   desktop App, 开发者工具 (Cmd+Alt+I).
@@ -563,6 +571,7 @@ Before you push an add-on:
 - A `README.md` in its folder: what it does, a screenshot, its settings. It shows under 说明 in the store; relative
   image paths work, and its leading `# Title` is dropped (the row already shows the name).
 - Nothing written into the folder at runtime, no secrets.
+- `gerdr addon check <store folder>` passes: it checks every add-on in the checkout.
 
 Updates: when the store's copy of a folder differs from what was installed, the add-on shows 更新. If the person edited
 the installed copy, Gerdr asks before overwriting it.

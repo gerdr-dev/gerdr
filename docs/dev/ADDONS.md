@@ -60,6 +60,13 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   Add-ons; values live in addons-state.json (`settings[id][key]`, only keys changed from the default), not in the
   browser's localStorage like `g.storage`, so every window and the phone agree. `g.settings.get` reads the latest
   `/api/addons` build each call, so a change applies without reloading the add-on (its hash doesn't include values).
+- addon.json is read leniently (unknown fields dropped, an unknown setting type drawn as a text box), so a typo fails
+  silently. `gerdr addon check` (internal/addons/check.go) is the strict reading, for authors — mostly agents, who
+  run it after each edit: unknown fields found by walking the JSON against the Manifest structs' json tags (nothing
+  to keep in step), plus per-type rules (select has options, default fits the type, i18n keys exist). list / info /
+  install / update carry the same `problems`. Asked for (2026-11) instead of a JSON Schema or a terser format: the
+  user's point was that AI writes these files, so length doesn't matter, an unchecked format does. Loading stays
+  lenient: an older Gerdr meeting a newer field must keep working.
 - A select's options can be worked out at run time: `optionsFrom: {events, reply}` lists the event sources whose
   switched-on add-ons declare a matching kind in `emits` (internal/addons/state.go `resolve`, applied in both the
   listing and `SettingsOf`, so the form, `g.settings.get` and a service's settings line agree). `required` = no empty

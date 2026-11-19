@@ -91,6 +91,17 @@ type addonView struct {
 	Log         string `json:"log,omitempty"`     // the service's stderr
 	Settings    int    `json:"settings,omitempty"`
 	Error       string `json:"error,omitempty"`
+	// Problems: what's wrong in its addon.json (gerdr addon check), so whoever reads list / info sees it
+	Problems []addons.Problem `json:"problems,omitempty"`
+}
+
+// problemsOf: dir's addon.json problems, the read error as one problem.
+func problemsOf(dir string) []addons.Problem {
+	ps, err := addons.CheckDir(dir)
+	if err != nil {
+		return []addons.Problem{{Problem: err.Error()}}
+	}
+	return ps
 }
 
 // storeIndex: id → the add-on each store offers, from the cache.
@@ -156,7 +167,8 @@ func liveAddons() map[string]struct {
 
 func viewAddon(a *addons.Addon, idx map[string]map[string]addons.StoreAddon) addonView {
 	v := addonView{ID: a.ID, Name: a.Name, Version: a.Version, Description: a.Description, Enabled: !a.Disabled, Dir: a.Dir,
-		Modified: a.Modified, Update: updateOf(a, idx), HasService: a.HasService, Settings: len(a.Settings), Error: a.Error}
+		Modified: a.Modified, Update: updateOf(a, idx), HasService: a.HasService, Settings: len(a.Settings), Error: a.Error,
+		Problems: problemsOf(a.Dir)}
 	if a.Source != nil {
 		v.Store = a.Source.Store
 	}
@@ -234,6 +246,9 @@ func install(m *addons.Manager, id, store string, force bool) (map[string]any, e
 	if len(a.Settings) > 0 {
 		out["settings"] = viewSettings(a)
 	}
+	if ps := problemsOf(a.Dir); len(ps) > 0 {
+		out["problems"] = ps // the store copy's own mistakes: tell its author (or fix a copy of your own)
+	}
 	return out, nil
 }
 
@@ -298,8 +313,10 @@ repositories (a URL, cloned with this computer's git and its credentials) or loc
   gerdr addon config cache-clock warnMinutes=3
   gerdr addon disable cache-clock
   gerdr addon rm cache-clock
+  gerdr addon check my-addon           # what's wrong in its addon.json; also a folder, or a store's checkout
 
-Writing your own add-on: read <GERDR_DIR>/addons/GUIDE.md.`,
+Writing your own add-on: read <GERDR_DIR>/addons/GUIDE.md, and run gerdr addon check after each change to
+addon.json. list / info / install / update show the same problems under "problems".`,
 	}
 
 	cmd.AddCommand(&cobra.Command{
@@ -426,7 +443,11 @@ settings are kept across updates.`,
 					skipped = append(skipped, map[string]any{"id": ad.ID, "why": err.Error()})
 					continue
 				}
-				updated = append(updated, map[string]any{"id": ad.ID, "from": from, "to": idx[ad.ID][ad.Source.Store].Version})
+				u := map[string]any{"id": ad.ID, "from": from, "to": idx[ad.ID][ad.Source.Store].Version}
+				if ps := problemsOf(ad.Dir); len(ps) > 0 {
+					u["problems"] = ps
+				}
+				updated = append(updated, u)
 			}
 			for _, id := range a {
 				if _, err := findAddon(m, id); err != nil {
@@ -546,6 +567,7 @@ Running add-ons read the new values right away.
 	conf.Flags().StringArrayVar(&unset, "unset", nil, "a key to put back to its default (repeatable)")
 	cmd.AddCommand(conf)
 
+	cmd.AddCommand(checkCmd())
 	cmd.AddCommand(storeCmd())
 	return cmd
 }
@@ -675,4 +697,67 @@ func storeCmd() *cobra.Command {
 		},
 	})
 	return cmd
+}
+
+func checkCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "check [id | folder]…",
+		Short: "Check addon.json files: unknown fields, wrong types and defaults, i18n for keys that don't exist",
+		Long: `Check addon.json files and print what's wrong, with the path to each spot. Exits 1 when anything is.
+
+Gerdr loads an addon.json leniently: a misspelled field ("option", "defualt") is dropped, an unknown setting type is
+drawn as a text box, a select without options is an empty dropdown, an i18n entry for a key that isn't there is never
+used. Nothing fails; the setting just doesn't show, or shows wrong. This says so. Run it after every change to an
+addon.json you write.
+
+  gerdr addon check                    # every installed add-on
+  gerdr addon check my-addon           # an installed one, by id
+  gerdr addon check ./voice            # a folder with an addon.json
+  gerdr addon check ~/src/my-store     # every add-on in a store's checkout (folders one or two levels down)`,
+		RunE: func(_ *cobra.Command, args []string) error {
+			m := openAddons()
+			var dirs []string
+			if len(args) == 0 {
+				for _, a := range m.Describe() {
+					dirs = append(dirs, a.Dir)
+				}
+			}
+			for _, arg := range args {
+				if st, err := os.Stat(arg); err == nil && st.IsDir() && (strings.ContainsAny(arg, `/\`) || arg == "." || arg == "..") {
+					found := addons.CheckFolders(arg)
+					if len(found) == 0 {
+						return fmt.Errorf("no %s in %s or the folders one or two levels down", addons.ManifestFile, arg)
+					}
+					dirs = append(dirs, found...)
+					continue
+				}
+				a, err := findAddon(m, arg)
+				if err != nil {
+					return fmt.Errorf("%w; or give a folder (./%s)", err, arg)
+				}
+				dirs = append(dirs, a.Dir)
+			}
+			type result struct {
+				Dir      string           `json:"dir"`
+				OK       bool             `json:"ok"`
+				Problems []addons.Problem `json:"problems,omitempty"`
+			}
+			out, bad := []result{}, 0
+			for _, d := range dirs {
+				if abs, err := filepath.Abs(d); err == nil {
+					d = abs
+				}
+				ps := problemsOf(d)
+				if len(ps) > 0 {
+					bad++
+				}
+				out = append(out, result{Dir: d, OK: len(ps) == 0, Problems: ps})
+			}
+			printJSON(map[string]any{"ok": bad == 0, "checked": out})
+			if bad > 0 {
+				return fmt.Errorf("%d of %d add-ons have problems in %s", bad, len(dirs), addons.ManifestFile)
+			}
+			return nil
+		},
+	}
 }

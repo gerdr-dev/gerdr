@@ -92,7 +92,10 @@ type SettingSpec struct {
 	Key         string `json:"key"`
 	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
-	Type        string `json:"type"` // number / string / boolean / select / color ("#rrggbb") / secret (a string the form masks) / link / action
+	// Type: one of SettingTypes (check.go) — number / string / text (several lines) / boolean / select / color
+	// ("#rrggbb") / icon / secret (a string the form masks) / link / action. A new type goes into SettingTypes too, or
+	// `gerdr addon check` calls it unknown.
+	Type string `json:"type"`
 	// link: not a value but a button that opens URL (a page of the add-on's: its control panel, a dashboard). When the
 	// address is only known at run time (a port the service picked), the service reports it in its status line's
 	// "links" by this setting's key, which wins over URL. Label is the button's text ("Open" when empty).

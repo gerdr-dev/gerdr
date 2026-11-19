@@ -23,6 +23,7 @@
 //                g.slot("settings") from these: fields shown only once a provider is picked, a line of help, and "pick
 //                one or type your own" = a select with a "custom" option plus a string drawn only while it's picked
 //                (<Field> for both; the voice add-on's Azure voice). Don't wait for gerdr to grow a new type.
+//                A misspelled field or type loads without a word: run `gerdr addon check <id>` after editing addon.json.
 //   index.ts     the UI half (or what "main" names): export default defineAddon({...}). It may import other files of
 //                the folder; images, sounds and other files it ships are reached with g.asset("icon.png").
 //
@@ -536,6 +537,8 @@ declare global {
     Fragment: any;
     useState<T>(initial: T | (() => T)): [T, (v: T | ((prev: T) => T)) => void];
     useEffect(effect: () => void | (() => void), deps?: readonly unknown[]): void;
+    /** Like useEffect, but before the browser paints: for measuring the page and placing something by it. */
+    useLayoutEffect(effect: () => void | (() => void), deps?: readonly unknown[]): void;
     useMemo<T>(f: () => T, deps: readonly unknown[]): T;
     useCallback<T extends (...args: any[]) => any>(f: T, deps: readonly unknown[]): T;
     useRef<T>(initial: T): { current: T };

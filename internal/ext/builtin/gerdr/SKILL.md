@@ -481,9 +481,11 @@ gerdr addon store add owner/repo        # or an absolute folder; store rm / stor
 - A `conflict` from install / update means the folder didn't come from a store or the user edited it. Ask before
   `--force`: it throws their changes away.
 - Secret settings print as `<hidden>`; set one only with a value the user gives you.
-- Done when `gerdr addon list` shows it with the expected `enabled` and no `error`. A non-empty `error` is a broken
-  addon.json or code that doesn't build; a service add-on's stderr is in its `log`.
-- Writing a new add-on: read `~/.gerdr/addons/GUIDE.md` first.
+- Done when `gerdr addon list` shows it with the expected `enabled`, no `error` and no `problems`. A non-empty `error`
+  is an addon.json that doesn't parse or code that doesn't build; a service add-on's stderr is in its `log`.
+- Writing or changing an add-on: read `~/.gerdr/addons/GUIDE.md` first, and run `gerdr addon check <id>` (or
+  `./folder`) after every change to its addon.json. Gerdr loads a misspelled field or setting type without a word (the
+  setting just doesn't show, or shows wrong); check names each mistake and exits 1 until there are none.
 
 ## Panels
 
@@ -584,7 +586,8 @@ gerdr artifacts link <new url> --supersedes <id>  # replaces an outdated record;
 Two browsers, the same actions on both:
 
 - **The project's browser** (default): a Chrome Gerdr runs in the background with a profile per project, so a site
-  signed in to once stays signed in for that project. Pages you open show in the **Browser pane** beside your chat:
+  signed in to once stays signed in for that project. Pages you open show in the **Browser pane** beside your chat
+  (when you work for a panel, as its board, in the browser view next to your conversation there, if the panel has one):
   the user watches you work and can click and type there themselves. A site that needs a sign-in or a captcha: open
   it, then ask the user to do that part in the Browser pane, and carry on when they say so. Also the way to show the
   user a page (a dev server you started, a report): open it, it appears next to the conversation.
