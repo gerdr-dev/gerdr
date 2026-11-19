@@ -367,3 +367,24 @@ func TestI18n(t *testing.T) {
 		t.Fatalf("store addon = %+v", s)
 	}
 }
+
+func TestOffers(t *testing.T) {
+	for _, c := range []struct {
+		x, y string
+		want int // sign
+	}{{"0.10.1", "0.9", 1}, {"v1.2.0", "1.2", 0}, {"0.3.3", "0.4.2", -1}, {"1.0.0-beta", "1.0.0", 0}} {
+		if got := CompareVersions(c.x, c.y); (got > 0) != (c.want > 0) || (got < 0) != (c.want < 0) {
+			t.Errorf("CompareVersions(%q, %q) = %d", c.x, c.y, got)
+		}
+	}
+	in := &Addon{Version: "0.4.2", Source: &Installed{Hash: "old"}}
+	if Offers(in, "0.3.3", "new") {
+		t.Error("an older store copy was offered over a newer folder")
+	}
+	if !Offers(in, "0.4.2", "new") || !Offers(in, "0.5.0", "new") || !Offers(in, "", "new") {
+		t.Error("a same / newer / unversioned store copy wasn't offered")
+	}
+	if Offers(in, "0.5.0", "old") || Offers(&Addon{Version: "0.1"}, "0.5.0", "new") {
+		t.Error("offered what was already installed, or an add-on not from a store")
+	}
+}

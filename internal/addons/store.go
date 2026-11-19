@@ -31,6 +31,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -586,4 +587,41 @@ func localReadmes(dir string) map[string]string {
 		out[m[1]] = string(b)
 	}
 	return out
+}
+
+// Offers reports whether the store's copy (storeVersion, storeHash) is worth offering as an update to an installed
+// add-on: it differs from what was installed from the store, and it isn't an older version than the folder holds now.
+// Someone working on an add-on copies a newer one in by hand, and "update" would then be a downgrade.
+// The UI's newer() in AddonSettings.tsx follows the same rule.
+func Offers(in *Addon, storeVersion, storeHash string) bool {
+	if in.Source == nil || in.Source.Hash == storeHash {
+		return false
+	}
+	return storeVersion == "" || in.Version == "" || CompareVersions(storeVersion, in.Version) >= 0
+}
+
+// CompareVersions compares dotted versions ("0.10.1" > "0.9"; a leading v is dropped, a part that isn't a number is 0).
+func CompareVersions(x, y string) int {
+	parts := func(v string) []int {
+		var out []int
+		for _, p := range strings.FieldsFunc(strings.TrimPrefix(v, "v"), func(r rune) bool { return r == '.' || r == '-' || r == '+' }) {
+			n, _ := strconv.Atoi(p)
+			out = append(out, n)
+		}
+		return out
+	}
+	a, b := parts(x), parts(y)
+	for i := 0; i < max(len(a), len(b)); i++ {
+		var p, q int
+		if i < len(a) {
+			p = a[i]
+		}
+		if i < len(b) {
+			q = b[i]
+		}
+		if p != q {
+			return p - q
+		}
+	}
+	return 0
 }

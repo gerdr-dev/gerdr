@@ -586,7 +586,7 @@ func storeCmd() *cobra.Command {
 					if o.Installed == "" {
 						o.Installed = "yes"
 					}
-					o.Update = in.Source != nil && in.Source.Store == s.Source && in.Source.Hash != a.Hash
+					o.Update = in.Source != nil && in.Source.Store == s.Source && addons.Offers(in, a.Version, a.Hash)
 				}
 				v.Addons = append(v.Addons, o)
 			}

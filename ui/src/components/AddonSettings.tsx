@@ -134,9 +134,29 @@ function Installed({ stores }: { stores: AddonStore[] }) {
   );
 }
 
-/** The store's copy when it differs from what was installed from it. */
+/** The store's copy when it differs from what was installed from it, unless it's an older version than the folder
+ * holds now: someone working on an add-on copies a newer one in by hand, and "update" would then be a downgrade.
+ * Same rule as addons.Offers (the CLI's "update" flag). */
 function newer(a: AddonStatus, s?: StoreAddon) {
-  return s && a.source && s.hash !== a.source.hash ? s : undefined;
+  if (!s || !a.source || s.hash === a.source.hash) return undefined;
+  if (s.version && a.version && cmpVersion(s.version, a.version) < 0) return undefined;
+  return s;
+}
+
+/** Compares dotted versions ("0.10.1" > "0.9"); a part that isn't a number counts as 0. */
+function cmpVersion(x: string, y: string) {
+  const p = (v: string) =>
+    v
+      .replace(/^v/, "")
+      .split(/[.+-]/)
+      .map((n) => parseInt(n, 10) || 0);
+  const a = p(x),
+    b = p(y);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
 }
 
 function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
