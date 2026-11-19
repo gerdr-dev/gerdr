@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gerdr-dev/gerdr/chatlog"
 )
@@ -135,11 +136,11 @@ func TestForkBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	src := Record{ID: "old", Agent: "claude", Cwd: "/tmp", Title: forkTitle("修登录页"), CustomTitle: true}
+	src := Record{ID: "old", Agent: "claude", Cwd: "/tmp", Title: forkTitle("修登录页")}
 	s := newSession(h, Record{ID: "new", Agent: "claude", Cwd: "/tmp"})
 	h.register(s)
 	h.adoptHistoryNote(s, src, []*Event{msg("u1", "登录页打不开"), agentText("路由表是空的。")}, "forked", true)
-	if s.rec.Title != "Fork: 修登录页" || !s.rec.CustomTitle || s.rec.Handoff == nil || !s.rec.Handoff.Fork {
+	if s.rec.Title != "Fork: 修登录页" || s.rec.CustomTitle || s.rec.Handoff == nil || !s.rec.Handoff.Fork {
 		t.Fatalf("record: %+v", s.rec)
 	}
 	p := s.pendingHandoff()
@@ -154,5 +155,51 @@ func TestForkBlock(t *testing.T) {
 	}
 	if strings.Contains(txt, "another coding agent") {
 		t.Errorf("same agent called another:\n%s", txt)
+	}
+}
+
+// A fork's auto title counts only what was said since the fork, starting at its first message, keeps the "Fork: "
+// prefix, and stops being a fork's after a /clear.
+func TestForkAutoTitle(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The model's answers, ready in Complete's cache: no agent is run
+	answer := func(prompts []string, title string) {
+		c := &completeCall{done: make(chan struct{}), text: title, at: time.Now()}
+		close(c.done)
+		completeMu.Lock()
+		completeCache["claude\x00"+buildTitlePrompt(prompts)] = c
+		completeMu.Unlock()
+	}
+	src := Record{ID: "old", Agent: "claude", AgentSessionID: "a0", Cwd: "/tmp", Title: forkTitle("修登录页")}
+	s := newSession(h, Record{ID: "new", Agent: "claude", AgentSessionID: "a1", Cwd: "/tmp"})
+	h.register(s)
+	old := []*Event{msg("u1", "登录页打不开"), msg("u2", "改路由"), msg("u3", "提交吧")}
+	h.adoptHistoryNote(s, src, old, "forked", true)
+	if p, fork := s.contextPrompts(); len(p) != 0 || !fork {
+		t.Fatalf("right after the fork: %q fork=%v", p, fork)
+	}
+	s.emit(msg("f1", "换成 Redis 试试"))
+	answer([]string{"换成 Redis 试试"}, "改用 Redis")
+	s.autoTitle()
+	if s.rec.Title != "Fork: 改用 Redis" {
+		t.Fatalf("first message: %+v", s.rec)
+	}
+	s.emit(msg("f2", "加上过期时间"))
+	s.emit(msg("f3", "写个测试"))
+	answer([]string{"换成 Redis 试试", "加上过期时间", "写个测试"}, "Redis 缓存与过期")
+	s.autoTitle()
+	if s.rec.Title != "Fork: Redis 缓存与过期" {
+		t.Fatalf("third message: %+v", s.rec)
+	}
+	s.SetAutoTitle("Redis 缓存")
+	if s.rec.Title != "Fork: Redis 缓存" {
+		t.Fatalf("plugin title %q", s.rec.Title)
+	}
+	s.emit(&Event{Kind: EvNotice, Level: "clear"})
+	if s.inFork() {
+		t.Fatal("still a fork after /clear")
 	}
 }

@@ -100,8 +100,11 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 			if g, ok := u.SessionInfoUpdate.Meta["gerdr"].(map[string]any); ok {
 				renamed, _ = g["renamed"].(bool)
 			}
+			// An agent's own title for a fork comes from its first message, which starts with the whole copied
+			// conversation (handoff.go): it names the original, not the fork. Gerdr names forks (title.go).
+			fork := !renamed && s.inFork()
 			s.mu.Lock()
-			custom := s.rec.CustomTitle
+			custom := s.rec.CustomTitle || fork
 			if renamed {
 				s.rec.Title, s.rec.CustomTitle = *t, true
 				custom = false

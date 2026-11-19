@@ -90,7 +90,7 @@ gerdr session new --agent codex --title reviewer \
 - `--title` 起个短名字，之后可以 `gerdr session send reviewer …`；这个名字固定：不会被自动起的标题换掉，/clear 之后也还在。
   已经开着的会话改名用 `gerdr session rename <会话> <标题>`（加 `--fixed` 一样固定；标题给 `""` 交回自动起名）；
 - Fork a conversation (the session menu's "Fork…"): `gerdr session fork <session> [--agent <id>] [--prompt … --wait]`
-  starts a new session carrying that conversation so far, named "Fork: <its title>", with the same agent or another;
+  starts a new session carrying that conversation so far, named "Fork: <its title>" (auto-renamed "Fork: <its own topic>" once it's talked to), with the same agent or another;
   the original is left as it is. The history goes to the new agent as text with the first message (like switching
   agents), so it works for any agent. Not while the source is running. Use it when the user wants to try another
   direction, or another agent's take, without losing the conversation they have;

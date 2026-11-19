@@ -48,21 +48,44 @@ const titlePrompt = "The <msgs> below are what the user said in a conversation w
 // Prompts：当前这段上下文（最后一次 /clear 之后）用户说过的话，按顺序。斜杠命令（/model、/clear……）不算 ——
 // 它们不是在说要做什么。
 func (s *Session) Prompts() []string {
+	p, _ := s.contextPrompts()
+	return p
+}
+
+// contextPrompts is Prompts, and whether this context is a fork's (CreateOptions.Fork): then it starts at the fork,
+// not at the copied conversation above it, which is the original's and would name the fork after it at once.
+func (s *Session) contextPrompts() (out []string, fork bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
-	var out []string
-	for _, e := range s.events {
+	at := -1 // the fork's notice: the latest handoff notice, a fork of a fork carrying the earlier one along
+	if s.rec.Handoff != nil && s.rec.Handoff.Fork {
+		for i := len(s.events) - 1; i >= 0; i-- {
+			if e := s.events[i]; e.Kind == EvNotice && e.Level == handoffLevel {
+				at = i
+				break
+			}
+		}
+	}
+	for i, e := range s.events {
 		switch {
 		case e.Kind == EvNotice && e.Level == "clear":
-			out = out[:0]
+			out, fork = out[:0], false
+		case i == at:
+			out, fork = out[:0], true
 		case e.Kind == EvUser:
 			if t := stripImageTokens(contentText(e.Content)); t != "" && commandIn(t) == "" {
 				out = append(out, t)
 			}
 		}
 	}
-	return out
+	return out, fork
+}
+
+// inFork: this session's current context is a fork's (contextPrompts).
+func (s *Session) inFork() bool {
+	_, fork := s.contextPrompts()
+	return fork
 }
 
 // imageLabel: a text block that is only "[Image #n]". The composer sends one in front of each inline image so the agent
@@ -117,6 +140,9 @@ func (s *Session) SetAutoTitle(title string) {
 	if title == "" {
 		return
 	}
+	if s.inFork() && !strings.HasPrefix(title, forkPrefix) {
+		title = forkTitle(title) // still a fork, whoever names it
+	}
 	s.mu.Lock()
 	if s.rec.CustomTitle || s.rec.Title == title && s.rec.PluginTitleFor == s.rec.AgentSessionID {
 		s.mu.Unlock()
@@ -131,13 +157,14 @@ func (s *Session) SetAutoTitle(title string) {
 // autoTitle: called when a message is sent and when a turn ends. Names the session once it reaches an autoTitleStages
 // stage that hasn't been named yet (TitleKey).
 func (s *Session) autoTitle() {
-	prompts := s.Prompts()
+	prompts, fork := s.contextPrompts()
 	stage := 0
 	for i, n := range autoTitleStages {
 		if len(prompts) >= n {
 			stage = i + 1
 		}
 	}
+	// A fork is named like any conversation, from what was said since the fork (contextPrompts) and still as a fork
 	if stage == 0 {
 		return
 	}
@@ -162,6 +189,9 @@ func (s *Session) autoTitle() {
 	t = cleanTitle(t)
 	if t == "" {
 		return
+	}
+	if fork {
+		t = forkTitle(t)
 	}
 	s.mu.Lock()
 	// 起名期间人改了名 / 插件起了 / 又 clear 了：作废

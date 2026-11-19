@@ -52,12 +52,15 @@ type Handoff struct {
 	Fork bool `json:"fork,omitempty"`
 }
 
-// forkTitle names a fork after its source, so the list shows which conversation it branched off.
-func forkTitle(src string) string {
-	if src == "" {
-		return "Fork"
+// forkPrefix starts every fork's title, so the list shows it's a fork both before and after it is renamed by topic.
+const forkPrefix = "Fork: "
+
+// forkTitle names a fork after its source (or, later, its own topic: title.go).
+func forkTitle(t string) string {
+	if t == "" {
+		return strings.TrimSuffix(forkPrefix, ": ")
 	}
-	return "Fork: " + src
+	return forkPrefix + t
 }
 
 func isHandoffBlock(raw json.RawMessage) bool {
@@ -124,14 +127,14 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	// The conversation's title comes along (adoptHistoryNote), unless one is given: then that is the session's fixed
 	// name (Record.TitleFixed), as when started fresh. A panel restarting its conversation names it again each time,
 	// and dropping that let an auto title from an earlier piece of work ride along from one restart to the next.
-	// A fork is named "Fork: <the original's title>", as if the user had renamed it: auto-naming leaves it alone, and
-	// a fixed name stays fixed.
+	// A fork is named "Fork: <the original's title>" until it has gone its own way for a while: auto-naming then names
+	// it from what was said since the fork (title.go). A fixed name stays fixed.
 	given := o.Title
 	o.ContinueFrom, o.Import, o.Title, o.Fork = "", "", "", false
 	if given != "" {
 		srcRec.Title, srcRec.CustomTitle, srcRec.TitleFixed, srcRec.TitleKey, srcRec.PluginTitleFor = given, true, true, "", ""
 	} else if fork {
-		srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor = forkTitle(srcRec.Title), true, "", ""
+		srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor = forkTitle(srcRec.Title), srcRec.TitleFixed, "", ""
 	}
 	s, err := h.Create(ctx, o)
 	if err != nil {
