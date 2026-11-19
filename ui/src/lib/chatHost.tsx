@@ -286,6 +286,8 @@ const localCommands = (session: ChatSession) =>
       description: t("chatHost.resume"),
       run: (paneId: string) => set({ dialog: { kind: "resume", sessionId: session.id, paneId } }),
     },
+    // The session menu's "Fork…" (ForkSessionDialog); ours, not the agent's own fork, so it works for every agent
+    { name: "fork", description: t("chatHost.fork"), run: () => set({ dialog: { kind: "forkSession", sessionId: session.id } }) },
     { name: "usage", description: t("chatHost.usage"), run: () => setUsageFor(session.id) },
     {
       name: "replay",

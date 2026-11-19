@@ -25,7 +25,7 @@ to before it, and the message (text and images) returns to the input box — sen
 restored.
 
 To try another direction without losing the conversation, fork it: the session menu (⋯ in the pane header) → *Fork…*,
-then pick the agent — the same one or another. A new conversation named "Fork: <title>" opens beside it with the
+(or type `/fork`), then pick the agent — the same one or another. A new conversation named "Fork: <title>" opens beside it with the
 conversation so far, which the agent receives with your first message there; the original stays as it was. Agents can
 do the same with `gerdr session fork`.
 

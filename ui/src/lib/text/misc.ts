@@ -110,6 +110,7 @@ export const zh = {
 
   // chatHost
   "chatHost.resume": "换到这个目录下之前的一段对话",
+  "chatHost.fork": "带着现在的对话另开一个，可以换 agent",
   "chatHost.usage": "看账号的用量额度（不发给 Agent）",
   "chatHost.replay": "把上一轮回复重新逐字放一遍（只在界面里，不发给 Agent；试滚动用）",
   "chatHost.replayRunning": "Agent 在跑，跑完再重放",
@@ -290,6 +291,7 @@ export const en: Record<keyof typeof zh, string> = {
 
   // chatHost
   "chatHost.resume": "Switch to an earlier conversation in this folder",
+  "chatHost.fork": "Fork this conversation into a new one, optionally with another agent",
   "chatHost.usage": "Show your account's usage limits (not sent to the agent)",
   "chatHost.replay": "Replay the last reply word by word (UI only, not sent to the agent; for testing scrolling)",
   "chatHost.replayRunning": "The agent is running; replay once it's done",
