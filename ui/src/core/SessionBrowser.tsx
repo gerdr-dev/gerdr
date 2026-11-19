@@ -3,6 +3,8 @@ import { BrowserScreen } from "@/components/browser/BrowserScreen";
 import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import { Globe, MessageSquare } from "lucide-react";
 
 // A conversation's browser on a panel's page (docs/dev/BROWSER-PANE.md). In Code, a page an agent opens comes up as a
 // Browser pane beside the agent's pane (lib/actions/browser.ts browserOpened); a panel's agent is in no pane, so its
@@ -73,6 +75,53 @@ export function SessionBrowser({ session, className }: { session: string; classN
           Body={Body}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Gerdr's own panel chats (the agent column on the right, the conversation a page brings up: WorkView.tsx) with their
+ * browser: once the agent has a page open, a 对话 / 浏览器 switch above the chat, turned to 浏览器 when it opens one.
+ * The chat stays mounted under the browser (its scroll, its draft).
+ */
+export function ChatWithBrowser({ session, children }: { session: string | undefined; children: ReactNode }) {
+  const { pages, opened } = useSessionBrowser(session);
+  const [view, setView] = useState<"chat" | "browser">("chat");
+  const seen = useRef(opened);
+  useEffect(() => {
+    if (opened === seen.current) return;
+    seen.current = opened;
+    if (opened) setView("browser");
+  }, [opened]);
+  useEffect(() => setView("chat"), [session]);
+  const has = !!session && pages.length > 0;
+  const browser = has && view === "browser";
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {has && (
+        <div className="flex shrink-0 justify-center border-b px-2 py-1">
+          <div className="flex rounded-md bg-muted p-0.5 text-[12px]">
+            {(["chat", "browser"] as const).map((v) => {
+              const Icon = v === "chat" ? MessageSquare : Globe;
+              return (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-sm px-2 py-0.5 text-muted-foreground",
+                    (v === "browser") === browser && "bg-background text-foreground shadow-xs",
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {t(v === "chat" ? "browser.chat" : "browser.tab")}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div className={cn("min-h-0 flex-1", browser && "hidden")}>{children}</div>
+      {browser && <SessionBrowser session={session!} className="flex-1" />}
     </div>
   );
 }

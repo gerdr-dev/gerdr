@@ -10,6 +10,7 @@ import { useClearBadge } from "@/lib/badges";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
+import { ChatWithBrowser } from "@/core/SessionBrowser";
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
 import { PixelLoader } from "@/components/chat/PixelLoader";
@@ -519,7 +520,9 @@ function WorkPeek() {
         )}
         <div className="min-h-0 flex-1" data-composer-scope>
           {session ? (
-            <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused focus={focus} />
+            <ChatWithBrowser session={id}>
+              <ChatView key={id} session={session} paneId={`work-peek:${id}`} focused focus={focus} />
+            </ChatWithBrowser>
           ) : (
             <div className="flex h-full items-center justify-center text-[12px] text-muted-foreground">
               {ready ? t("workView.peekGone") : <PixelLoader className="size-4" />}
@@ -561,7 +564,13 @@ function WorkChat() {
   useEffect(() => {
     if (ready && !session) ensureWorkSession().catch((e) => setErr(e.message ?? String(e)));
   }, [ready, session]);
-  if (session) return <ChatView key={session.id} session={session} paneId={`${WORK_PANE}:${project}`} focused={false} />;
+  // its pages (gerdr browser open) beside it: in no pane, nothing else shows them (core/SessionBrowser.tsx)
+  if (session)
+    return (
+      <ChatWithBrowser session={session.id}>
+        <ChatView key={session.id} session={session} paneId={`${WORK_PANE}:${project}`} focused={false} />
+      </ChatWithBrowser>
+    );
   return (
     <div className="flex h-full items-center justify-center gap-2 p-6 text-center text-[12px] text-muted-foreground">
       {err ? (
