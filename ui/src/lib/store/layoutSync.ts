@@ -1,5 +1,5 @@
 import { api, clientId } from "../api";
-import { currentSpace, validLayout, viewOf, withView, type Layout, type View } from "../layout";
+import { dockFloatsUnderBrowsers, currentSpace, validLayout, viewOf, withView, type Layout, type View } from "../layout";
 import { enterSpaceMode, get, set } from "../store";
 
 // ---- 布局：本地先改，300ms 后写回服务端（别的窗口 / 设备跟着变）----
@@ -24,7 +24,8 @@ export function loadView(): View | null {
 
 export function setLayout(fn: (l: Layout) => Layout) {
   const prev = get().layout;
-  const next = fn(prev);
+  // no floating Browser pane under a docked one's page, whatever made the change (layout.dockFloatsUnderBrowsers)
+  const next = dockFloatsUnderBrowsers(fn(prev));
   if (next === prev) return;
   // Same set() as the layout: listeners (nav history) never see the new project in the old project's mode
   const space = currentSpace(next);

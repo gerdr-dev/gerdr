@@ -83,6 +83,7 @@ func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, space, met
 	if err != nil || !c.changed {
 		return nil, result, err
 	}
+	c.dockFloatsUnderBrowsers() // whatever the method did (layout.ts dockFloatsUnderBrowsers)
 	c.normalize()
 	out, err = json.Marshal(c.l)
 	return out, result, err
@@ -349,6 +350,11 @@ func (c *layoutCall) setFloat(t node, id string, on bool, fit string) (any, erro
 	if pn := c.leafIn(t, id); pn == nil || pn["browser"] == nil {
 		return nil, errors.New("only a Browser pane can float for now")
 	}
+	for _, l := range leaves(asNode(t["root"])) {
+		if str(l, "id") != id && l["browser"] != nil && f[str(l, "id")] == nil {
+			return nil, errors.New("another Browser pane is docked in that tab: its page would cover a floating one")
+		}
+	}
 	if docked < 2 {
 		return nil, errors.New("a pane can only float over another pane in its tab, and that would leave none docked")
 	}
@@ -356,8 +362,13 @@ func (c *layoutCall) setFloat(t node, id string, on bool, fit string) (any, erro
 		f = node{}
 		t["float"] = f
 	}
-	n := float64(len(f)) // each next one a little up-left, as the UI does
-	f[id] = node{"x": 0.58 - n*0.03, "y": 0.53 - n*0.04, "w": 0.4, "h": 0.45}
+	// the top corner on the side it was docked, each next one a little lower, as the UI does (layout.ts toggleFloat)
+	n := float64(len(f))
+	x := 0.0
+	if cx, ok := centerX(asNode(t["root"]), id, 0, 1); !ok || cx >= 0.5 {
+		x = 1
+	}
+	f[id] = node{"x": x, "y": n * 0.04, "w": 0.4, "h": 0.45}
 	if fit != "" {
 		asNode(f[id])["fit"] = fit
 	}
@@ -503,6 +514,38 @@ func (c *layoutCall) moveTab(p LayoutParams) (any, error) {
 	return node{"tab": c.tabView(w, t, tabNumber(w, t))}, nil
 }
 
+// dockFloatsUnderBrowsers docks a floating Browser pane in a tab that has a docked one, as the UI's setLayout does
+// (ui/src/lib/layout.ts dockFloatsUnderBrowsers, the reasons there): the docked one's page covered it.
+func (c *layoutCall) dockFloatsUnderBrowsers() {
+	for _, w := range nodes(c.l["workspaces"]) {
+		for _, t := range tabsOf(w) {
+			f := asNode(t["float"])
+			if len(f) == 0 {
+				continue
+			}
+			ls := leaves(asNode(t["root"]))
+			docked := false
+			for _, p := range ls {
+				if p["browser"] != nil && f[str(p, "id")] == nil {
+					docked = true
+				}
+			}
+			if !docked {
+				continue
+			}
+			for _, p := range ls {
+				if p["browser"] != nil && f[str(p, "id")] != nil {
+					delete(f, str(p, "id"))
+					c.changed = true
+				}
+			}
+			if len(f) == 0 {
+				delete(t, "float")
+			}
+		}
+	}
+}
+
 // destination: the tab a split-in goes to, and the pane it splits (nil = beside the whole tab).
 func (c *layoutCall) destination(p LayoutParams) (w, t, target node, err error) {
 	if p.TargetPane != "" {
@@ -573,6 +616,25 @@ func (c *layoutCall) detach(t, pn node) {
 	t["root"] = removeLeaf(asNode(t["root"]), str(pn, "id"))
 	dropZoom(t)
 	c.changed = true
+}
+
+// centerX: where pane id's middle is across the tab (0 left, 1 right), its subtree n spanning x0 to x0+w.
+func centerX(n node, id string, x0, w float64) (float64, bool) {
+	if str(n, "type") != "split" {
+		return x0 + w/2, str(n, "id") == id
+	}
+	r, _ := n["ratio"].(float64)
+	if r <= 0 || r >= 1 {
+		r = 0.5
+	}
+	wa, xb, wb := w, x0, w
+	if str(n, "dir") == "row" {
+		wa, xb, wb = w*r, x0+w*r, w*(1-r)
+	}
+	if c, ok := centerX(asNode(n["a"]), id, x0, wa); ok {
+		return c, true
+	}
+	return centerX(asNode(n["b"]), id, xb, wb)
 }
 
 // ---- tree helpers ----

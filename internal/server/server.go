@@ -56,6 +56,7 @@ type Server struct {
 	Config  *config.Store
 	Secrets *config.Secrets // API keys moved out of config.json (config/secrets.go)
 	Layout  *config.Store
+	bpanes  browserPanes // Browser panes and their pages, to close a page with its pane (browserpanes.go)
 	// Unread: sessions that finished unseen, shared by every device (unread.go). nil = off (tests).
 	Unread *config.Store
 	Addons *addons.Manager

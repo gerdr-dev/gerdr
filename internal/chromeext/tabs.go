@@ -273,7 +273,11 @@ func (b *Bridge) Tabs() []Tab {
 	b.mu.Lock()
 	out := make([]Tab, 0, len(b.tabs))
 	for _, t := range b.tabs {
-		out = append(out, *t)
+		c := *t
+		// where it is now, not where it was opened: the Browser pane's page list named a page by the site it had
+		// left long ago (user report: "www.baidu.com" for a page at talizen.com)
+		c.URL = t.CurrentURL()
+		out = append(out, c)
 	}
 	b.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].Opened < out[j].Opened })

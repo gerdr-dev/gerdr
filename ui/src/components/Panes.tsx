@@ -255,6 +255,13 @@ export function TabView({ tab }: { tab: Tab }) {
   );
 }
 
+/** A floating Browser pane's picture reached its fit's shape (BrowserScreen onFitDrawn): FloatPane switches its box then. */
+const FloatFitDrawn = createContext<((fit: FloatFit) => void) | undefined>(undefined);
+/** A floating Browser pane shrunk below FLOAT_OPERABLE of its fit's largest size: its page is only looked at. */
+const FloatViewOnly = createContext(false);
+// Below this share of the fit's largest size the page is too small to hit what you mean, so it only shows (asked for)
+const FLOAT_OPERABLE = 0.6;
+
 /** The title bar's drag of a floating pane: it moves the pane inside its tab instead of moving it elsewhere (usePaneDrag). */
 const FloatMove = createContext<((e: React.PointerEvent<HTMLElement>) => void) | undefined>(undefined);
 
@@ -282,21 +289,43 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
   // was unmounted), this effect runs before the parent's ref is set, area.current was null, nothing was measured and
   // the box never showed again (user report)
   const meter = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  // top: the docked panes' title bars along the tab's top, which the box stays below (it covered them, user report)
+  const [size, setSize] = useState<{ w: number; h: number; top: number } | null>(null);
   useLayoutEffect(() => {
     const el = meter.current;
     if (!el) return;
-    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      // the first pane in the tab's DOM is a docked one (floating ones come after the split)
+      const head = el.parentElement?.querySelector("[data-pane-id]")?.firstElementChild?.getBoundingClientRect();
+      const top = head && head.top - r.top < 8 && head.height < 80 ? Math.max(0, Math.round(head.bottom - r.top)) : 0;
+      setSize({ w: el.clientWidth, h: el.clientHeight, top });
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const fit = FLOAT_FITS[fitOf(fb)];
+  // Another size picked: the box keeps the old one's shape until the page's first picture at the new one is drawn
+  // (or a moment has passed), then both change together; switched at once, the old picture showed in the new box
+  // for a few frames (user report)
+  const cur = fitOf(fb);
+  const [drawn, setDrawn] = useState(cur);
+  useEffect(() => {
+    if (drawn === cur) return;
+    const id = setTimeout(() => setDrawn(cur), 1500);
+    return () => clearTimeout(id);
+  }, [cur, drawn]);
+  const onFitDrawn = (f: FloatFit) => f === cur && setDrawn(f);
+  const fit = FLOAT_FITS[cur];
   const ratio = fit.w / fit.h;
   const [pwMin, pwDef, pwMax] = fit.pw;
   const span = { min: pwMin + FLOAT_CHROME_W, max: pwMax + FLOAT_CHROME_W };
-  const geom = size && floatGeom(fb.x * size.w, fb.y * size.h, (fb.pw ?? pwDef) + FLOAT_CHROME_W, ratio, size, span);
+  const fresh = size && floatGeom(fb.x * size.w, fb.y * size.h - size.top, (fb.pw ?? pwDef) + FLOAT_CHROME_W, ratio, { w: size.w, h: size.h - size.top }, span);
+  if (fresh && size) fresh.top += size.top;
+  const lastGeom = useRef(fresh);
+  const geom = drawn === cur || !lastGeom.current ? fresh : lastGeom.current;
+  if (drawn === cur) lastGeom.current = fresh;
   // One gesture: pointer moves turn into box changes, at most one layout update a frame (as the seams do)
   const gesture = (e: React.PointerEvent, cursor: string, next: (dx: number, dy: number) => FloatBox) => {
     const el = area.current;
@@ -352,7 +381,7 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
         bottom = geom.top + geom.h;
       // the room on the side that moves
       const roomW = g.l ? right : size.w - geom.left;
-      const roomH = g.t ? bottom : size.h - geom.top;
+      const roomH = g.t ? bottom - size.top : size.h - geom.top;
       const next = floatGeom(0, 0, geom.w + dw, ratio, { w: roomW, h: roomH }, span);
       const left = g.l ? right - next.w : geom.left;
       const top = g.t ? bottom - next.h : geom.top;
@@ -370,7 +399,11 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
       >
         <div className="h-full w-full rounded-md bg-background shadow-2xl">
           <FloatMove.Provider value={onMove}>
-            <PaneView pane={pane} tab={tab} framed />
+            <FloatFitDrawn.Provider value={onFitDrawn}>
+              <FloatViewOnly.Provider value={(geom.w - FLOAT_CHROME_W) / pwMax < FLOAT_OPERABLE}>
+                <PaneView pane={pane} tab={tab} framed />
+              </FloatViewOnly.Provider>
+            </FloatFitDrawn.Provider>
           </FloatMove.Provider>
         </div>
         {EDGES.map(({ e: g, cls }, i) => (
@@ -637,6 +670,8 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
   const headH = usePaneHeadHeight(framed);
+  const fitDrawn = useContext(FloatFitDrawn);
+  const viewOnly = useContext(FloatViewOnly);
   const drag = usePaneDrag(pane.id, { label: t("browser.empty") });
   return (
     <div
@@ -645,6 +680,8 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         "flex h-full min-h-0 flex-col",
         framed && "overflow-hidden rounded-md border",
         framed && (focused ? "border-brand" : "border-border"),
+        // floating too small to use: the page only shows (FloatViewOnly), and the border says so
+        viewOnly && "border-dashed",
         drag.dragging && "opacity-40",
       )}
       onMouseDown={() => !focused && focusPane(pane.id)}
@@ -656,6 +693,8 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         paneId={pane.id}
         focused={focused}
         fit={tab.float?.[pane.id] ? fitOf(tab.float[pane.id]) : undefined}
+        onFitDrawn={fitDrawn}
+        viewOnly={viewOnly}
         headClassName={cn(headH, !focused && many && "opacity-70")}
         onHeadPointerDown={drag.onPointerDown}
         extra={
@@ -699,20 +738,26 @@ function FloatItem({ pane, tab }: { pane: PaneLeaf; tab: Tab; count?: Count }) {
  * A pane's own items go above it (the Browser pane's pages).
  */
 function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab; zoomed?: boolean; count?: Count }) {
+  // A floating pane isn't in the split: splitting it or opening a tab from it means nothing there (asked to drop them)
+  const floating = !!tab.float?.[pane.id];
   return (
     <>
-      <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("right"))}>
-        <Columns2 /> {t("panes.splitRight")}
-        <ActionKeys action="splitRight" />
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("down"))}>
-        <Rows2 /> {t("panes.splitDown")}
-        <ActionKeys action="splitDown" />
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => runAction("newTab")}>
-        <Plus /> {t("panes.newTab")}
-        <ActionKeys action="newTab" />
-      </DropdownMenuItem>
+      {!floating && (
+        <>
+          <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("right"))}>
+            <Columns2 /> {t("panes.splitRight")}
+            <ActionKeys action="splitRight" />
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => (focusPane(pane.id), splitFocused("down"))}>
+            <Rows2 /> {t("panes.splitDown")}
+            <ActionKeys action="splitDown" />
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => runAction("newTab")}>
+            <Plus /> {t("panes.newTab")}
+            <ActionKeys action="newTab" />
+          </DropdownMenuItem>
+        </>
+      )}
       <FloatItem pane={pane} tab={tab} count={count} />
       <FitItems pane={pane} tab={tab} />
       {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,8 +18,10 @@ import (
 //
 // A floating Browser pane (picture-in-picture) shows stills of the page shrunk into a small box. Laid out at that
 // box's size, sites switched to their phone layout, which isn't what the person floated it for, so the pane picks a
-// fixed size instead (Fit: a desktop, a tablet or a phone) and the stills are scaled down from it. That wins over a
-// remote viewer's phone layout, and ends when the App's pane shows the page again (docked) or the pane says so.
+// fixed size instead (Fit: a desktop, a tablet or a phone) and its pictures are scaled down from it. A remote viewer's
+// phone layout wins over it while one looks: at the fit's size the page was taller than the phone's pane (its keyboard
+// up), and the bottom of the page couldn't be reached (user report). It ends when the App's pane shows the page
+// again (docked) or the pane says so.
 //
 // The shell says when its pane shows a page (the "shown" event, desktop/core/views.go). Headless pages don't need
 // this: their window is resized to the viewer (Tab.resize).
@@ -26,14 +30,18 @@ type phoneLayout struct {
 	mu      sync.Mutex
 	desktop bool // the App's pane shows the page now
 	viewers map[*View][2]int
-	fit     *Fit // a floating pane's fixed size
-	on      Fit  // the override set now; zero = none
+	fit     *Fit   // a floating pane's fixed size
+	engine  string // the browser's Chrome version (engineVersion)
+	on      Fit    // the override set now; zero = none
 }
 
 // Fit is a page's laid-out size (CSS px) and whether it is laid out as a mobile device (sites' mobile layout, touch).
+// Device "phone" / "tablet" also makes the page that device to the sites (fitUA): the size alone left a site that
+// tells devices apart by the user agent sending its desktop page (asked for).
 type Fit struct {
 	W, H   int
 	Mobile bool
+	Device string `json:"-"` // "", "phone", "tablet"
 }
 
 func (t *Tab) phone() *phoneLayout {
@@ -58,24 +66,100 @@ func (t *Tab) desktopShown(on bool) {
 	p := t.phone()
 	p.mu.Lock()
 	p.desktop = on
+	was := deviceOf(p.fit)
 	if on {
-		p.fit = nil // docked again: the page takes the pane's size
+		p.fit = nil // docked again: the page takes the pane's size, and is the browser it is again
 	}
 	p.mu.Unlock()
 	t.applyPhone()
+	if on {
+		t.applyDevice(was, "")
+	}
 }
 
 // setFit: a floating pane's fixed size for the page; nil = none.
 func (t *Tab) setFit(f *Fit) {
 	p := t.phone()
 	p.mu.Lock()
+	was := deviceOf(p.fit)
 	p.fit = f
 	p.mu.Unlock()
 	t.applyPhone()
+	t.applyDevice(was, deviceOf(f))
 }
 
-// applyPhone sets or clears the override to match: a floating pane's Fit when it has one; else on while a remote
-// viewer is there and the desktop isn't showing the page, at the newest viewer's size.
+func deviceOf(f *Fit) string {
+	if f == nil {
+		return ""
+	}
+	return f.Device
+}
+
+// applyDevice: the page's user agent (and its client hints) for device, then a reload when that changed, as the sites
+// that pick a page by it decide on the request (a phone picked showed the same desktop page until reloaded).
+func (t *Tab) applyDevice(was, device string) {
+	if was == device {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ua := map[string]any{"userAgent": ""} // "" = the browser's own again
+	if device != "" {
+		ua = fitUA(device, t.engineVersion(ctx))
+	}
+	params, _ := json.Marshal(ua)
+	t.send(ctx, "Emulation.setUserAgentOverride", params)
+	t.send(ctx, "Page.reload", nil)
+}
+
+// engineVersion: the browser's Chrome version ("131.0.6778.85"), read once from the page before any override, for a
+// device's user agent to name the engine it really is.
+func (t *Tab) engineVersion(ctx context.Context) string {
+	p := t.phone()
+	p.mu.Lock()
+	v := p.engine
+	p.mu.Unlock()
+	if v != "" {
+		return v
+	}
+	v = "131.0.0.0"
+	if raw, err := t.eval(ctx, "navigator.userAgent"); err == nil {
+		var ua string
+		if json.Unmarshal(raw, &ua) == nil {
+			if m := chromeVersion.FindStringSubmatch(ua); m != nil {
+				v = m[1]
+			}
+		}
+	}
+	p.mu.Lock()
+	p.engine = v
+	p.mu.Unlock()
+	return v
+}
+
+var chromeVersion = regexp.MustCompile(`Chrome/([\d.]+)`)
+
+// fitUA: Chrome on an Android phone or tablet (the engine it is, so what sites detect matches what they get): the
+// user agent, its platform and the client hints sites read as sec-ch-ua-mobile / -platform.
+func fitUA(device, version string) map[string]any {
+	major := strings.SplitN(version, ".", 2)[0]
+	model, mobile, tail := "Pixel 8", true, " Mobile Safari/537.36"
+	if device == "tablet" {
+		model, mobile, tail = "SM-X710", false, " Safari/537.36"
+	}
+	brands := []map[string]string{{"brand": "Chromium", "version": major}, {"brand": "Google Chrome", "version": major}, {"brand": "Not?A_Brand", "version": "99"}}
+	return map[string]any{
+		"userAgent": "Mozilla/5.0 (Linux; Android 14; " + model + ") AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + version + tail,
+		"platform":  "Linux armv8l",
+		"userAgentMetadata": map[string]any{
+			"brands": brands, "fullVersion": version, "platform": "Android", "platformVersion": "14.0.0",
+			"architecture": "", "model": model, "mobile": mobile,
+		},
+	}
+}
+
+// applyPhone sets or clears the override to match: a phone layout while a remote viewer is there and the desktop
+// isn't showing the page, at the newest viewer's size; else a floating pane's Fit when it has one.
 func (t *Tab) applyPhone() {
 	p := t.phone()
 	p.mu.Lock()
@@ -84,10 +168,10 @@ func (t *Tab) applyPhone() {
 		size = s
 	}
 	var want Fit
-	if p.fit != nil {
+	if !p.desktop && size[0] > 0 {
+		want = Fit{W: size[0], H: size[1], Mobile: true}
+	} else if p.fit != nil {
 		want = *p.fit
-	} else if !p.desktop && size[0] > 0 {
-		want = Fit{size[0], size[1], true}
 	}
 	was := p.on
 	p.on = want

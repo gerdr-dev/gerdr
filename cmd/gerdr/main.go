@@ -491,6 +491,9 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		UI: ui, ESM: esm, Remote: rm, Awake: keeper,
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
+	// A Browser pane closed closes its page (server/browserpanes.go): seen on every layout save
+	layout.OnSet = func(b json.RawMessage) { wr.SaveLayouts(b); srv.LayoutSaved(b) }
+	srv.LayoutSaved(layout.Get())
 	wr.Inbox = srv  // ctx.inbox (server/inbox.go)
 	wr.Badges = srv // ctx.badge (server/badge.go)
 	// Other computers this one drives (docs/dev/MULTIHOST.md). A broken peers.json only turns that off.

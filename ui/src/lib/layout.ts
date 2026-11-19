@@ -46,10 +46,12 @@ export type FloatFit = "pc" | "pad" | "mobile";
 // pw: the range the shown page's width keeps to, [smallest, default, largest] in CSS px. Free, a phone box kept the
 // width it had as a desktop one and its height ran the tab's whole height (user report); smaller than this the
 // stills can't be read, larger it isn't a corner view any more
-export const FLOAT_FITS: Record<FloatFit, { w: number; h: number; mobile: boolean; pw: [number, number, number] }> = {
+// device: the page is also that device to sites (user agent, client hints; chromeext phone.go fitUA), reloaded when it
+// changes: the size alone left sites that pick their page by the user agent sending the desktop one (asked for)
+export const FLOAT_FITS: Record<FloatFit, { w: number; h: number; mobile: boolean; device?: string; pw: [number, number, number] }> = {
   pc: { w: 1280, h: 800, mobile: false, pw: [320, 480, 720] },
-  pad: { w: 820, h: 1180, mobile: true, pw: [240, 320, 460] },
-  mobile: { w: 390, h: 844, mobile: true, pw: [170, 230, 300] },
+  pad: { w: 820, h: 1180, mobile: true, device: "tablet", pw: [240, 320, 460] },
+  mobile: { w: 390, h: 844, mobile: true, device: "phone", pw: [170, 230, 300] },
 };
 export const fitOf = (b: FloatBox): FloatFit => (b.fit && b.fit in FLOAT_FITS ? b.fit : "pc");
 export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string; float?: Record<string, FloatBox> };
@@ -241,7 +243,13 @@ export function dockedRoot(tab: Tab): PaneNode | null {
  */
 export function floatable(tab: Tab, paneId: string): boolean {
   const d = dockedRoot(tab);
-  return !!d && d.type === "split" && leaves(d).some((p) => p.id === paneId && !!p.browser);
+  return (
+    !!d &&
+    d.type === "split" &&
+    leaves(d).some((p) => p.id === paneId && !!p.browser) &&
+    // not over another docked Browser pane: its page would cover this one (dockFloatsUnderBrowsers)
+    !leaves(d).some((p) => p.id !== paneId && !!p.browser)
+  );
 }
 
 const clampBox = (b: FloatBox): FloatBox => {
@@ -257,8 +265,13 @@ export function toggleFloat(tab: Tab, paneId: string): Tab {
     return { ...tab, float: Object.keys(rest).length ? rest : undefined, focus: paneId };
   }
   if (!floatable(tab, paneId)) return tab;
-  const n = Object.keys(tab.float ?? {}).length; // each next one a little up-left, so they don't stack exactly
-  const box = clampBox({ w: 0.4, h: 0.45, x: 0.58 - n * 0.03, y: 0.53 - n * 0.04 });
+  // In the top corner on the side the pane was docked (asked for: one on the right floated to the bottom). x = 1 is
+  // the right edge: FloatPane pulls the box in by its real width (from its fit), which clampBox doesn't know. Each
+  // next one a little lower, so they don't stack exactly
+  const n = Object.keys(tab.float ?? {}).length;
+  const r = rects(tab.root).get(paneId);
+  const right = !r || r.x + r.w / 2 >= 0.5;
+  const box = { ...clampBox({ w: 0.4, h: 0.45, x: 0, y: n * 0.04 }), x: right ? 1 : 0 };
   return { ...tab, float: { ...tab.float, [paneId]: box }, focus: paneId, zoom: tab.zoom === paneId ? undefined : tab.zoom };
 }
 
@@ -273,6 +286,28 @@ export function setFloatFit(tab: Tab, paneId: string, fit: FloatFit): Tab {
 export function setFloatBox(tab: Tab, paneId: string, box: FloatBox): Tab {
   if (!tab.float?.[paneId]) return tab;
   return { ...tab, float: { ...tab.float, [paneId]: clampBox(box) } };
+}
+
+/**
+ * No floating Browser pane in a tab with a docked one: the docked one's page (the App's, a window drawn over the UI)
+ * covered the floating box. A floating pane there is docked back, whatever put a docked Browser pane in its tab (a
+ * split, the new-session screen's button, a drag, an agent's layout call): kept on every layout change in one place
+ * (setLayout here, ApplyLayout on the server), not at each way in (asked for). Several docked Browser panes in a tab
+ * are fine, as are several floating ones (a floating one shows pictures, drawn by us); floatable won't float one over
+ * a docked one.
+ */
+export function dockFloatsUnderBrowsers(l: Layout): Layout {
+  let out = l;
+  for (const w of l.workspaces)
+    for (const t of w.tabs) {
+      const f = t.float;
+      if (!f) continue;
+      const ls = leaves(t.root);
+      if (!ls.some((p) => p.browser && !f[p.id])) continue;
+      const rest = Object.fromEntries(Object.entries(f).filter(([id]) => !ls.find((p) => p.id === id)?.browser));
+      out = updateTab(out, t.id, (x) => ({ ...x, float: Object.keys(rest).length ? rest : undefined }));
+    }
+  return out;
 }
 
 export function findLeaf(n: PaneNode, id: string): PaneLeaf | undefined {

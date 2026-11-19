@@ -84,6 +84,7 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 				return
 			}
 			id = tab
+			s.notePageOpener(id, in.Caller.Session)
 			// the UI puts the Browser pane beside the agent that opened it (ui/src/lib/actions/browser.ts)
 			s.Hub.Broadcast("browser_open", map[string]any{"tab": id, "project": project, "session": in.Caller.Session})
 		}
@@ -158,23 +159,7 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			return
 		}
 		tab, _ := strconv.Atoi(r.URL.Query().Get("tab"))
-		args := map[string]any{"format": "jpeg", "quality": 85}
-		// w: the picture's width in pixels, scaled down from the page's (a floating pane's small box: a full-size
-		// still every second was megabytes to decode for a few hundred pixels). The clip is the visible viewport,
-		// in the document's coordinates (where it is scrolled to)
-		if want, _ := strconv.Atoi(r.URL.Query().Get("w")); want > 0 {
-			var lm struct {
-				V struct {
-					PageX, PageY, ClientWidth, ClientHeight float64
-				} `json:"cssVisualViewport"`
-			}
-			if res, err := b.Act(r.Context(), tab, "cdp", chromeext.ActArgs{Method: "Page.getLayoutMetrics"}); err == nil &&
-				json.Unmarshal([]byte(res.Text), &lm) == nil && lm.V.ClientWidth > 0 {
-				args["clip"] = map[string]any{"x": lm.V.PageX, "y": lm.V.PageY, "width": lm.V.ClientWidth, "height": lm.V.ClientHeight,
-					"scale": min(1, float64(want)/lm.V.ClientWidth)}
-			}
-		}
-		params, _ := json.Marshal(args)
+		params, _ := json.Marshal(map[string]any{"format": "jpeg", "quality": 85})
 		res, err := b.Act(r.Context(), tab, "cdp", chromeext.ActArgs{Method: "Page.captureScreenshot", Params: params})
 		if err != nil {
 			httpError(w, http.StatusBadGateway, err.Error())
@@ -202,6 +187,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			Width  int  `json:"width"`
 			Height int  `json:"height"`
 			Mobile bool `json:"mobile"`
+			// device: "phone" / "tablet" also makes the page that device to sites (user agent, client hints)
+			Device string `json:"device"`
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
@@ -210,6 +197,9 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		var f *chromeext.Fit
 		if in.Width > 0 && in.Height > 0 {
 			f = &chromeext.Fit{W: min(in.Width, 4000), H: min(in.Height, 4000), Mobile: in.Mobile}
+			if in.Device == "phone" || in.Device == "tablet" {
+				f.Device = in.Device
+			}
 		}
 		if err := b.SetFit(in.Tab, f); err != nil {
 			httpError(w, http.StatusNotFound, err.Error())

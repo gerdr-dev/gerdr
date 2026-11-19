@@ -286,7 +286,7 @@ func paneCmd() *cobra.Command {
 	float := &cobra.Command{
 		Use: "float <pane>",
 		Short: "Float a Browser pane over the others in its tab (picture-in-picture; the user drags / resizes it). Needs another pane left in the split. " +
-			"Its page is laid out at a fixed size whatever the box's (--fit pc 1280x800, pad 820x1180, mobile 390x844; default pc) and shown as stills; " +
+			"Its page is laid out at a fixed size whatever the box's (--fit pc 1280x800, pad 820x1180, mobile 390x844; default pc), shown as its stream (clicks and keys go through it); " +
 			"--fit on a floating pane changes it",
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, a []string) error {

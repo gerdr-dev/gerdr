@@ -8,6 +8,7 @@ export const zh = {
   "browser.newPage": "新页面",
   "browser.closePage": "关掉这个页面",
   "browser.loading": "正在打开…",
+  "browser.viewOnly": "放大后可操作",
   "browser.empty": "项目浏览器",
   "browser.emptyHint":
     "在上面输入网址打开。这是「{project}」项目自己的浏览器：登录过的网站在这个项目里一直保持登录，agent 用 gerdr browser 打开的页面也显示在这里。",
@@ -28,6 +29,7 @@ export const en: Record<keyof typeof zh, string> = {
   "browser.newPage": "New page",
   "browser.closePage": "Close this page",
   "browser.loading": "Opening…",
+  "browser.viewOnly": "Enlarge to use",
   "browser.empty": "Project browser",
   "browser.emptyHint":
     "Type a URL above. This is the {project} project's own browser: sites you sign in to stay signed in for this project, and pages agents open with gerdr browser show here too.",

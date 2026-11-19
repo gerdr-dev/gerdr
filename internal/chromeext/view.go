@@ -83,7 +83,7 @@ func (v *View) Close() {
 	v.casting = false
 	v.mu.Unlock()
 	if casting {
-		v.t.cast.release()
+		v.t.cast.release(v)
 	}
 	v.mu.Lock()
 	remote := v.remote
@@ -175,7 +175,7 @@ func (v *View) latest(maxWidth int) ([]byte, int64, error) {
 	v.mu.Lock()
 	first, resized := !v.casting, v.maxW != maxWidth
 	v.casting, v.maxW = true, maxWidth
-	if resized {
+	if first {
 		v.frame = nil
 	}
 	v.mu.Unlock()
@@ -183,21 +183,37 @@ func (v *View) latest(maxWidth int) ([]byte, int64, error) {
 		ctx, cancel := context.WithTimeout(v.ctx, 10*time.Second)
 		var err error
 		if first {
-			err = v.t.cast.acquire(ctx, maxWidth)
+			err = v.t.cast.acquire(ctx, v, maxWidth)
 		} else {
-			err = v.t.cast.width(ctx, maxWidth)
+			// the cast is the widest viewer's: only when that changed are the frames so far another size
+			var changed bool
+			changed, err = v.t.cast.width(ctx, v, maxWidth)
+			if changed {
+				v.mu.Lock()
+				v.frame = nil
+				v.mu.Unlock()
+			}
 		}
 		cancel()
 		if err != nil {
 			return nil, 0, err
 		}
 		deadline := time.Now().Add(3 * time.Second)
+		still := time.Now().Add(500 * time.Millisecond)
 		for time.Now().Before(deadline) {
 			v.mu.Lock()
 			got := v.frame != nil
 			v.mu.Unlock()
 			if got {
 				break
+			}
+			// Chrome sends screencast frames only as the page paints, and a page that sits still sends none when the
+			// cast starts: an App page parked out of the window (a floating Browser pane shows it through here) stayed
+			// "hasn't drawn anything yet" for good (user report). A screenshot stands in for the first frame
+			if time.Now().After(still) {
+				still = deadline
+				v.stillFrame()
+				continue
 			}
 			select {
 			case <-v.changed:
@@ -582,19 +598,34 @@ type caster struct {
 	op      sync.Mutex // start / stop one at a time, so a leaving viewer's stop can't land after a new one's start
 	mu      sync.Mutex
 	refs    int
-	maxW    int
+	maxW    int // the widest viewer's: one cast feeds them all, and the narrower ones scale it down
+	widths  map[*View]int
 	hidden  bool // the page said it is hidden (a background tab)
 	unwatch func()
 }
 
-func (c *caster) acquire(ctx context.Context, w int) error {
+// widest: the cast's width for the viewers there are now (c.mu held). The last one to ask set it before, and a phone
+// watching an App page a floating pane shows got that pane's 960 px pictures, blurry on its screen (user report).
+func (c *caster) widest() int {
+	w := 0
+	for _, x := range c.widths {
+		w = max(w, x)
+	}
+	return w
+}
+
+func (c *caster) acquire(ctx context.Context, v *View, w int) error {
 	c.mu.Lock()
 	c.refs++
 	first := c.refs == 1
 	if first {
 		c.unwatch = c.t.watch.add(c.event)
 	}
-	c.maxW = w
+	if c.widths == nil {
+		c.widths = map[*View]int{}
+	}
+	c.widths[v] = w
+	c.maxW = c.widest()
 	c.mu.Unlock()
 	// The page a viewer looks at is the front tab of its window: a page that opened a new tab (target=_blank) is a
 	// background tab otherwise, hidden, and Chrome sends no screencast frames for it (measured: the pane froze on
@@ -607,26 +638,43 @@ func (c *caster) acquire(ctx context.Context, w int) error {
 	return c.start(ctx)
 }
 
-func (c *caster) width(ctx context.Context, w int) error {
+// width: viewer v wants w px now. changed: the cast restarted at another width (its frames before are another size).
+func (c *caster) width(ctx context.Context, v *View, w int) (changed bool, err error) {
 	c.mu.Lock()
-	same := c.maxW == w
-	c.maxW = w
+	if c.widths != nil {
+		c.widths[v] = w
+	}
+	nw := c.widest()
+	same := c.maxW == nw
+	c.maxW = nw
 	c.mu.Unlock()
 	if same {
-		return nil
+		return false, nil
 	}
-	return c.start(ctx)
+	return true, c.start(ctx)
 }
 
-func (c *caster) release() {
+func (c *caster) release(v *View) {
 	c.mu.Lock()
 	c.refs--
+	delete(c.widths, v)
 	last := c.refs == 0
 	var unwatch func()
 	if last {
 		unwatch, c.unwatch = c.unwatch, nil
 	}
+	nw := c.widest()
+	narrower := !last && nw > 0 && nw != c.maxW
+	if narrower {
+		c.maxW = nw
+	}
 	c.mu.Unlock()
+	if narrower { // the widest viewer left: the others' size, less to encode
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		c.start(ctx)
+		cancel()
+		return
+	}
 	if !last {
 		return
 	}
@@ -720,4 +768,32 @@ func (v *View) Viewport() [2]float64 {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return [2]float64{v.vw, v.vh}
+}
+
+// stillFrame: a screenshot of the visible page as the frame, while the screencast has sent none (a page that doesn't
+// paint sends none). Its size (CSS px) is what the input maps onto, as a screencast frame's metadata is.
+func (v *View) stillFrame() {
+	ctx, cancel := context.WithTimeout(v.ctx, 5*time.Second)
+	defer cancel()
+	var lm struct {
+		V struct {
+			ClientWidth  float64 `json:"clientWidth"`
+			ClientHeight float64 `json:"clientHeight"`
+		} `json:"cssVisualViewport"`
+	}
+	if err := v.t.call(ctx, "Page.getLayoutMetrics", map[string]any{}, &lm); err != nil || lm.V.ClientWidth <= 0 {
+		return
+	}
+	var shot struct {
+		Data []byte `json:"data"` // base64 in the JSON
+	}
+	if err := v.t.call(ctx, "Page.captureScreenshot", map[string]any{"format": "jpeg", "quality": 92}, &shot); err != nil || len(shot.Data) == 0 {
+		return
+	}
+	v.mu.Lock()
+	if v.frame == nil { // a real frame came meanwhile: that one is newer
+		v.frame, v.vw, v.vh = shot.Data, lm.V.ClientWidth, lm.V.ClientHeight
+		v.frameSeq++
+	}
+	v.mu.Unlock()
 }

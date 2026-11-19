@@ -23,6 +23,7 @@ import { focusSession } from "./sessions";
 import { selectTabIn, shutdownGone } from "./shared";
 import { addTab } from "./tabs";
 import { reopenTerminal } from "./terminal";
+import { reopenBrowserPage } from "./browser";
 import { t } from "../i18n";
 
 // ---- 撤销关闭（⌘⇧T）----
@@ -44,7 +45,7 @@ export function remember(c: Closed) {
 }
 
 /** 里面什么都没有的 pane / tab（还没开会话的空 pane）。 */
-const blankLeaf = (p: PaneLeaf) => !p.sessionId && !p.term && !p.sub && !p.file;
+const blankLeaf = (p: PaneLeaf) => !p.sessionId && !p.term && !p.sub && !p.file && !p.browser;
 const blankTab = (t: Tab) => !t.name && t.root.type === "pane" && blankLeaf(t.root);
 /**
  * 空 tab 也要记：⌘T 开个新 tab 随手 ⌘W 关掉，再按 ⌘⇧T 却说「没有刚关掉的」，和浏览器对不上（用户报的）。
@@ -125,6 +126,7 @@ export function reopenClosed() {
       );
     });
     reopenTerms([pane]);
+    reopenPages([pane]);
     return;
   }
   const root = reviveTree(c.tab.root, l);
@@ -142,10 +144,16 @@ export function reopenClosed() {
     );
   });
   reopenTerms(leaves(root));
+  reopenPages(leaves(root));
 }
 
 function reopenTerms(panes: PaneLeaf[]) {
   for (const p of panes) if (p.term && !p.term.id) reopenTerminal(p.id, p.term.cwd);
+}
+
+/** A Browser pane brought back: its page closed with it (server/browserpanes.go), so it opens again where it was. */
+function reopenPages(panes: PaneLeaf[]) {
+  for (const p of panes) if (p.browser) void reopenBrowserPage(p.id, p.browser);
 }
 
 /**

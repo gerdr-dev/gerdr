@@ -220,3 +220,26 @@ func TestPaneFloatDockAndCleanup(t *testing.T) {
 		t.Fatalf("float box left behind: %v", f)
 	}
 }
+
+// A floating Browser pane is docked once a docked one comes into its tab (the docked one's page would cover it), and
+// one can't float over a docked one. Two docked ones in a tab are fine.
+func TestFloatDocksUnderBrowser(t *testing.T) {
+	floats := func(raw string) node {
+		var l node
+		_ = json.Unmarshal([]byte(raw), &l)
+		return asNode(tabsOf(nodes(l["workspaces"])[0])[0]["float"])
+	}
+	base := strings.Replace(opsLayout, `"id":"p2","sessionId":"B"`, `"id":"p2","browser":{"project":"default"}`, 1)
+	base = strings.Replace(base, `"id":"p4","sessionId":"C"`, `"id":"p4","browser":{"project":"default"}`, 1)
+	raw, _ := apply(t, base, call("pane.float", LayoutParams{ID: "p2"}))
+	if floats(raw)["p2"] == nil {
+		t.Fatal("p2 didn't float")
+	}
+	moved, _ := apply(t, raw, call("pane.move", LayoutParams{ID: "p4", TargetPane: "p1", Split: "down"}))
+	if f := floats(moved); f != nil {
+		t.Fatalf("still floating over a docked Browser pane: %v", f)
+	}
+	if _, _, err := ApplyLayout(json.RawMessage(moved), opsSessions, "A", "default", "pane.float", LayoutParams{ID: "p2"}); err == nil {
+		t.Fatal("floated over a docked Browser pane")
+	}
+}

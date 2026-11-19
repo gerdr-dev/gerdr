@@ -177,17 +177,40 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   size): parked at another size, it came back drawn at that size for a frame or two. Tried first and dropped: cutting their shapes out of the window
   (Lightron's `View.Mask`) kept the page live, but clicks in the holes and the keyboard had to be handed between the
   two windows by hand, and each case was a bug of its own (a rename dialog's text box that took no typing).
-- **A floating pane shows stills only, of a page at a fixed size.** A Browser pane floated over the others
-  (picture-in-picture, `Tab.float`) keeps its page aside the whole time and shows a still taken every second: no
-  clicks, no typing (asked for that way). Floating is for shrinking the page into a corner, and a page laid out at the
-  small box's size switched to its phone layout; so the page is laid out at a fixed size picked in the pane's ⋯ menu
-  (`FLOAT_FITS` in ui/src/lib/layout.ts: pc 1280x800, pad 820x1180, mobile 390x844, the last two as mobile devices)
-  and the box keeps that shape (Panes.tsx `FloatPane`: its height follows its width). The size is a device-metrics
-  override set by the backend (`POST /api/browser/fit`, chromeext phone.go `Fit`), which wins over a remote viewer's
-  phone layout and ends when the App shows the page again (docked) or the pane says so. The stills come from the
-  backend (`/api/browser/shot?w=`: `Page.captureScreenshot` of the visible viewport, scaled to the box), not the App's
-  own capture, which has the window's size, not the emulated one. The UA isn't changed: a site that tells tablets and
-  phones apart by it alone still sends its desktop page. Agents: `gerdr pane float <pane> --fit pad`.
+- **A floating pane shows the stream, of a page at a fixed size.** A Browser pane floated over the others
+  (picture-in-picture, `Tab.float`) doesn't place the App's page: it shows the stream's pictures and sends clicks and
+  keys through it, as a phone does (`nativeView` is off while floating). Stills every second came first and couldn't
+  be clicked. Floating is for shrinking the page into a corner, and a page laid out at the small box's size switched
+  to its phone layout; so the page is laid out at a fixed size picked in the pane's ⋯ menu (`FLOAT_FITS` in
+  ui/src/lib/layout.ts: pc 1280x800, pad 820x1180, mobile 390x844, the last two as mobile devices) and the box keeps
+  that shape within a size range per fit (Panes.tsx `FloatPane`). The size is a device-metrics override set by the
+  backend (`POST /api/browser/fit`, chromeext phone.go `Fit`). A remote viewer's phone layout wins over it while one
+  looks (at the fit's size the page ran below a phone's pane, keyboard up, and its bottom couldn't be reached). The
+  fit ends when the App shows the page again (docked) or the pane says so; not when the pane unmounts (its tab dropped), or the
+  first pictures after switching back had the docked shape. Picking another size holds the box's old shape until the
+  first picture at the new one is drawn (`onFitDrawn`), then both change in one frame: switched at once, the old
+  picture showed in the new box. pad / mobile are also that device to sites: Chrome on an Android tablet / phone as the
+  user agent and client hints (`fitUA`, the real engine version), reloaded when the device changes (sites pick their
+  page on the request), and the browser's own again, reloaded, once docked; the size alone left sites that go by the
+  user agent sending the desktop page. Agents: `gerdr pane float <pane> --fit pad`.
+  Two things the stream needed for it: a page that doesn't paint sends no screencast frame when the cast starts (a
+  parked App page sat on "hasn't drawn anything yet"), so after 0.5 s without one a screenshot stands in
+  (`View.stillFrame`); and one cast feeds every viewer of a page, so it runs at the widest viewer's width (`caster`
+  `widest`): it was the last one to ask, and a phone got the floating pane's 960 px pictures, blurry.
+- **A pane closed closes its page.** Left open, pages piled up out of sight (each a whole renderer; a video played on
+  with no pane to stop it). On every layout save (layout.json's `OnSet`, server/browserpanes.go), whatever closed the
+  pane: a page whose pane is gone and that no pane shows is closed, unless the agent session that opened it (`gerdr
+  browser open`) is still there, as it may be driving it (it stays in the page list). A pane that only switched to
+  another page leaves the old one open, in its list. ⌘⇧T brings the pane back and opens its address again
+  (`reopenBrowserPage`).
+- **No floating Browser pane over a docked one.** The App's page is a window over the UI, so a docked Browser pane's
+  page covered a floating Browser pane in the same tab. A Browser pane doesn't float in a tab with another docked one
+  (`floatable`, the server's setFloat), and a floating one is docked back once a docked one comes into its tab,
+  whatever did it (a split, the new-session screen's button, a drag, an agent's layout call): one place each side, not
+  each way in, `dockFloatsUnderBrowsers` in ui/src/lib/layout.ts (run by setLayout) and server/layoutapi.go (run by
+  ApplyLayout). Several docked Browser panes in a tab are fine (each its own window), and so are several floating ones
+  (pictures, drawn by us). Merging a tab's Browser panes into one was tried first and dropped: two in a tab is wanted.
+  A pane's page list leaves out the pages other panes show (picking one took it from that pane).
 - **A page is in one pane.** Picking, in a pane's page list, a page another pane shows swaps the two panes'
   pages (`showBrowserTab`). Two panes on one page read as two pages (the second shows the first's pictures), and a
   reload in either looked like every pane reloading to one address.

@@ -168,3 +168,20 @@ export function browserOpened(m: { tab: number; project: string; session?: strin
     return updateTab(l, loc.tab.id, (tab) => ({ ...split(tab, loc.pane.id, "row", fresh), focus: tab.focus }));
   });
 }
+
+/**
+ * A Browser pane put back (⌘⇧T): its page closed with the pane (server/browserpanes.go), so it is opened again at the
+ * address the pane remembers. One still open (an agent's, kept) is shown as it is.
+ */
+export async function reopenBrowserPage(paneId: string, b: { project: string; tab?: number; url?: string }) {
+  await loadBrowserTabs();
+  if (b.tab && useBrowserTabs.getState().tabs.some((x) => x.tab === b.tab && !x.gone)) return;
+  if (!b.url) return showBrowserTab(paneId, b.project, undefined);
+  try {
+    const t = await api.browserOpen(b.url, b.project);
+    showBrowserTab(paneId, b.project, t.tab);
+    void loadBrowserTabs();
+  } catch {
+    showBrowserTab(paneId, b.project, undefined); // the address bar, to type it again
+  }
+}
