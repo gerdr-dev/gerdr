@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -61,11 +63,60 @@ func WithRetryNotice(ctx context.Context, f func(err error, attempt int, wait ti
 }
 
 var httpClient = &http.Client{Transport: &http.Transport{
-	Proxy:                 http.ProxyFromEnvironment,
+	Proxy:       http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+	// Without these a connect / handshake into a dead network waited on forever (the Transport's zero values mean none).
+	TLSHandshakeTimeout:   15 * time.Second,
 	ResponseHeaderTimeout: 5 * time.Minute, // 推理模型第一个字节可能很久才来
 	IdleConnTimeout:       90 * time.Second,
 	MaxIdleConnsPerHost:   8,
 }}
+
+// streamIdle is how long a 200 response may go without a single byte before it counts as dead. A local proxy (a TUN
+// one's 198.18.x.x fake IPs, Clash, Surge) keeps our side of the TCP connection alive after the network behind it
+// drops, so neither an error nor TCP keepalive ever arrives: a turn sat on "retrying now" for over ten minutes after
+// the network was back. 5 minutes like Codex's stream_idle_timeout and the header timeout above: a reasoning model
+// can be silent for minutes. A var for tests.
+var streamIdle = 5 * time.Minute
+
+// errStreamIdle reads as a dropped stream (streamErr wraps it as "stream disconnected"), so the hub retries the turn.
+var errStreamIdle = errors.New("no data from the model API for too long")
+
+// idleBody cancels its request once no byte has come for streamIdle; the blocked Read then fails with errStreamIdle.
+type idleBody struct {
+	rc     io.ReadCloser
+	timer  *time.Timer
+	cancel context.CancelFunc
+	idle   time.Duration
+	fired  atomic.Bool
+}
+
+func newIdleBody(rc io.ReadCloser, cancel context.CancelFunc, idle time.Duration) *idleBody {
+	b := &idleBody{rc: rc, cancel: cancel, idle: idle}
+	b.timer = time.AfterFunc(idle, func() {
+		b.fired.Store(true)
+		cancel()
+	})
+	return b
+}
+
+func (b *idleBody) Read(p []byte) (int, error) {
+	n, err := b.rc.Read(p)
+	if n > 0 {
+		b.timer.Reset(b.idle)
+	}
+	if err != nil && b.fired.Load() {
+		return n, fmt.Errorf("%w (%s)", errStreamIdle, b.idle)
+	}
+	return n, err
+}
+
+func (b *idleBody) Close() error {
+	b.timer.Stop()
+	err := b.rc.Close()
+	b.cancel()
+	return err
+}
 
 // post 发请求，拿到 200 的响应体（SSE）。网络错误、429、5xx 在拿到响应之前重试。
 // session 是会话 id（Request.CacheKey），放进 x-session-id 头：服务商据此把同一段对话的请求串起来。
@@ -89,8 +140,11 @@ func postURL(ctx context.Context, url string, auth http.Header, extra map[string
 	}
 	var last error
 	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(buf))
+		// rctx: the idle watchdog's handle on this one request (cancelling ctx itself would read as a stop)
+		rctx, cancel := context.WithCancel(ctx)
+		req, err := http.NewRequestWithContext(rctx, "POST", url, bytes.NewReader(buf))
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -102,13 +156,14 @@ func postURL(ctx context.Context, url string, auth http.Header, extra map[string
 			req.Header.Set(k, v)
 		}
 		res, err := httpClient.Do(req)
+		if err == nil && res.StatusCode == 200 {
+			return newIdleBody(res.Body, cancel, streamIdle), nil
+		}
 		var wait time.Duration
 		if err == nil {
-			if res.StatusCode == 200 {
-				return res.Body, nil
-			}
 			b, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
 			res.Body.Close()
+			cancel()
 			last = &HTTPError{Status: res.StatusCode, Body: string(b)}
 			if res.StatusCode != 429 && res.StatusCode != 408 && res.StatusCode < 500 {
 				return nil, last
@@ -117,6 +172,7 @@ func postURL(ctx context.Context, url string, auth http.Header, extra map[string
 				wait = time.Duration(s) * time.Second
 			}
 		} else {
+			cancel()
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
