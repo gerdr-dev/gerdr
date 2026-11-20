@@ -35,6 +35,8 @@ import { panelDataChanged, panelDataResync } from "@/core/panelData";
 const wantSpace = decodeURIComponent(location.pathname.split("/")[1] ?? "") || new URLSearchParams(location.search).get("space");
 
 let ws: WebSocket | null = null;
+// A second connection opening to take over from ws (refresh): ws keeps serving until this one is open
+let pending: WebSocket | null = null;
 let retry = 0;
 let watched = "";
 const draftOutbox = new Map<string, SharedDraft>(); // session id → draft waiting for the throttle (or for a connection)
@@ -63,6 +65,8 @@ function stop() {
   const sock = ws;
   ws = null; // 先置空：onclose 里认出不是当前这条，不会再去重连
   sock?.close();
+  pending?.close();
+  pending = null;
 }
 
 // App remounts (hot update with changed hooks, or a changed module that this one doesn't import) call boot() again
@@ -152,17 +156,29 @@ let lastTick = 0;
 let heartbeat: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-function connect() {
+/**
+ * Open the push connection. With `replace`, it opens beside the current one, which keeps serving until this one is
+ * open and is closed then (refresh): the page never shows itself disconnected.
+ */
+function connect(replace = false) {
   if (stopped) return;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
-  set({ conn: { state: "connecting" } });
+  if (!replace) set({ conn: { state: "connecting" } });
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const sock = new WebSocket(`${proto}//${location.host}/ws`);
-  ws = sock;
+  if (replace) pending = sock;
+  else ws = sock;
   sock.onopen = () => {
+    if (replace) {
+      if (pending !== sock) return sock.close();
+      pending = null;
+      const old = ws;
+      ws = sock; // first: the old one's onclose sees it isn't current and stays quiet
+      old?.close();
+    }
     retry = 0;
     lastHeard = Date.now();
     pingAt = 0;
@@ -193,6 +209,8 @@ function connect() {
     if (reconnect) import("./addons").then((p) => p.reloadIfFailed());
   };
   sock.onmessage = (ev) => {
+    // A connection replaced by a refresh: what it still delivers, the new one's watch brings again
+    if (ws !== sock) return;
     lastHeard = Date.now();
     let batch: any[];
     try {
@@ -204,6 +222,12 @@ function connect() {
     for (const m of batch) handle(m);
   };
   sock.onclose = () => {
+    if (pending === sock) {
+      // The refresh didn't get through: the old connection stays; if it died meanwhile, reconnect the usual way
+      pending = null;
+      if (!ws) scheduleReconnect(true);
+      return;
+    }
     if (ws !== sock) return;
     set({ connected: false, catchingUp: {} });
     ws = null;
@@ -216,7 +240,7 @@ function connect() {
 let dialing = false;
 
 function scheduleReconnect(now = false) {
-  if (stopped || reconnectTimer || ws || dialing) return;
+  if (stopped || reconnectTimer || ws || dialing || pending) return;
   // A restart we were told about takes a few seconds: try every half second instead of backing off, so the new
   // backend is picked up as soon as it answers
   const delay = now ? 0 : restartingNow(get()) ? 500 : Math.min(8000, 300 * 2 ** retry++);
@@ -242,7 +266,7 @@ function scheduleReconnect(now = false) {
 
 /** Reconnect right away instead of waiting out the backoff (the "retry now" button next to the connection status). */
 export function reconnectNow() {
-  if (stopped || ws || dialing) return;
+  if (stopped || ws || dialing || pending) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
   scheduleReconnect(true);
@@ -260,40 +284,66 @@ function dropStale() {
   scheduleReconnect(true);
 }
 
-// Heartbeat: a ping every 20s; a ping left unanswered for 25s while the page is in front means the connection is dead.
+/**
+ * Replace the push connection with a fresh one without dropping it first (connect(true)). A connection that sat
+ * through a while in the background, or a network change, may be open on the phone and dead on the way (a NAT or the
+ * relay forgot it, the Mac's relay tunnel came back): the page then shows the chat frozen while the computer goes on,
+ * until the heartbeat notices. Probing it first cost up to 8s more of that. A new connection is one handshake; its
+ * watch sends only what the page doesn't have (since), and the old one serves until it opens.
+ */
+function refresh() {
+  if (stopped || !ws || pending || dialing) return;
+  connect(true);
+  const sock = pending as WebSocket | null; // set by connect(true)
+  // Never opened (a handshake hanging on a dead route): give up on it, the old one is judged by the heartbeat
+  setTimeout(() => {
+    if (pending === sock && sock?.readyState !== WebSocket.OPEN) sock?.close();
+  }, 10000);
+}
+
+// Heartbeat: a ping every 10s; one left unanswered for 15s while the page is in front means the connection is dead.
 // Judged on a ping we sent, not on "nothing heard for 45s": a page in the background (the Android App, a hidden
 // tab) has its timers slowed to once a minute or stopped altogether, so the old rule fired on the first tick after
-// every long stay in the background and dropped a connection that was fine. The protocol-level pings the server
-// sends are answered by the network stack meanwhile, so the connection itself survives; the page then showed
-// "reconnecting" on every return to the App. A tick that comes late (timers were held up) judges nothing and starts
-// over; coming back to the front, wake() probes instead.
+// every long stay in the background and dropped a connection that was fine. A tick that comes late (timers were held
+// up) judges nothing and starts over; coming back to the front, wake() refreshes instead. 15s and not less: on a slow
+// remote line a pong queues behind a big log frame being written (the 3s probe once dropped good connections).
+const BEAT = 10000;
 function startHeartbeat() {
   if (heartbeat) return;
   lastTick = Date.now();
   heartbeat = setInterval(() => {
     const now = Date.now();
-    const late = now - lastTick > 30000;
+    const late = now - lastTick > 2 * BEAT;
     lastTick = now;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     if (late || lastHeard >= pingAt) pingAt = 0;
-    if (pingAt && document.visibilityState === "visible" && now - pingAt > 25000) return dropStale();
+    if (pingAt && document.visibilityState === "visible" && now - pingAt > 15000) return dropStale();
     try {
       ws.send(JSON.stringify({ t: "ping" }));
       pingAt ||= now;
     } catch {
       dropStale();
     }
-  }, 20000);
+  }, BEAT);
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("online", wake);
   window.addEventListener("focus", wake);
 }
 
-function wake() {
-  if (document.visibilityState === "hidden") return;
+let hiddenAt = 0;
+
+function wake(e: Event) {
+  if (document.visibilityState === "hidden") {
+    hiddenAt ||= Date.now();
+    return;
+  }
+  const away = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = 0;
   // No connection: try now, also when a backoff wait is pending (it grew while the page sat in the background)
   if (!ws) return reconnectNow();
-  // 刚醒来：问一下，8 秒没回音就重连。
+  // Back after a while in the background, or on another network: don't trust the connection, replace it (refresh)
+  if (away > 20000 || e.type === "online") return refresh();
+  // A short look away / a focus: just ask, 8s without an answer reconnects.
   // 只收问的那一条：focus / visibilitychange / online 常常一起来，3 秒的版本在远程慢网上会把刚连上的新连接也当死的收掉，
   // 一直重连（服务端「正在连接」里一台手机列好几条）。8 秒是给远程留的：pong 会排在正在写的一大帧日志后面。
   void probe();
