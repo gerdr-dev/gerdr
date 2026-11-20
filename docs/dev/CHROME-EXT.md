@@ -54,8 +54,8 @@ Emulation, Log, Inspector, CSS, Network, Accessibility, Overlay, DOMSnapshot, Pe
   an id, so the user can say "use the Work Chrome". Only the user names a profile: an agent can't tell them apart.
 - CLI: `gerdr browser status | open | close | snapshot | text | screenshot | click | hover | drag | type | key | fill |
   scroll | wait | goto | back | forward | reload | eval | console | network | body | upload | resize | dialog | cdp`
-  (cmd/gerdr/browsercmd.go); `gerdr browser mcp` serves the same as MCP tools (browsermcp.go). The built-in `gerdr`
-  skill tells agents.
+  (cmd/gerdr/browsercmd.go); `gerdr browser mcp` serves the same as MCP tools (browsermcp.go). The built-in
+  `gerdr-browser` skill tells agents.
 - Every open window also gets a fake browser-level CDP endpoint (endpoint.go, `ws://127.0.0.1:<random>/devtools/browser/<random>`,
   one client at a time). It answers what chromedp needs plus `setAutoAttach` with flatten; Playwright
   `connectOverCDP` is untested.

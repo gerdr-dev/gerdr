@@ -82,7 +82,7 @@ artifacts folder unless there is such output.
   - `gerdr artifacts link <url> [--label]`, `gerdr artifacts path <path> [--label]`, `gerdr artifacts text <text> [--label]`,
     `gerdr artifacts pin <file>`; `--supersedes <id>`
   - `gerdr artifacts ls` → records and files
-  - The built-in gerdr skill documents it; its description mentions artifacts / outputs so it is read.
+  - The built-in gerdr-events skill documents it; its description mentions artifacts / outputs so it is read.
 - Panels: `ctx.folders.create({name, under, owner}) → {id, path}`, `resolve(id)`, `move(id, newName)` (keeps the id),
   `items(id)`, `record(id, item)`; `ctx.fs` may address the artifacts root, not only the panel directory. Typed in
   `ctx.d.ts`.
@@ -165,7 +165,7 @@ is in `tasks/work-on-content.md`, not in code.
   refuses a missing one, so the very first write may ask); codex gets it as a `writableRoots` of workspace-write.
 - API: `server/artifactsapi.go`; `/api/fs/stat?hash=1` gives the sha256 an editor saves against (`PUT /api/fs/file?ifMatch=`).
 - CLI `gerdr artifacts` (`cmd/gerdr/artifacts.go`); auto-approved for agents (`sysenv.SafeGerdrCLI`) unless it names
-  `--dir` / `--session` (Gerdr would write a `.gerdr/` wherever told). The built-in gerdr skill documents it.
+  `--dir` / `--session` (Gerdr would write a `.gerdr/` wherever told). The built-in gerdr-events skill documents it.
 - UI: `components/folder/` (`Folder`, `Records`, `MdEditor`); the folder button in a session pane's title bar (only a session with an `artifactsDir`) opens it
   as a pane beside (a `file` pane with `folder: true`, `actions/files.ts` `openArtifacts`). ⌘S saves inside the editor:
   elements can claim keys from the global shortcuts with `data-own-keys` (`lib/commands.ts`). Editor styles:

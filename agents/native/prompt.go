@@ -52,7 +52,10 @@ func (a *Agent) systemPrompt(s *session, cwd string, model resolved) string {
 	if skills := a.skills(s, cwd); len(skills) > 0 {
 		b.WriteString("\n# Skills\nSkills are packaged instructions for specific tasks. When a task matches a skill's description, read its SKILL.md with the read tool first and follow it (paths inside are relative to the skill's directory). The user may also invoke one as /<name>.\n")
 		for _, sk := range skills {
-			fmt.Fprintf(&b, "- %s: %s (%s)\n", sk.Name, oneLine(sk.Description, 300), filepath.Join(sk.Dir, "SKILL.md"))
+			// The description is all the model sees when deciding whether to read a skill, so cut it where Claude
+			// Code does (1536), not shorter: at 300 the gerdr skill lost everything after "Use when…" (the browser,
+			// events, panels) and the model never opened it for a web-page task.
+			fmt.Fprintf(&b, "- %s: %s (%s)\n", sk.Name, oneLine(sk.Description, 1536), filepath.Join(sk.Dir, "SKILL.md"))
 		}
 	}
 	if !a.opt.NoMemory {

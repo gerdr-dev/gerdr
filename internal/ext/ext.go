@@ -121,6 +121,7 @@ func (m *Manager) Scoped(o Only) *Manager {
 	if m == nil || (o.Skills == nil && o.MCP == nil) {
 		return m
 	}
+	o.Skills = withSplit(o.Skills)
 	return &Manager{core: m.core, only: &o, off: m.off}
 }
 
@@ -141,6 +142,7 @@ func (m *Manager) ForProject(project string) *Manager {
 	if len(o.Skills) == 0 && len(o.MCP) == 0 {
 		return m
 	}
+	o.Skills = withSplit(o.Skills)
 	return &Manager{core: m.core, only: m.only, off: &o}
 }
 
@@ -254,7 +256,30 @@ func (m *Manager) Settings() Settings {
 	if s.DisabledSkills == nil {
 		s.DisabledSkills = []string{}
 	}
+	s.DisabledSkills = withSplit(s.DisabledSkills)
 	return s
+}
+
+// splitInto: built-in skills that used to be one. The gerdr skill's description outgrew what agents show of it
+// (everything past the first part was cut, so the browser part was never seen), so it was split by topic. Every
+// list of skill names written before then (switched off, a role's skills, a project's switched-off) means the parts
+// too: a role that named "gerdr" keeps getting all of it, a "gerdr" switched off keeps all of it off.
+var splitInto = map[string][]string{"gerdr": {"gerdr-browser", "gerdr-setup", "gerdr-events"}}
+
+// withSplit is names plus the parts of any split skill it names, each once. nil stays nil (Only: "no limit").
+func withSplit(names []string) []string {
+	out := names
+	for _, n := range names {
+		for _, part := range splitInto[n] {
+			if !contains(out, part) {
+				if len(out) == len(names) {
+					out = append([]string(nil), names...)
+				}
+				out = append(out, part)
+			}
+		}
+	}
+	return out
 }
 
 func (m *Manager) Save(s Settings) error {

@@ -278,7 +278,7 @@ folders (one or two levels down) holding an `addon.json` are its add-ons; no ind
 - The default store is `gerdr-dev/gerdr-addon`; removing it sticks (the state file stores `stores: []`).
 - An add-on in a store should have `screenshots` in addon.json (shown as thumbnails in the store list) and a
   README.md; relative image paths in the README are served from the store's copy.
-- `gerdr addon` (cmd/gerdr/addoncmd.go) does all of this from the command line for agents (the gerdr skill teaches
+- `gerdr addon` (cmd/gerdr/addoncmd.go) does all of this from the command line for agents (the built-in gerdr-setup skill teaches
   it). It works on the files through the same `Manager` (with gerdr stopped too); the running gerdr's watcher picks
   the add-on directory and the state file up, but store list changes reach an open store tab only on reopening it
   (`addon_stores` is broadcast from the HTTP API only). `Manager.Describe` lists without building; build errors and

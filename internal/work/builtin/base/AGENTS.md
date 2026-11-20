@@ -118,7 +118,7 @@ and their choices are what they set or wrote down, not what the code says.
   schedule"; `gerdr panel schedules` shows how they went.
 - `streams/<id>.json` — a live connection (a WebSocket) Gerdr keeps open for this panel: `connect` says where, `on`
   runs for what comes. FUNCTIONS.md, "On a live connection"; `gerdr panel streams` shows its state.
-- Handing a task to another agent (the gerdr skill has the commands): don't block on `--wait`. Start it, go back to
+- Handing a task to another agent (the built-in gerdr skill has the commands): don't block on `--wait`. Start it, go back to
   the user, and get told when it stops (done, waiting for a person, failed): wait for it in the background if you
   can (`gerdr session wait` as a background task, or a Codex sub-agent that wakes you), otherwise `--report-to self`
   (a Gerdr report message with its reply) — the skill's "Hand it off without waiting". Give it `--cwd` (the repository; otherwise it runs in this panel's

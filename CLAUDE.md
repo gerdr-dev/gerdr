@@ -71,7 +71,8 @@ shells before it are in git history, why Chromium at all in docs/dev/WHY-ELECTRO
 - **Every new feature is also for agents.** Agents run inside Gerdr and the user asks them to set things up, so whatever
   a person can do in the UI an agent must be able to do too, and know that it can: a CLI command or flag (`gerdr …`,
   works with only files when it can), the built-in skill text that tells agents about it (internal/ext/builtin/,
-  including its `description`, which decides when the skill is read), and the CLI help. A feature only in the UI
+  including its `description`, which decides when the skill is read; one topic per skill, at most 1024 characters, as
+  agents cut the rest, so a topic that doesn't fit gets its own skill), and the CLI help. A feature only in the UI
   gets missed: project skills shipped UI-only, and an agent asked to write one for a project said Gerdr had no
   per-project skills and put it in the global pool. Check this before calling a feature done.
 - Events (chat messages, mentions… as one record; `internal/events`, `work/trigger.go`, `gerdr event`) and waiting

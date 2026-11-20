@@ -612,7 +612,12 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `mcp_servers.<name>` entries Gerdr read from config.toml get `enabled = false`. Accepted for now: "only Gerdr's" asks
   for a clean set anyway. Keeping the connectors would mean dropping strict and denying the local servers by name
   (`permissions.deny: ["mcp__<name>"]`), which still starts their processes.
-- 内置 skill（`internal/ext/builtin/`：gerdr、gerdr-ui）不管来源选什么都给，设置里能单个关。
+- Built-in skills (`internal/ext/builtin/`: gerdr, gerdr-browser, gerdr-setup, gerdr-events, gerdr-ui) are given whatever
+  the source, and each can be switched off in Settings. One topic per skill, description ≤ 1024 characters
+  (`TestBuiltinSkillDescriptionLength`): agents show only the start of a description (the native agent and Claude
+  Code cut near 1536), and the old single gerdr skill (2809) hid its browser part that way, so agents never opened it
+  for a web page. It was split on 2026-11-20; a "gerdr" in a list of names written before (switched off, a role's
+  skills, a project's switched-off) still means all its parts (`withSplit` in ext.go).
 - Agents change all of this from the CLI: `gerdr skill` / `gerdr mcp` (cmd/gerdr/extcmd.go) write ext.json and the
   skills folder directly, like `gerdr config`, so they work with gerdr stopped. `ext.Manager.Watch` polls a signature of
   both and broadcasts `ext`, which makes open Settings pages refetch (store `extVersion`). The CLI lists built-in skills

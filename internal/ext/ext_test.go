@@ -88,8 +88,9 @@ func TestClaudeArgsScoped(t *testing.T) {
 	for _, l := range links {
 		names = append(names, l.Name())
 	}
-	if !slices.Equal(names, []string{"gerdr"}) {
-		t.Fatalf("壳目录里应当只有挑中的内置 skill：%v", names)
+	// "gerdr" brings the skills it was split into (withSplit), still not gerdr-ui
+	if !slices.Equal(names, []string{"gerdr", "gerdr-browser", "gerdr-events", "gerdr-setup"}) {
+		t.Fatalf("only the built-in skills picked belong in the shell dir: %v", names)
 	}
 	// 没限定的 Manager 不带这些
 	if args := New(t.TempDir()).ClaudeArgs("s2", cwd, nil); slices.Contains(args, "--strict-mcp-config") {
@@ -300,5 +301,62 @@ func TestClaudeSyncedSkills(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "anthropic-skills:docx|"+OriginClaudeAI {
 		t.Fatalf("got %v", got)
+	}
+}
+
+// A built-in skill's description is all an agent sees when deciding whether to open it, and every agent cuts it:
+// the Agent Skills format caps it at 1024 characters, Claude Code's skill list at about 1536, the native agent
+// where Claude Code does. The gerdr skill once grew to 2809 and agents never learnt it covers web pages, because
+// that part came last; it was split by topic (splitInto). Over the limit, split again or move detail into the body.
+func TestBuiltinSkillDescriptionLength(t *testing.T) {
+	const max = 1024
+	ents, err := builtinFS.ReadDir("builtin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range ents {
+		b, err := builtinFS.ReadFile("builtin/" + e.Name() + "/SKILL.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, d := frontmatter(string(b))
+		if d == "" {
+			t.Errorf("%s: no description", e.Name())
+		}
+		if n := len([]rune(d)); n > max {
+			t.Errorf("%s: description is %d characters, over %d", e.Name(), n, max)
+		}
+	}
+}
+
+// "gerdr" in a list written before the split covers its parts: a role naming it keeps the browser part, switching it
+// off keeps all of it off.
+func TestSplitSkillNames(t *testing.T) {
+	if got := withSplit(nil); got != nil {
+		t.Fatalf("nil must stay nil (no limit): %v", got)
+	}
+	in := []string{"gerdr", "pdf", "gerdr-setup"}
+	got := withSplit(in)
+	want := []string{"gerdr", "pdf", "gerdr-setup", "gerdr-browser", "gerdr-events"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%v, want %v", got, want)
+	}
+	if !slices.Equal(in, []string{"gerdr", "pdf", "gerdr-setup"}) {
+		t.Fatalf("input changed: %v", in)
+	}
+	m := New(t.TempDir())
+	if r := m.Scoped(Only{Skills: []string{"gerdr"}}); !r.AllowSkill("gerdr-browser") || r.AllowSkill("gerdr-ui") {
+		t.Fatal("a role naming gerdr should get gerdr-browser and nothing it didn't name")
+	}
+	if err := m.Save(Settings{SkillSource: SourceAgent, MCPSource: SourceAgent, DisabledSkills: []string{"gerdr"}}); err != nil {
+		t.Fatal(err)
+	}
+	if d := m.Settings().DisabledSkills; !slices.Contains(d, "gerdr-events") {
+		t.Fatalf("switching gerdr off should switch its parts off: %v", d)
+	}
+	for _, p := range splitInto["gerdr"] {
+		if _, err := builtinFS.ReadFile("builtin/" + p + "/SKILL.md"); err != nil {
+			t.Errorf("split part %s isn't a built-in skill", p)
+		}
 	}
 }
