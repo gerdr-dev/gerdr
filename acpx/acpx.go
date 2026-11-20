@@ -445,14 +445,16 @@ func DescribeRequest(kind string, raw json.RawMessage) string {
 // ui lib/paths.ts). An agent that doesn't know either just answers about the file without handing it over:
 // asked about README.zh-CN.md it listed the headings with bare `:45` line numbers and no clickable path, so the
 // user had to ask again for the full path to open it. Bare relative names like `README.md` aren't recognized
-// as paths (no slash), hence "absolute".
+// as paths (no slash), hence "absolute". Mermaid / math (ui components/chat/MermaidBlock.tsx, lib/markdownPlugins.ts)
+// are named so an agent reaches for a diagram instead of ASCII art, and keeps single-$ math out (only $$ is math).
 const MediaHint = "You are running inside Gerdr, a GUI for coding agents. Its chat view renders Markdown image syntax inline: " +
 	"when the user should see or hear a local image, video, audio file or PDF (a screenshot, a generated or downloaded image/video, a QR code, a voice-over…), " +
 	"embed it in your reply with image syntax and an absolute path, e.g. ![login QR code](/Users/me/project/out/qr.png) " +
 	"(wrap the path in <> if it contains spaces: ![demo](</Users/me/my dir/demo.mp4>)). Several images on consecutive lines show as a grid. " +
 	"Use a plain link instead when the file is just being mentioned, not shown. " +
 	"Absolute file paths in your reply are clickable and open the file in a viewer (Markdown rendered, code, text…), " +
-	"so when the user asks about a file or wants to read one (a doc, a plan, a report you wrote), include its absolute path."
+	"so when the user asks about a file or wants to read one (a doc, a plan, a report you wrote), include its absolute path. " +
+	"```mermaid code blocks are drawn as diagrams and $$…$$ as math, in replies and in that viewer."
 
 // ShellHint：告诉 agent 可以让人在输入框里敲 `! 命令`（gerdr 在会话目录里直接跑，输出跑完就发给它 —— or with the next message when the autoSendShell setting is off; hub/shell.go）。
 // Claude Code 自己只在交互式终端里给这句，stream-json 下没有，agent 只会说「去终端里跑」。
