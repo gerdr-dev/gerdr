@@ -146,6 +146,9 @@ function pruneLayout() {
 }
 
 let lastHeard = 0;
+// When the oldest ping still unanswered went out (0 = none), and when the heartbeat last ran: see startHeartbeat
+let pingAt = 0;
+let lastTick = 0;
 let heartbeat: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -162,6 +165,7 @@ function connect() {
   sock.onopen = () => {
     retry = 0;
     lastHeard = Date.now();
+    pingAt = 0;
     const reconnect = get().everConnected;
     const restarted = get().restarting;
     set({ connected: true, everConnected: true, restarting: null });
@@ -207,8 +211,12 @@ function connect() {
   };
 }
 
+// A reconnect's hello is in flight. Without this, wake() firing twice (focus, visibilitychange and online come
+// together) in that window started a second connection and orphaned the first, still open
+let dialing = false;
+
 function scheduleReconnect(now = false) {
-  if (stopped || reconnectTimer || ws) return;
+  if (stopped || reconnectTimer || ws || dialing) return;
   // A restart we were told about takes a few seconds: try every half second instead of backing off, so the new
   // backend is picked up as soon as it answers
   const delay = now ? 0 : restartingNow(get()) ? 500 : Math.min(8000, 300 * 2 ** retry++);
@@ -217,19 +225,24 @@ function scheduleReconnect(now = false) {
     reconnectTimer = null;
     set({ conn: { state: "connecting" } });
     // 重连前确认凭据还在（401 就别再连了）。
-    api
-      .hello()
-      .then(() => connect())
-      .catch((e) => {
+    dialing = true;
+    api.hello().then(
+      () => {
+        dialing = false;
+        connect();
+      },
+      (e) => {
+        dialing = false;
         if (e instanceof ApiError && e.status === 401) set({ authError: true });
         else scheduleReconnect();
-      });
+      },
+    );
   }, delay);
 }
 
 /** Reconnect right away instead of waiting out the backoff (the "retry now" button next to the connection status). */
 export function reconnectNow() {
-  if (stopped || ws) return;
+  if (stopped || ws || dialing) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
   scheduleReconnect(true);
@@ -247,14 +260,26 @@ function dropStale() {
   scheduleReconnect(true);
 }
 
-// 心跳：20 秒问一次，45 秒没有任何回音就当断了。页面不可见时浏览器会压定时器，回到前台立刻补一次。
+// Heartbeat: a ping every 20s; a ping left unanswered for 25s while the page is in front means the connection is dead.
+// Judged on a ping we sent, not on "nothing heard for 45s": a page in the background (the Android App, a hidden
+// tab) has its timers slowed to once a minute or stopped altogether, so the old rule fired on the first tick after
+// every long stay in the background and dropped a connection that was fine. The protocol-level pings the server
+// sends are answered by the network stack meanwhile, so the connection itself survives; the page then showed
+// "reconnecting" on every return to the App. A tick that comes late (timers were held up) judges nothing and starts
+// over; coming back to the front, wake() probes instead.
 function startHeartbeat() {
   if (heartbeat) return;
+  lastTick = Date.now();
   heartbeat = setInterval(() => {
+    const now = Date.now();
+    const late = now - lastTick > 30000;
+    lastTick = now;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    if (Date.now() - lastHeard > 45000) return dropStale();
+    if (late || lastHeard >= pingAt) pingAt = 0;
+    if (pingAt && document.visibilityState === "visible" && now - pingAt > 25000) return dropStale();
     try {
       ws.send(JSON.stringify({ t: "ping" }));
+      pingAt ||= now;
     } catch {
       dropStale();
     }
@@ -266,7 +291,8 @@ function startHeartbeat() {
 
 function wake() {
   if (document.visibilityState === "hidden") return;
-  if (!ws) return scheduleReconnect(true);
+  // No connection: try now, also when a backoff wait is pending (it grew while the page sat in the background)
+  if (!ws) return reconnectNow();
   // 刚醒来：问一下，8 秒没回音就重连。
   // 只收问的那一条：focus / visibilitychange / online 常常一起来，3 秒的版本在远程慢网上会把刚连上的新连接也当死的收掉，
   // 一直重连（服务端「正在连接」里一台手机列好几条）。8 秒是给远程留的：pong 会排在正在写的一大帧日志后面。
