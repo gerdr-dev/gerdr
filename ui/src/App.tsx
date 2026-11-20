@@ -147,7 +147,9 @@ export default function App() {
         set({ dialog: { kind: "settings", tab: "remote" } });
       }
     });
-    const onKey = (e: KeyboardEvent) => handleKeydown(e);
+    // A window showing one browser page (browserOnly) shares the layout with the others, so Gerdr's shortcuts there
+    // would close / split / switch panes the person can't see: none, only its own ⌘W (BrowserWindow)
+    const onKey = (e: KeyboardEvent) => !browserOnly && handleKeydown(e);
     window.addEventListener("keydown", onKey, true);
     const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
     const unwatchInbox = watchInbox(); // errors, questions / approvals, low battery → the inbox
@@ -156,7 +158,9 @@ export default function App() {
     if (isNative()) document.documentElement.classList.add("native");
     // mac App 的菜单和通知点击走这两个入口。
     (window as any).gerdr = {
-      runCommand: (id: string) => import("./lib/addons").then((p) => p.runCommand(id)),
+      // a window showing one browser page (browserOnly) has no panes: ⌘W (the menu's close pane / tab) closes it
+      runCommand: (id: string) =>
+        browserOnly ? (id === "closePane" || id === "closeTab") && window.close() : import("./lib/addons").then((p) => p.runCommand(id)),
       focusSession: (id: string) => import("./lib/actions").then((a) => a.focusSession(id)),
       appUpdate: onAppUpdate, // desktop/main.js pushUpdate
     };

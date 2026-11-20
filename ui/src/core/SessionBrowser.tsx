@@ -214,6 +214,19 @@ export function BrowserWindow({ tab: first }: { tab: number }) {
   useEffect(() => {
     if (cur?.url) document.title = cur.url;
   }, [cur?.url]);
+  // ⌘W / Ctrl+W closes this window, as a browser's would: in the App the menu's key comes as a command (App.tsx
+  // runCommand), in a plain browser (or a Windows App without that menu key) it is a keydown here
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        e.stopPropagation();
+        window.close();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   return (
     <div className="flex h-full flex-col bg-background">
       {/* the App's traffic lights: a strip of their height that drags the window (lib/native.ts nativeTitleBar) */}
