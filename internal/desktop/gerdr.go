@@ -37,6 +37,7 @@ type shell struct {
 	idleOK       string // "update when idle" was picked for this version (automatic updates off)
 
 	views *appBrowser // the App's own browser for the Browser pane (views.go)
+	bwins browserWins // windows showing one page of it (browserwin.go)
 
 	mu     sync.Mutex
 	spaces map[string]string // window id → the session (layout.ts Space) its page says it shows
@@ -191,6 +192,8 @@ func (s *shell) message(w *el.Window, raw json.RawMessage) {
 		} else {
 			s.newWindow(str("space"))
 		}
+	case "browserWindow", "browserWindowTab", "browserWindowClose", "browserWindows":
+		s.browserWinMessage(w, str("type"), m)
 	case "open":
 		s.openExternal(str("url"))
 	case "openPath":

@@ -373,6 +373,11 @@ async function handle(m) {
     }
     case "focus":
       return showWindow(wins.get(m.win));
+    case "close": {
+      const w = wins.get(m.win);
+      if (w && !w.isDestroyed()) w.close();
+      return;
+    }
     case "badge":
       if (isMac) app.dock?.setBadge(m.label || "");
       return;

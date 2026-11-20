@@ -141,6 +141,25 @@ export function nativeNewPathWindow(space: string, path: string) {
   bridge()?.postMessage({ type: "newWindow", space, path });
 }
 
+/**
+ * The App's windows showing one page of a project's browser each (core/SessionBrowser.tsx, internal/desktop
+ * browserwin.go): show page tab in its own window (the one it is in, else a new one); put it back (its window closes);
+ * say which page this window shows (0 = none); ask which pages are out. The answer and every change come as the
+ * gerdr:browserwindows event (detail: page numbers).
+ */
+export function nativeBrowserWindow(space: string, tab: number) {
+  bridge()?.postMessage({ type: "browserWindow", space, tab });
+}
+export function nativeBrowserWindowClose(tab: number) {
+  bridge()?.postMessage({ type: "browserWindowClose", tab });
+}
+export function nativeBrowserWindowTab(tab: number) {
+  bridge()?.postMessage({ type: "browserWindowTab", tab });
+}
+export function nativeAskBrowserWindows() {
+  bridge()?.postMessage({ type: "browserWindows" });
+}
+
 /** App 里：tell the shell which session this window shows (its title, where a notification click goes, what ⌘N copies). */
 export function nativeSpace(id: string, name: string) {
   bridge()?.postMessage({ type: "space", id, name });

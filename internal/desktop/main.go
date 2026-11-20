@@ -102,7 +102,7 @@ func Main(args []string) {
 	}
 	shellJS := shellScript(*dataDir)
 
-	sh := &shell{spaces: map[string]string{}, notes: map[string]time.Time{}}
+	sh := &shell{spaces: map[string]string{}, notes: map[string]time.Time{}, bwins: browserWins{tabs: map[string]int{}}}
 
 	if browserMode {
 		sh.backendEntry = *browser
@@ -154,6 +154,7 @@ func Main(args []string) {
 			if sh.views != nil {
 				sh.views.windowClosed(w)
 			}
+			sh.browserWindowClosed(w)
 		},
 		OnNoteClick: sh.noteClick,
 		DataDir:     *dataDir,

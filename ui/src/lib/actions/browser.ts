@@ -16,6 +16,7 @@ import {
   type PaneLeaf,
 } from "../layout";
 import { get, setLayout } from "../store";
+import { isNative, nativeAskBrowserWindows } from "../native";
 
 // ---- Browser panes: a page of the project's own browser beside the chat (components/browser/, docs/dev/BROWSER-PANE.md) ----
 
@@ -54,6 +55,22 @@ export function releaseNative(tab: number, paneId: string) {
     const { [tab]: _, ...rest } = useNativeOwners.getState();
     useNativeOwners.setState(rest, true);
   }
+}
+
+/**
+ * The pages in a window of their own (the App's, core/SessionBrowser.tsx BrowserWindow): the core says so as
+ * gerdr:browserwindows whenever it changes. known: the core answered at all (an older one doesn't, and then a page is
+ * popped out the old way: a new window each time, nothing tracked).
+ */
+export const useBrowserWindows = create<{ tabs: number[]; known: boolean }>(() => ({ tabs: [], known: false }));
+if (typeof window !== "undefined") {
+  window.addEventListener("gerdr:browserwindows", (e) => {
+    const d = (e as CustomEvent<number[]>).detail;
+    useBrowserWindows.setState({ tabs: Array.isArray(d) ? d : [], known: true });
+  });
+  // after this module and lib/native have both loaded: they import each other through lib/actions, so at this
+  // module's own evaluation isNative may not be there yet ("isNative is not a function", the whole UI down)
+  setTimeout(() => isNative() && nativeAskBrowserWindows(), 0);
 }
 
 /** The pages Gerdr has open (pushed by the server as "browser_tabs" whenever one opens or closes). */

@@ -6,7 +6,17 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
-import { claimNative, focusPane, loadBrowserTabs, noteBrowserURL, releaseNative, showBrowserTab, useBrowserTabs, useNativeOwners } from "@/lib/actions";
+import {
+  useBrowserWindows,
+  claimNative,
+  focusPane,
+  loadBrowserTabs,
+  noteBrowserURL,
+  releaseNative,
+  showBrowserTab,
+  useBrowserTabs,
+  useNativeOwners,
+} from "@/lib/actions";
 import { t } from "@/lib/i18n";
 import { paintFrame, parseFrame, wsURL, type StreamPage } from "@/lib/screenStream";
 import { canNativeBrowser, nativeBrowserView } from "@/lib/native";
@@ -130,6 +140,7 @@ export function BrowserScreen({
 }: Props) {
   const show = (t?: number) => (onShow ? onShow(t) : showBrowserTab(paneId, project, t));
   const all = useBrowserTabs((s) => s.tabs);
+  const inWindows = useBrowserWindows((w) => w.tabs);
   const loaded = useBrowserTabs((s) => s.loaded);
   useEffect(() => {
     if (!loaded) void loadBrowserTabs();
@@ -1013,6 +1024,10 @@ export function BrowserScreen({
                 <Globe className={cn(p.tab === tab ? "text-brand" : "text-muted-foreground")} />
                 <span className="truncate">{p.tab === tab && page?.title ? page.title : hostOf(p.url)}</span>
                 {p.tab === tab && <Check className="ml-auto" />}
+                {/* in a window of its own: picked here, this view shows a card for it (core/SessionBrowser.tsx) */}
+                {p.tab !== tab && inWindows.includes(p.tab) && (
+                  <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{t("browser.inWindowTag")}</span>
+                )}
               </DropdownMenuItem>
             ))}
             <DropdownMenuItem onClick={() => (show(undefined), requestAnimationFrame(() => addrRef.current?.focus()))}>

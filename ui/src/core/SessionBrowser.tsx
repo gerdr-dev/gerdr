@@ -1,13 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { Globe, PanelRightClose, SquareArrowOutUpRight } from "lucide-react";
+import { AppWindow, Globe, PanelRightClose, SquareArrowOutUpRight, Undo2 } from "lucide-react";
 import { BrowserScreen } from "@/components/browser/BrowserScreen";
 import { Button } from "@/components/ui/button";
-import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs } from "@/lib/actions";
+import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import type { FloatFit } from "@/lib/layout";
-import { isNative, nativeNewPathWindow } from "@/lib/native";
+import { isNative, nativeBrowserWindow, nativeBrowserWindowClose, nativeBrowserWindowTab, nativeNewPathWindow } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 // Agents' pages outside Code's panes (docs/dev/BROWSER-PANE.md). In Code, a page an agent opens comes up as a Browser
@@ -162,6 +162,8 @@ export function usePanelBrowserClosed(panel: string, sessions: Set<string>): boo
  */
 export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; sessions: Set<string>; width?: number; edge?: ReactNode }) {
   const { st, save, last, tab, project, has } = usePanelColumn(panel, sessions);
+  const inWindow = useBrowserWindows((w) => !!tab && w.tabs.includes(tab));
+  const cur = useBrowserTabs((s) => s.tabs.find((x) => x.tab === tab));
   // one of its agents opened a page: show it, the column coming back if it was closed
   useEffect(() => {
     if (last && last.at > st.seen) save({ tab: last.tab, closed: false, seen: last.at });
@@ -169,9 +171,42 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
   if (!has) return null;
   // closed: its way back is a PanelBrowserButton in the row beside it (WorkView); a phone's tab shows it anyway
   if (st.closed && width) return null;
+  const hide = width && (
+    <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.hideColumn")} onClick={() => save({ ...st, closed: true })}>
+      <PanelRightClose className="size-3.5" />
+    </Button>
+  );
+  const box = cn("relative flex min-w-0 flex-col", width ? "max-w-[60%] shrink-0 border-l" : "min-h-0 flex-1");
+  // The page moved to a window of its own: a page is in one place, so the column holds a card for it instead of a
+  // second view of it (pictures, as the window has the real page)
+  if (tab && inWindow)
+    return (
+      <div className={box} style={{ width }}>
+        {edge}
+        <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2 text-[12px]">
+          <Globe className="mr-1 size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">{cur?.url}</span>
+          {hide}
+        </div>
+        <div className="grid flex-1 place-items-center bg-muted/40 p-6 text-center">
+          <div className="max-w-xs space-y-3">
+            <AppWindow className="mx-auto size-8 text-muted-foreground" />
+            <div className="text-[13px] text-muted-foreground">{t("browser.inWindow")}</div>
+            <div className="flex justify-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => nativeBrowserWindow(project, tab)}>
+                <AppWindow /> {t("browser.showWindow")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => nativeBrowserWindowClose(tab)}>
+                <Undo2 /> {t("browser.backToPanel")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   return (
     // width: a column at the panel's right; none: the whole space (a phone's 浏览器 tab)
-    <div className={cn("relative flex min-w-0 flex-col", width ? "max-w-[60%] shrink-0 border-l" : "min-h-0 flex-1")} style={{ width }}>
+    <div className={box} style={{ width }}>
       {edge}
       <PageBrowser
         project={project}
@@ -187,17 +222,14 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
                 title={t("browser.newWindow")}
                 onClick={() => {
                   openBrowserWindow(project, tab);
-                  save({ ...st, closed: true });
+                  // an older core can't say the page is out (no card): the column steps aside as it used to
+                  if (!useBrowserWindows.getState().known) save({ ...st, closed: true });
                 }}
               >
                 <SquareArrowOutUpRight className="size-3.5" />
               </Button>
             )}
-            {width && (
-              <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.hideColumn")} onClick={() => save({ ...st, closed: true })}>
-                <PanelRightClose className="size-3.5" />
-              </Button>
-            )}
+            {hide}
           </>
         }
       />
@@ -206,13 +238,14 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
 }
 
 /**
- * A window of its own for page tab: the desktop App opens one more window of Gerdr on /<project>?browser=<tab>
- * (internal/desktop gerdr.go newWindow's path; an App older than that opens the project's usual window); a plain browser
- * opens that address in a new tab.
+ * Page tab in a window of its own: the desktop App's core brings forward the window it is in already, or opens one more
+ * window of Gerdr on /<project>?browser=<tab> (internal/desktop browserwin.go). A core that doesn't track them (it never
+ * answered) gets the plain new window; a plain browser opens that address in a new tab.
  */
 export function openBrowserWindow(project: string, tab: number) {
   const path = `/${encodeURIComponent(project)}?browser=${tab}`;
-  if (isNative()) nativeNewPathWindow(project, path);
+  if (isNative() && useBrowserWindows.getState().known) nativeBrowserWindow(project, tab);
+  else if (isNative()) nativeNewPathWindow(project, path);
   else window.open(path, "_blank");
 }
 
@@ -235,6 +268,9 @@ export function BrowserWindow({ tab: first }: { tab: number }) {
   useEffect(() => {
     if (cur?.url) document.title = cur.url;
   }, [cur?.url]);
+  // the core keeps which page this window has (it followed the page to a popup: the new one), so the panel's column
+  // shows its card and opening the page again brings this window forward (internal/desktop browserwin.go)
+  useEffect(() => nativeBrowserWindowTab(tab ?? 0), [tab]);
   // ⌘W / Ctrl+W closes this window, as a browser's would: in the App the menu's key comes as a command (App.tsx
   // runCommand), in a plain browser (or a Windows App without that menu key) it is a keydown here
   useEffect(() => {
@@ -253,7 +289,17 @@ export function BrowserWindow({ tab: first }: { tab: number }) {
       {/* the App's traffic lights: a strip of their height that drags the window (lib/native.ts nativeTitleBar) */}
       {isNative() && <div className="h-(--titlebar-h) shrink-0 border-b bg-sidebar" style={{ WebkitAppRegion: "drag" } as React.CSSProperties} />}
       {project ? (
-        <PageBrowser project={project} tab={tab} onTab={setTab} />
+        <PageBrowser
+          project={project}
+          tab={tab}
+          onTab={setTab}
+          extra={
+            // back where it came from: closing the window puts it back (the column shows it again)
+            <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.backToPanel")} onClick={() => window.close()}>
+              <Undo2 className="size-3.5" />
+            </Button>
+          }
+        />
       ) : (
         <div className="grid flex-1 place-items-center text-[13px] text-muted-foreground">{loaded ? t("browser.gone") : t("browser.loading")}</div>
       )}

@@ -42,6 +42,10 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   a phone). Asked for: one place for the whole panel, not a tab beside each chat (the first cut). Its "open in new
   window" asks the App for a window on `/<project>?browser=<tab>` (internal/desktop `newWindow` with a `path`), which
   App.tsx draws as that page alone (`BrowserWindow`); the App's real page moves there (one window per page).
+  It is a move, not a copy (asked for: the window turned to pictures when the column was opened again, and each click
+  opened another window): the core keeps which window has which page (internal/desktop browserwin.go, the window's
+  page saying so), the column shows a card for a page that is out (show the window / put it back), opening it again
+  brings that window forward, and closing the window puts the page back in the column.
 
 ## Why not the obvious ways
 

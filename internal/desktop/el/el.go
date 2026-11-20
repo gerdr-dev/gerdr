@@ -12,7 +12,7 @@
 //	start {url, port}            the backend is up: open the first window at its login link
 //	newWindow {url} → window id  windows {} → [ids]   focus {win}   load {win, url}   eval {win, js} → value
 //	badge {label}   menu {items}   dockMenu {items}   quit {}   webPid {win} → pid   engine {} → {exe, dataDir, kind}
-//	relaunch {}   focused {} → bool
+//	relaunch {}   focused {} → bool   close {win}
 //	openExternal {url}   openPath {path, reveal}
 //	notify {win, title, body, sessionId, space}   dialog {kind, title, detail, buttons, defaultId, cancelId} → index
 //	openView {profile, url} → view id   viewCdp {view, method, params} → result   viewPlace {view, win, rect, radius}
@@ -134,6 +134,9 @@ func (w *Window) Load(url string) error {
 
 // Focus brings the window up.
 func (w *Window) Focus() { _, _ = w.app.call(map[string]any{"op": "focus", "win": w.id}) }
+
+// Close closes the window (as its close button would).
+func (w *Window) Close() { _, _ = w.app.call(map[string]any{"op": "close", "win": w.id}) }
 
 // Call: the DevTools protocol on the window's page isn't offered (the core used it for Page.navigate: Load).
 func (w *Window) Call(method string, params any) (json.RawMessage, error) {

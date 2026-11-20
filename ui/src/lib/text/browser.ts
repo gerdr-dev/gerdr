@@ -2,6 +2,10 @@
 export const zh = {
   "browser.back": "后退",
   "browser.newWindow": "在新窗口打开",
+  "browser.showWindow": "显示窗口",
+  "browser.backToPanel": "放回面板",
+  "browser.inWindow": "这个页面在独立窗口中打开着",
+  "browser.inWindowTag": "窗口中",
   "browser.hideColumn": "收起浏览器",
   "browser.showColumn": "打开浏览器",
   "browser.forward": "前进",
@@ -53,6 +57,10 @@ export const zh = {
 export const en: Record<keyof typeof zh, string> = {
   "browser.back": "Back",
   "browser.newWindow": "Open in new window",
+  "browser.showWindow": "Show window",
+  "browser.backToPanel": "Put back in the panel",
+  "browser.inWindow": "This page is open in its own window",
+  "browser.inWindowTag": "in a window",
   "browser.hideColumn": "Hide the browser",
   "browser.showColumn": "Show the browser",
   "browser.forward": "Forward",
