@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LLMSettings } from "@/components/LLMSettings";
+import { ImageModels, LLMSettings } from "@/components/LLMSettings";
 import { api } from "@/lib/api";
 import { MODE, defaultsOf, flatOptions, setDefaults, withoutDefaults } from "@/lib/defaults";
 import { t } from "@/lib/i18n";
@@ -407,6 +407,7 @@ function Engines({ agents }: { agents: AgentInfo[] }) {
         {cli("codex", "Codex", t("agentSettings.codexHow"))}
       </div>
       <LLMSettings />
+      <ImageModels />
     </div>
   );
 }

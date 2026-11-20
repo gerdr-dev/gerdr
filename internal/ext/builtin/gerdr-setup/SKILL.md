@@ -88,6 +88,9 @@ against the whole window). To compact earlier or later, set `compactAt` on that 
 on the same model fixes a wrong guess of the window size. Claude Code and Codex compact on their own; this doesn't
 touch them.
 
+The image model (for `gerdr image gen` and Gerdr Agent's `generate_image`) is `llm.imageModel`, picked from the
+providers' image models (`gerdr image models`); setting one up is in the gerdr-image skill.
+
 API keys read back as `<hidden>`; the real ones are in secrets.json. Don't open that file or print the
 environment variables named in `apiKeyEnv`: whatever you read ends up in this transcript. To set a key the
 user gives you, `gerdr config set llm.providers.<id>.apiKey <key>`.

@@ -28,6 +28,9 @@ type Config struct {
 	DefaultModel string     `json:"defaultModel,omitempty"` // provider/model
 	// SmallModel：起标题、压缩上下文这类杂活用的模型（provider/model），空 = 用会话自己的。
 	SmallModel string `json:"smallModel,omitempty"`
+	// ImageModel: the model that generates images (provider/model; its Kind is image), for the native agent's
+	// generate_image tool and `gerdr image gen`. Empty = pick one (resolveImage).
+	ImageModel string `json:"imageModel,omitempty"`
 }
 
 type Provider struct {
@@ -50,6 +53,9 @@ type Provider struct {
 type Model struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
+	// Kind: "chat" or "image" (an image generation model: never offered as a session's model, only used to make
+	// images). Empty = guessed from the id (imageModelID).
+	Kind string `json:"kind,omitempty"`
 	// API：chat（Chat Completions）| responses。空 = 按 id 猜：gpt / o 系列走 responses，别的走 chat。
 	// 服务商是 anthropic 协议时不看这个，一律 anthropic。
 	API string `json:"api,omitempty"`
@@ -142,8 +148,20 @@ func (r resolved) compactAt() int {
 	return r.Window * 9 / 10
 }
 
-// models 列出所有模型（补好默认值），按配置里的顺序。
+// models lists the chat models (defaults filled in), in config order. Image models are left out: none of the
+// callers (a session's model, the picker, compaction, titles) can use one.
 func (c Config) models() []resolved {
+	var out []resolved
+	for _, m := range c.allModels() {
+		if m.Kind != "image" {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// allModels is models with the image models too.
+func (c Config) allModels() []resolved {
 	var out []resolved
 	for _, p := range c.Providers {
 		if p.ID == "" || p.BaseURL == "" {
@@ -179,6 +197,12 @@ func (c Config) find(key string) (resolved, bool) {
 func (p Provider) withDefaults(m Model) Model {
 	if p.API == "anthropic" || p.API == "gemini" {
 		m.API = p.API
+	}
+	if m.Kind == "" {
+		m.Kind = "chat"
+		if imageModelID(m.ID) {
+			m.Kind = "image"
+		}
 	}
 	return withDefaults(m)
 }

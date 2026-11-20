@@ -1,4 +1,4 @@
-import { Check, Download, Loader2, Pencil, Plus, X } from "lucide-react";
+import { Check, Download, Image as ImageIcon, Loader2, Pencil, Plus, Star, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
@@ -74,6 +74,15 @@ function fromDraft(d: Draft): LLMProvider {
   return p;
 }
 
+// Image generation models, guessed from the id like the backend does (native/image.go imageModelID): Nano Banana
+// (gemini-…-image), gpt-image, dall-e. Not Imagen (Google's :predict API, unsupported). A model's kind overrides it.
+function imageId(id: string) {
+  const s = id.toLowerCase().split("/").pop() ?? "";
+  if (s.includes("imagen")) return false;
+  return s.includes("-image") || s.startsWith("gpt-image") || s.startsWith("dall-e") || s.includes("nano-banana");
+}
+const isImageModel = (m: LLMModel) => (m.kind ? m.kind === "image" : imageId(m.id));
+
 function slug(name: string, taken: Set<string>) {
   const base =
     name
@@ -91,6 +100,7 @@ export function LLMSettings() {
   const [edit, setEdit] = useState<Draft | null>(null);
   const [isNew, setIsNew] = useState(false);
   const save = (next: LLMConfig) => setConfig({ llm: next });
+  const chatProviders = providers.filter((p) => p.models.some((m) => !isImageModel(m))).length;
 
   const onSave = () => {
     if (!edit) return;
@@ -115,12 +125,14 @@ export function LLMSettings() {
         <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground max-md:order-last max-md:basis-full max-md:pl-6 max-md:whitespace-normal">
           {t("llmSettings.desc")}
         </span>
-        {providers.some((p) => p.models.length) ? (
+        {/* Counted like the backend's Available(): only providers with a chat model make Gerdr Agent usable, so one
+            holding just image models doesn't read as "configured" while Gerdr Agent is missing from new sessions */}
+        {chatProviders > 0 ? (
           <span className="ml-auto shrink-0 text-[12px] text-ok">
-            {t(providers.length === 1 ? "llmSettings.configuredOne" : "llmSettings.configured", { n: providers.length })}
+            {t(chatProviders === 1 ? "llmSettings.configuredOne" : "llmSettings.configured", { n: chatProviders })}
           </span>
         ) : (
-          <span className="ml-auto shrink-0 text-[12px] text-bad">{t("llmSettings.noProviders")}</span>
+          <span className="ml-auto shrink-0 text-[12px] text-bad">{t(providers.length ? "llmSettings.noChatModels" : "llmSettings.noProviders")}</span>
         )}
       </div>
       <div className="text-[12px] text-muted-foreground">{t("llmSettings.hint")}</div>
@@ -154,7 +166,8 @@ export function LLMSettings() {
           <div className="flex flex-wrap gap-1">
             {p.models.length ? (
               p.models.map((m) => (
-                <span key={m.id} className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[12px]">
+                <span key={m.id} className="flex items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[12px]">
+                  {isImageModel(m) && <ImageIcon className="size-3 text-muted-foreground" />}
                   {m.id}
                 </span>
               ))
@@ -319,6 +332,21 @@ function Editor({
               <span key={m.id} className="flex items-center gap-1 rounded-sm bg-card py-0.5 pr-0.5 pl-1.5 font-mono text-[12px] ring-1 ring-border">
                 {m.id}
                 <button
+                  className="flex items-center gap-0.5 rounded-sm px-1 text-muted-foreground hover:bg-muted hover:text-foreground data-[on=true]:text-brand"
+                  data-on={isImageModel(m)}
+                  title={t("llmSettings.imageToggle")}
+                  onClick={() => {
+                    const kind = isImageModel(m) ? "chat" : "image";
+                    // Stored only when it differs from the guess, so config.json stays just the id
+                    const next = { ...m, kind: kind === (imageId(m.id) ? "image" : "chat") ? undefined : kind } as LLMModel;
+                    if (!next.kind) delete next.kind;
+                    set({ models: d.models.map((x) => (x.id === m.id ? next : x)) });
+                  }}
+                >
+                  <ImageIcon className="size-3" />
+                  {isImageModel(m) && <span className="font-sans">{t("llmSettings.imageTag")}</span>}
+                </button>
+                <button
                   className="rounded-sm px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                   title={t("llmSettings.testTitle")}
                   onClick={() => test(m)}
@@ -390,6 +418,293 @@ function Editor({
       </div>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>
+          {t("common.cancel")}
+        </Button>
+        <Button size="sm" onClick={onSave}>
+          {t("common.save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+type ImageRow = { key: string; provider: LLMProvider; model: LLMModel };
+
+/** The image models in config order, and the one generation uses without --model: llm.imageModel, else the first on
+ *  a Gemini provider, then on an OpenAI-compatible one (backend native/image.go resolveImage). Anthropic can't make images. */
+function imageRows(llm: LLMConfig): { rows: ImageRow[]; current?: string } {
+  const rows: ImageRow[] = [];
+  for (const p of llm.providers ?? []) {
+    if (p.api === "anthropic") continue;
+    for (const m of p.models ?? []) if (isImageModel(m)) rows.push({ key: `${p.id}/${m.id}`, provider: p, model: m });
+  }
+  const current = llm.imageModel || (rows.find((r) => r.provider.api === "gemini") ?? rows.find((r) => !r.provider.api))?.key;
+  return { rows, current };
+}
+
+// The protocols an image model can be on, with the model a new one starts from
+const IMAGE_PROTOCOLS = { gemini: "gemini-2.5-flash-image", openai: "gpt-image-1" } as const;
+type ImageProtocol = keyof typeof IMAGE_PROTOCOLS;
+const NEW = "__new";
+
+/**
+ * Settings → Agent, under the engines: the model that makes images for every agent (`gerdr image gen`, Gerdr Agent's
+ * generate_image). Its own section, not inside the Native card, because Claude Code / Codex use it too. The data
+ * stays in one place: an image model is a model of kind image on one of llm.providers (keys and URLs only there),
+ * the default is llm.imageModel. Adding one to a provider here is the same as adding it in the provider's editor.
+ */
+export function ImageModels() {
+  const llm = useStore((s) => s.config.llm ?? EMPTY);
+  const providers = (llm.providers ?? []).filter((p) => p.api !== "anthropic");
+  const { rows, current } = imageRows(llm);
+  const [adding, setAdding] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+  const save = (next: LLMConfig) => setConfig({ llm: next });
+
+  const test = async (r: ImageRow) => {
+    setTesting(r.key);
+    try {
+      const res = await api.llmTest(r.provider, r.model);
+      toast.success(t("llmSettings.imageTestOk", { id: r.model.id, reply: res.reply }));
+    } catch (e: any) {
+      toast.error(t("llmSettings.testFailed", { id: r.model.id, error: e.message }));
+    } finally {
+      setTesting(null);
+    }
+  };
+  const remove = (r: ImageRow) =>
+    save({
+      ...llm,
+      imageModel: llm.imageModel === r.key ? undefined : llm.imageModel,
+      providers: (llm.providers ?? []).map((p) => (p.id === r.provider.id ? { ...p, models: p.models.filter((m) => m.id !== r.model.id) } : p)),
+    });
+  const code = (x: string) => <code className="font-mono">{x}</code>;
+
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div>
+        <div className="font-medium">{t("llmSettings.imageModel")}</div>
+        <div className="text-[12px] text-muted-foreground">{rich(t("llmSettings.imageHint"), { cmd: code("gerdr image gen") })}</div>
+      </div>
+      {rows.length > 0 && (
+        <div className="space-y-1.5">
+          {rows.map((r) => {
+            const isDefault = r.key === current;
+            const pinned = r.key === llm.imageModel;
+            return (
+              <div key={r.key} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-3 py-2 text-[13px]">
+                <ImageIcon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate font-mono text-[12px]">{r.model.id}</span>
+                <span className="shrink-0 text-[12px] text-muted-foreground">{t("llmSettings.imageFrom", { provider: r.provider.name || r.provider.id })}</span>
+                <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">{r.provider.api === "gemini" ? "Gemini" : "OpenAI"}</span>
+                {isDefault && (
+                  <span className="shrink-0 rounded-sm bg-brand/10 px-1 text-[11px] text-brand">
+                    {t(pinned ? "llmSettings.imageDefault" : "llmSettings.imageDefaultAuto")}
+                  </span>
+                )}
+                <span className="flex-1" />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7 data-[on=true]:text-brand"
+                  data-on={pinned}
+                  title={t(pinned ? "llmSettings.imageUnpin" : "llmSettings.imagePin")}
+                  onClick={() => save({ ...llm, imageModel: pinned ? undefined : r.key })}
+                >
+                  <Star className="size-3.5" fill={pinned ? "currentColor" : "none"} />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  onClick={() => test(r)}
+                  disabled={testing === r.key}
+                  title={t("llmSettings.imageTestTitle")}
+                >
+                  {testing === r.key ? <Loader2 className="size-3.5 animate-spin" /> : t("llmSettings.test")}
+                </Button>
+                <ConfirmDelete title={t("llmSettings.removeModel")} onConfirm={() => remove(r)} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!rows.length && !adding && (
+        <div className="text-[12px] text-muted-foreground">
+          {rich(t("llmSettings.imageNone"), { gemini: code(IMAGE_PROTOCOLS.gemini), openai: code(IMAGE_PROTOCOLS.openai) })}
+        </div>
+      )}
+      {adding ? (
+        <ImageAdder providers={providers} llm={llm} onDone={() => setAdding(false)} />
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+          <Plus className="size-3.5" /> {t("llmSettings.imageAdd")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Adding an image model: to a provider there already is, or with a new provider (the only way when there is none
+ *  yet, e.g. someone on Claude Code only) — then the provider is saved with just this model. */
+function ImageAdder({ providers, llm, onDone }: { providers: LLMProvider[]; llm: LLMConfig; onDone: () => void }) {
+  const [target, setTarget] = useState(providers[0]?.id ?? NEW);
+  const firstProto: ImageProtocol = providers[0]?.api === "gemini" || !providers[0] ? "gemini" : "openai";
+  const [model, setModel] = useState<string>(IMAGE_PROTOCOLS[firstProto]);
+  const [proto, setProto] = useState<ImageProtocol>("gemini");
+  const [name, setName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [key, setKey] = useState("");
+  const [fetched, setFetched] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const existing = providers.find((p) => p.id === target);
+  // A provider picked earlier may be gone (deleted meanwhile): then it is a new one, as when there were none
+  const isNew = !existing;
+
+  const pickTarget = (v: string) => {
+    setTarget(v);
+    setFetched(null);
+    const p = providers.find((x) => x.id === v);
+    setModel(IMAGE_PROTOCOLS[v === NEW ? proto : p?.api === "gemini" ? "gemini" : "openai"]);
+  };
+  const newProvider = (): LLMProvider => {
+    const taken = new Set((llm.providers ?? []).map((p) => p.id));
+    const label = name.trim() || (proto === "gemini" ? "Gemini" : "OpenAI");
+    return {
+      id: slug(label, taken),
+      name: label,
+      api: proto === "gemini" ? "gemini" : undefined,
+      baseUrl: (baseUrl.trim() || PROTOCOLS[proto].baseUrl).replace(/\/+$/, ""),
+      apiKey: key.trim() || undefined,
+      models: [],
+    };
+  };
+  // Marked image only when the id doesn't say so already: config.json stays just the id
+  const entry = (id: string): LLMModel => (imageId(id) ? { id } : { id, kind: "image" });
+
+  const fetchModels = async () => {
+    const p = isNew ? newProvider() : existing;
+    if (!p) return;
+    setBusy(true);
+    try {
+      const r = await api.llmModels(p);
+      // Image models first: a gateway lists dozens of chat models
+      setFetched([...r.models.filter(imageId), ...r.models.filter((x) => !imageId(x))]);
+    } catch (e: any) {
+      toast.error(t("llmSettings.fetchFailed", { error: e.message }));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const onSave = () => {
+    const id = model.trim();
+    if (!id) return toast.error(t("llmSettings.imageNeedModel"));
+    const list = llm.providers ?? [];
+    if (isNew) {
+      const p = newProvider();
+      if (!/^https?:\/\//.test(p.baseUrl)) return toast.error(t("llmSettings.badBaseUrl"));
+      setConfig({ llm: { ...llm, providers: [...list, { ...p, models: [entry(id)] }] } });
+    } else if (existing) {
+      const has = existing.models.find((m) => m.id === id);
+      const models = has ? existing.models.map((m) => (m.id === id ? { ...m, kind: "image" as const } : m)) : [...existing.models, entry(id)];
+      setConfig({ llm: { ...llm, providers: list.map((p) => (p.id === existing.id ? { ...p, models } : p)) } });
+    }
+    toast.success(t("llmSettings.imageAdded", { id }));
+    onDone();
+  };
+
+  return (
+    <div className="space-y-2.5 rounded-lg border bg-muted/30 p-3 text-[13px]">
+      <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 max-md:grid-cols-1">
+        {providers.length > 0 && (
+          <>
+            <span className="text-muted-foreground">{t("llmSettings.imageProvider")}</span>
+            <Select value={target} onValueChange={pickTarget}>
+              <SelectTrigger size="sm" className="w-auto max-w-full min-w-48 max-md:w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name || p.id}
+                  </SelectItem>
+                ))}
+                <SelectItem value={NEW}>{t("llmSettings.imageNewProvider")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        )}
+        {isNew && (
+          <>
+            <span className="text-muted-foreground">{t("llmSettings.protocol")}</span>
+            <Select
+              value={proto}
+              onValueChange={(v) => {
+                setProto(v as ImageProtocol);
+                setModel(IMAGE_PROTOCOLS[v as ImageProtocol]);
+              }}
+            >
+              <SelectTrigger size="sm" className="w-40 max-w-full max-md:w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gemini">Gemini</SelectItem>
+                <SelectItem value="openai">{PROTOCOLS.openai.label}</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-muted-foreground">{t("llmSettings.name")}</span>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={stop}
+              className="h-8"
+              placeholder={proto === "gemini" ? "Gemini" : "OpenAI"}
+            />
+            <span className="text-muted-foreground">{t("llmSettings.baseUrl")}</span>
+            <Input
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              onKeyDown={stop}
+              className="h-8 font-mono text-[12px]"
+              placeholder={PROTOCOLS[proto].baseUrl}
+            />
+            <span className="text-muted-foreground">API key</span>
+            <Input
+              type="password"
+              autoComplete="off"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              onKeyDown={stop}
+              className="h-8 font-mono text-[12px]"
+              placeholder={t("llmSettings.keyPlaceholder", { example: PROTOCOLS[proto].key })}
+            />
+          </>
+        )}
+        <span className="text-muted-foreground">{t("llmSettings.imageModelId")}</span>
+        <div className="flex items-center gap-2">
+          <Input value={model} onChange={(e) => setModel(e.target.value)} onKeyDown={stop} className="h-8 font-mono text-[12px]" />
+          <Button size="sm" variant="outline" className="shrink-0" onClick={fetchModels} disabled={busy}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />} {t("llmSettings.fetch")}
+          </Button>
+        </div>
+      </div>
+      {fetched && fetched.length > 0 && (
+        <div className="flex max-h-32 flex-wrap gap-1 overflow-auto rounded-md border bg-card p-2">
+          {fetched.map((id) => (
+            <button
+              key={id}
+              className="rounded-sm px-1.5 py-0.5 font-mono text-[12px] hover:bg-muted data-[on=true]:bg-brand/10 data-[on=true]:text-brand"
+              data-on={id === model}
+              onClick={() => setModel(id)}
+            >
+              {id}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="text-[12px] text-muted-foreground">{t(isNew ? "llmSettings.imageAddNewHint" : "llmSettings.imageAddHint")}</div>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onDone}>
           {t("common.cancel")}
         </Button>
         <Button size="sm" onClick={onSave}>

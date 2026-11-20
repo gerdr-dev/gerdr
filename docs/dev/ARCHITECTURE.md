@@ -283,6 +283,30 @@ config.json (example in the README), read fresh every turn.
 
 测试：`go test ./agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
+### Image generation (`native/image.go`, `llm/image.go`, `/api/image`, `gerdr image`)
+
+One model makes images for every agent: `llm.imageModel` (empty = the first image model, Gemini providers first).
+The native agent calls it through its `generate_image` tool (offered only when a model resolves); Claude Code / Codex
+through `gerdr image gen`, which posts to `/api/image` so the request goes out from the backend with the keys there
+(agents' environments don't have them); the images come back in the response and the CLI writes them where it runs.
+Not a session model on purpose: image models (Nano Banana, gpt-image) don't do function calling, so choosing one as a
+session's model would lose every tool.
+
+- `Model.Kind` "image" keeps a model out of everything chat (`Config.models()` skips it; `allModels()` has it). Guessed
+  from the id (`-image`, `gpt-image`, `dall-e`, `nano-banana`), not `imagen`: that is Google's `:predict` API, which we
+  don't speak. The automatic pick only takes models of kind image: a provider on the Gemini protocol (a gateway)
+  doesn't necessarily have Nano Banana.
+- Gemini: `generateContent` with `responseModalities ["TEXT","IMAGE"]` and `imageConfig.aspectRatio` / `imageSize`
+  (`imageSize` only on Pro image models — sent only when asked for). Pro models also return draft images as parts with
+  `thought: true`: skip them. No `n`: n requests in parallel. A refusal comes as text or finishReason `IMAGE_SAFETY`
+  with no image: reported as the error. Multi-turn editing with thought signatures isn't used: each call is one
+  request with the images to edit attached.
+- OpenAI: `/images/generations`, or multipart `/images/edits` (`image[]`) with reference images. gpt-image refuses
+  `response_format` (it always answers base64); DALL·E needs `response_format: b64_json`. Many gateways have Chat
+  Completions but no Images API: their 404 is reported as that.
+- Image MIME types come from the bytes, not the label (gateways mislabel).
+- The settings page's Test on an image model makes one small image (it can't "reply OK").
+
 ## 用量额度（`_gerdr/usage` → hub/usage.go → `/api/usage` → 插件面板的 UsageMeter）
 
 不发 `/usage`（那会进对话记录、输出是给终端看的文字）。两边都有结构化的口：

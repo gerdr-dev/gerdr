@@ -1,9 +1,11 @@
 package server
 
 import (
+	"encoding/base64"
 	"net/http"
 
 	"github.com/gerdr-dev/gerdr/agents/native"
+	"github.com/gerdr-dev/gerdr/agents/native/llm"
 	"github.com/gerdr-dev/gerdr/internal/agentwire"
 )
 
@@ -40,4 +42,54 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"reply": reply, "api": api})
 	})
+	mux.HandleFunc("POST /api/image", s.generateImage)
+	mux.HandleFunc("GET /api/image/models", func(w http.ResponseWriter, r *http.Request) {
+		cfg := s.Hub.LLM()
+		ms := cfg.ImageModels()
+		if ms == nil {
+			ms = []native.ImageModel{}
+		}
+		out := map[string]any{"models": ms, "configured": cfg.ImageModel}
+		if _, err := cfg.ResolveImageModel(""); err != nil {
+			out["error"] = err.Error()
+		}
+		writeJSON(w, out)
+	})
+}
+
+type imageBlob struct {
+	MIME string `json:"mime"`
+	Data string `json:"data"` // base64
+}
+
+// POST /api/image: `gerdr image gen`. The backend makes the request so the keys stay here (agents' environments
+// don't have them); the images go back in the response and the CLI writes them where it runs, which also works
+// for a paired computer reached through /h/<host>/.
+func (s *Server) generateImage(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Prompt string      `json:"prompt"`
+		Images []imageBlob `json:"images"`
+		Aspect string      `json:"aspect"`
+		Size   string      `json:"size"`
+		N      int         `json:"n"`
+		Model  string      `json:"model"`
+	}
+	if err := decode(r, &b); err != nil {
+		httpError(w, 400, err.Error())
+		return
+	}
+	req := llm.ImageRequest{Prompt: b.Prompt, Aspect: b.Aspect, Size: b.Size, N: b.N}
+	for _, im := range b.Images {
+		req.Images = append(req.Images, llm.Part{Type: "image", MIME: im.MIME, Data: im.Data})
+	}
+	res, key, err := native.GenerateImage(r.Context(), s.Hub.LLM(), b.Model, req)
+	if err != nil {
+		httpError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	out := []imageBlob{}
+	for _, im := range res.Images {
+		out = append(out, imageBlob{MIME: im.MIME, Data: base64.StdEncoding.EncodeToString(im.Data)})
+	}
+	writeJSON(w, map[string]any{"model": key, "text": res.Text, "images": out})
 }

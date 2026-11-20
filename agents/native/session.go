@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -461,6 +462,9 @@ func (s *session) newRun(ctx context.Context) *run {
 	m, _ := cfg.find(model)
 	r := &run{s: s, model: m, effort: effort, tok: &s.tok}
 	r.tools = append([]*tool(nil), builtinTools...)
+	if _, err := cfg.resolveImage(""); err != nil { // no image model: no tool that can only fail
+		r.tools = slices.DeleteFunc(r.tools, func(t *tool) bool { return t == generateImageTool })
+	}
 	for _, t := range s.a.opt.Tools {
 		r.tools = append(r.tools, callerTool(t))
 	}
@@ -491,7 +495,7 @@ func (s *session) newRun(ctx context.Context) *run {
 var builtinTools []*tool
 
 func init() {
-	builtinTools = []*tool{readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, askTool, taskTool, bashOutputTool, stopTaskTool, webFetchTool}
+	builtinTools = []*tool{readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, askTool, taskTool, bashOutputTool, stopTaskTool, webFetchTool, generateImageTool}
 }
 
 // ---- Context-full notice ----

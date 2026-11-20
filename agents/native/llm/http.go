@@ -138,6 +138,11 @@ func postURL(ctx context.Context, url string, auth http.Header, extra map[string
 	if err != nil {
 		return nil, err
 	}
+	return postBytes(ctx, url, auth, extra, "application/json", buf)
+}
+
+// postBytes is postURL for a body already encoded (a multipart upload: OpenAI's image edits), with the same retries.
+func postBytes(ctx context.Context, url string, auth http.Header, extra map[string]string, contentType string, buf []byte) (io.ReadCloser, error) {
 	var last error
 	for attempt := 0; ; attempt++ {
 		// rctx: the idle watchdog's handle on this one request (cancelling ctx itself would read as a stop)
@@ -147,7 +152,7 @@ func postURL(ctx context.Context, url string, auth http.Header, extra map[string
 			cancel()
 			return nil, err
 		}
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 		req.Header.Set("Accept", "text/event-stream")
 		for k, v := range auth {
 			req.Header[k] = v

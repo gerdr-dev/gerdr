@@ -521,6 +521,11 @@ func SafeGerdrCLI(cmd string) bool {
 		if len(words) != 3 || words[2] != "list" {
 			return false
 		}
+	case "image":
+		// Only listing the image models: gen costs the person money for every image, so it is asked about
+		if len(words) != 3 || words[2] != "models" {
+			return false
+		}
 	case "wait":
 		// Waiting for a state, listing, removing one's own waits: nothing it does runs anything
 		if len(words) < 3 {

@@ -122,6 +122,20 @@ func listGeminiModels(ctx context.Context, ep llm.Endpoint) ([]string, error) {
 // TestModel：用这个模型说一句话，回它的回复和用的协议。
 func TestModel(ctx context.Context, p Provider, m Model) (reply, api string, err error) {
 	r := resolved{Key: p.ID + "/" + m.ID, Provider: p, Model: p.withDefaults(m)}
+	if r.Kind == "image" {
+		// An image model can't "reply OK": make one small image (costs one generation, on a button the person pressed)
+		cfg := Config{Providers: []Provider{p}}
+		cfg.Providers[0].Models = []Model{m}
+		res, _, err := GenerateImage(ctx, cfg, r.Key, llm.ImageRequest{Prompt: "A single red circle on a plain white background, flat, minimal."})
+		api = "images"
+		if p.API == "gemini" {
+			api = "gemini"
+		}
+		if err != nil {
+			return "", api, err
+		}
+		return fmt.Sprintf("%s, %d KB", res.Images[0].MIME, (len(res.Images[0].Data)+1023)/1024), api, nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	res, err := r.client().Stream(ctx, llm.Request{

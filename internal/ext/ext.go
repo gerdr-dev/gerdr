@@ -264,7 +264,7 @@ func (m *Manager) Settings() Settings {
 // (everything past the first part was cut, so the browser part was never seen), so it was split by topic. Every
 // list of skill names written before then (switched off, a role's skills, a project's switched-off) means the parts
 // too: a role that named "gerdr" keeps getting all of it, a "gerdr" switched off keeps all of it off.
-var splitInto = map[string][]string{"gerdr": {"gerdr-browser", "gerdr-setup", "gerdr-events"}}
+var splitInto = map[string][]string{"gerdr": {"gerdr-browser", "gerdr-setup", "gerdr-events", "gerdr-image"}}
 
 // withSplit is names plus the parts of any split skill it names, each once. nil stays nil (Only: "no limit").
 func withSplit(names []string) []string {

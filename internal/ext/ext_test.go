@@ -89,7 +89,7 @@ func TestClaudeArgsScoped(t *testing.T) {
 		names = append(names, l.Name())
 	}
 	// "gerdr" brings the skills it was split into (withSplit), still not gerdr-ui
-	if !slices.Equal(names, []string{"gerdr", "gerdr-browser", "gerdr-events", "gerdr-setup"}) {
+	if !slices.Equal(names, []string{"gerdr", "gerdr-browser", "gerdr-events", "gerdr-image", "gerdr-setup"}) {
 		t.Fatalf("only the built-in skills picked belong in the shell dir: %v", names)
 	}
 	// 没限定的 Manager 不带这些
@@ -337,7 +337,7 @@ func TestSplitSkillNames(t *testing.T) {
 	}
 	in := []string{"gerdr", "pdf", "gerdr-setup"}
 	got := withSplit(in)
-	want := []string{"gerdr", "pdf", "gerdr-setup", "gerdr-browser", "gerdr-events"}
+	want := []string{"gerdr", "pdf", "gerdr-setup", "gerdr-browser", "gerdr-events", "gerdr-image"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("%v, want %v", got, want)
 	}
