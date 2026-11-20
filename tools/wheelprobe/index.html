@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;font:15px/22px -apple-system,sans-serif;background:#f4f4f5}
+#s{height:100%;overflow-y:auto}
+.r{margin:6px 12px;padding:10px 14px;border-radius:16px;background:#fff;max-width:85%}
+.r b{display:block;font-size:12px;color:#71717a}
+</style></head><body><div id="s"></div><script>
+const fs = require("fs");
+const LOG = "/tmp/electron-wheel.log";
+fs.writeFileSync(LOG, "");
+const W = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua".split(" ");
+let seed = 7; const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const s = document.getElementById("s");
+let html = "";
+for (let i = 0; i < 400; i++) { const n = 3 + Math.floor(rand() * 120); html += `<div class="r"><b>#${i + 1}</b>${Array.from({ length: n }, () => W[Math.floor(rand() * W.length)]).join(" ")}</div>`; }
+s.innerHTML = html;
+const lines = [];
+const flush = () => { if (lines.length) fs.appendFileSync(LOG, lines.splice(0).join("\n") + "\n"); };
+setInterval(flush, 500);
+// performance.now() is ms since the page's time origin; log that origin too, in the same clock as the frames
+lines.push(`origin ${performance.timeOrigin}`);
+s.addEventListener("wheel", (e) => lines.push(`wheel t=${e.timeStamp.toFixed(2)} dy=${e.deltaY} mode=${e.deltaMode}`), { passive: true });
+let last = -1;
+const frame = (t) => { const y = s.scrollTop; if (y !== last) { lines.push(`frame t=${t.toFixed(2)} y=${y.toFixed(2)}`); last = y; } requestAnimationFrame(frame); };
+requestAnimationFrame(frame);
+</script></body></html>

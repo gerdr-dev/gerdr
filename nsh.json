@@ -1,0 +1,30 @@
+{
+  "name": "gerdr-nsh-spike",
+  "id": "com.example.gerdrnshspike",
+  "version": "1.0.0",
+  "build": 1,
+  "capabilities": {
+    "fs": {
+      "read": [
+        "${homeDir}/.gerdr",
+        "${dataDir}"
+      ],
+      "write": [
+        "${dataDir}"
+      ]
+    },
+    "homeDir": true,
+    "network": {
+      "hosts": [
+        "127.0.0.1"
+      ]
+    },
+    "clipboard": true,
+    "application": true,
+    "statusBar": true,
+    "host": [
+      "mic.*",
+      "audio.*"
+    ]
+  }
+}

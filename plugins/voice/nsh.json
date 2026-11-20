@@ -1,0 +1,10 @@
+{
+  "name": "Gerdr voice",
+  "id": "dev.gerdr.plugin.voice",
+  "version": "0.1.0",
+  "build": 1,
+  "capabilities": {
+    "network": { "hosts": ["openspeech.bytedance.com", "*.tts.speech.microsoft.com"] },
+    "host": ["gerdr.*", "mic.*", "audio.*"]
+  }
+}
