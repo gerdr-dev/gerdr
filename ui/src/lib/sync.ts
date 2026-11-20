@@ -341,8 +341,9 @@ function wake(e: Event) {
   hiddenAt = 0;
   // No connection: try now, also when a backoff wait is pending (it grew while the page sat in the background)
   if (!ws) return reconnectNow();
-  // Back after a while in the background, or on another network: don't trust the connection, replace it (refresh)
-  if (away > 20000 || e.type === "online") return refresh();
+  // Back after a while in the background, or on another network: don't trust the connection, replace it (refresh).
+  // Unless it has been delivering all along (Labs "stay connected in the background" in the App): then just ask
+  if ((away > 20000 && Date.now() - lastHeard > 20000) || e.type === "online") return refresh();
   // A short look away / a focus: just ask, 8s without an answer reconnects.
   // 只收问的那一条：focus / visibilitychange / online 常常一起来，3 秒的版本在远程慢网上会把刚连上的新连接也当死的收掉，
   // 一直重连（服务端「正在连接」里一台手机列好几条）。8 秒是给远程留的：pong 会排在正在写的一大帧日志后面。

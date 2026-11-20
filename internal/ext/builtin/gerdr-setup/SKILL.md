@@ -78,7 +78,7 @@ gerdr config set agents.reviewer.prompt "Review only, don't edit"   # array elem
 gerdr config unset defaultConfig.codex
 ```
 
-`theme`, `sendKey`, `notifications`, `keepTabs`, `gridTiles`, `virtualList` and `copyOnSelect` are per device: a device that
+`theme`, `sendKey`, `notifications`, `keepTabs`, `gridTiles`, `virtualList`, `copyOnSelect` and `keepConnected` are per device: a device that
 picked its own in Settings (marked 仅本设备) keeps it, `gerdr config set` only changes the others. If the user says
 it didn't take, tell them to change it in Settings on that device.
 

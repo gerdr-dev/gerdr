@@ -87,7 +87,9 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                         // the same flow as iOS. The pairing page offers it when the server says this device has one
                         .put("appKey", AppKey.available(act))
                         // net: add-ons' g.socket / g.fetch go from the phone straight to the service (NativeNet)
-                        .put("net", true),
+                        .put("net", true)
+                        // keepConnected: Labs "stay connected in the background" (MainActivity.setKeepConnected)
+                        .put("keepConnected", true),
                 )
                 keyboard(act.hardKeyboard()) // whether menus show their shortcut keys (ui lib/hwKeyboard.ts)
                 send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
@@ -114,6 +116,8 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                 "install" -> AppUpdate.install(act)
                 else -> send(AppUpdate.state(act))
             }
+            // Labs: keep the page running and connected in the background (MainActivity.setKeepConnected)
+            "keepConnected" -> act.setKeepConnected(m.optBoolean("on"))
             "theme" -> act.applyTheme(m.optString("bg"), m.optBoolean("light"))
             "open" -> act.openExternal(m.optString("url"))
             // More windows, one project each (WindowActivity); `space` names this window's project for the recents list

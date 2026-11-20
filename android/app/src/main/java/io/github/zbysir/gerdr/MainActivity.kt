@@ -332,9 +332,30 @@ open class MainActivity : ComponentActivity() {
     override fun onPause() {
         resumed.decrementAndGet()
         // 页面那边会收到 visibilitychange（hidden），终端的「回前台发探针、僵了就重连」照常工作
-        web?.onPause()
+        // Labs "stay connected in the background": the page keeps running instead (setKeepConnected)
+        applyKeepConnected()
+        if (!keepConnected) web?.onPause()
         CookieManager.getInstance().flush()
         super.onPause()
+    }
+
+    /** Labs "stay connected in the background" (the page's config keepConnected, sent over the bridge; kept here too) */
+    private val keepConnected get() = getSharedPreferences("app", MODE_PRIVATE).getBoolean("keepConnected", false)
+
+    /**
+     * Stay connected in the background: the page keeps its /ws open and keeps handling what comes in, so it is current
+     * the moment the App comes back instead of catching up then. Two things stop that by default: web.onPause in
+     * onPause, and the WebView waiving its renderer's priority when it isn't visible, which lets Android (HyperOS
+     * especially) freeze or kill the renderer process even while the App itself is kept alive by NoticeService. Off
+     * by default: it costs data and battery, and a connected remote page keeps the computer awake (server/ws.go).
+     */
+    fun setKeepConnected(on: Boolean) {
+        getSharedPreferences("app", MODE_PRIVATE).edit().putBoolean("keepConnected", on).apply()
+        applyKeepConnected()
+    }
+
+    private fun applyKeepConnected() {
+        web?.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, !keepConnected)
     }
 
     override fun onDestroy() {
@@ -504,6 +525,7 @@ open class MainActivity : ComponentActivity() {
         w.webChromeClient = chrome
         w.setDownloadListener { url, ua, disposition, mime, _ -> download(url, ua, disposition, mime) }
         web = w
+        applyKeepConnected()
         bridge = Bridge(this, w, o)
         root.addView(w, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         showLoading(server.host ?: o)

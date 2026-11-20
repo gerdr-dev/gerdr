@@ -8,7 +8,7 @@ import { lightboxOpen } from "@/components/Lightbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isApp } from "@/lib/android";
+import { androidCan, isApp } from "@/lib/android";
 import { api } from "@/lib/api";
 import { usePhone } from "@/lib/phone";
 import { GAP, pageX, useSwipePager } from "@/lib/swipePager";
@@ -464,6 +464,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
                 <Row label={t("settings.labs.copyOnSelect")} hint={t("settings.labs.copyOnSelect.hint")} local>
                   <Switch checked={!!dev.copyOnSelect} onCheckedChange={(v) => setPref({ copyOnSelect: v })} />
                 </Row>
+                {androidCan("keepConnected") && (
+                  <Row label={t("settings.labs.keepConnected")} hint={t("settings.labs.keepConnected.hint")} local>
+                    <Switch checked={!!dev.keepConnected} onCheckedChange={(v) => setPref({ keepConnected: v })} />
+                  </Row>
+                )}
                 <ProdReactRow />
                 <div className="border-t pt-4">
                   <DoctorPanel />

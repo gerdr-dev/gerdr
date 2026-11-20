@@ -90,6 +90,9 @@ const settingsZh = {
   "settings.labs.readFromTop.hint": "跟着输出往下滚时，一段文字长到超出屏幕，就停在这段的开头让你从头读，不再往下滚；后面的新输出点 ↓ 按钮去看",
   "settings.labs.copyOnSelect": "选中即复制",
   "settings.labs.copyOnSelect.hint": "和 Herdr 一样：拖着选中文字，松开鼠标就复制到剪贴板；双击选词也会复制。对话和终端里都管用，输入框里不复制",
+  "settings.labs.keepConnected": "后台保持连接",
+  "settings.labs.keepConnected.hint":
+    "App 切到后台时继续连着、继续收对话内容，切回来就是最新的，不用等。代价：更费流量和电；手机连着时电脑不会睡眠。要开着后台通知（它让 App 在后台活着）",
   "settings.labs.prodReact": "生产版 React（更流畅）",
   "settings.labs.prodReact.hint":
     "默认打开，切 tab、滚动都快好几倍。代价：改界面后整页重新渲染（滚动位置、打开的菜单会丢）；界面报错看不到出错的文件。调试或让 agent 修界面时可以先关掉",
@@ -204,6 +207,9 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.labs.copyOnSelect": "Copy on select",
   "settings.labs.copyOnSelect.hint":
     "Like Herdr: drag to select text and it's copied when you let go; double-click selects a word and copies it too. Works in chats and terminals, not in the input box",
+  "settings.labs.keepConnected": "Stay connected in the background",
+  "settings.labs.keepConnected.hint":
+    "The App stays connected and keeps receiving chats while it's in the background, so it's current the moment you come back. Costs more data and battery, and the computer won't sleep while the phone is connected. Needs background notifications on (they keep the App alive)",
   "settings.labs.prodReact": "Production React (smoother)",
   "settings.labs.prodReact.hint":
     "On by default: switching tabs and scrolling are several times faster. The cost: a UI edit re-renders the whole page (scroll positions and open menus are lost), and UI errors don't say which file. Turn it off while debugging the UI or having an agent fix it",

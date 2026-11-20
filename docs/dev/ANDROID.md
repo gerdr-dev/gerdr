@@ -149,6 +149,18 @@ App 关着 / 锁屏时，一个前台服务（`NoticeService`）挂在两个长�
 - 点通知带着会话 id，页面 hello 之后壳发 `focus`，页面切到那个会话。App 在前台时不弹（网页自己有提示）。
 - 小米 HyperOS 那几个坑（频道级别、RemoteViews 按 view id 认控件）见 NoticeService.kt / widget 布局里的注释。
 
+## Staying connected in the background (Labs)
+
+By default the page stops in the background: `web.onPause()`, and the WebView waives its renderer's priority when it
+isn't visible, so Android (HyperOS readily) freezes the renderer even while NoticeService keeps the App's own process
+alive. /ws then delivers nothing, and on coming back the page catches up (sync.ts `wake` → `refresh`: a new
+connection opened beside the old one, swapped in once open, so nothing reads "reconnecting"; still a moment of stale
+chat). With Labs → "stay connected in the background" on, `MainActivity.setKeepConnected` skips `web.onPause()` and
+sets `setRendererPriorityPolicy(IMPORTANT, waivedWhenNotVisible = false)`: the renderer shares the App's importance,
+the page keeps handling /ws, and it is current when it comes back. Off by default, for the reasons in "后台通知" above
+(/ws traffic in the background, and a connected remote page keeps the Mac awake). Without notifications on, nothing
+keeps the App's process alive and the setting does little.
+
 ## Downloads
 
 Files (`/api/fs/raw`, `/api/blobs`) sit behind the same device cookie, which only the WebView has. So a download
@@ -265,6 +277,7 @@ below (hello, theme, open, setup, login, copyImage, lan, route, ws, http); keep 
 | `keyboard` | 壳 → 页 | `hard`: a hardware keyboard is attached (`Configuration.hardKeyboardHidden`), sent after hello and on every plug in / out (`onConfigurationChanged`; the manifest's configChanges keeps the Activity alive). Menus show shortcut keys only with one (`ui/src/lib/hwKeyboard.ts`). The hello reply carries `keyboard: true`; older Apps fall back to the page's own guess |
 | `ime` | 页 → 壳 → 页 | The soft keyboard as it slides ("Soft keyboard" above). The page's hello says `ime: true` (it follows the keyboard itself); then on every frame of a slide the shell sends `h` (the keyboard's height now) and `pad` (how much of it the WebView's padding holds), CSS px, nav bar taken out. Without it (an older page, Android < 11) the WebView resizes in one step as before |
 | `focus` | 壳 → 页 | 点通知进来：切到那个会话 |
+| `keepConnected` | 页 → 壳 | Labs "stay connected in the background" (config `keepConnected`, per device): `on`. Sent after each hello reply and on every change, only when the hello reply says `keepConnected: true`; the shell keeps it for the next start ("Staying connected in the background" above) |
 | `newWindow` | 页 → 壳 | "Open in new window" on a project (SpaceSwitcher): `space` = project id. Shown only when the hello reply says `windows: true` (`canNewWindow` in native.ts) |
 | `space` | 页 → 壳 | The project this window shows (`id`, `name`): the window's name in the recents list. Sent on every switch, also before hello |
 | `open` / `setup` / `fullscreen` | 页 → 壳 | 外部链接交给系统浏览器 / 回到填地址那屏 / 藏系统栏 |

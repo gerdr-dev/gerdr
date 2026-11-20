@@ -16,7 +16,7 @@ import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
 import { toggleOverview } from "./overview";
-import { get, set, useStore, visibleSessions } from "./store";
+import { get, prefOf, set, useStore, visibleSessions } from "./store";
 import { isPhone, keyboardUp } from "./phone";
 import { watchImeLift } from "./imeLift";
 
@@ -228,15 +228,37 @@ export function initAndroid() {
   // What decides whether the volume keys are arrows right now (syncArrows): the keyboard coming up or going (focus,
   // viewport height), a menu / list opening (Radix portals land on <body>), a question card, the focused pane
   const arrowOffs = watchArrows();
+  const keepOff = syncKeepConnected();
   document.addEventListener("touchstart", gateStretch, { capture: true, passive: true });
   g.__gerdrAndroidOff = () => {
     document.removeEventListener("touchstart", gateStretch, true);
     document.documentElement.style.overscrollBehavior = "";
     for (const ev of MEDIA_EVENTS) document.removeEventListener(ev, syncMedia, true);
     arrowOffs();
+    keepOff();
     document.removeEventListener("visibilitychange", onVisible);
     offs.forEach((off) => off());
   };
+}
+
+/**
+ * Labs "stay connected in the background" (config keepConnected, per device): tell the shell, which then leaves the
+ * WebView running and its renderer as important as the App when it goes to the background (MainActivity
+ * keepConnected), so /ws keeps delivering and the page is current when it comes back. Sent after each hello reply
+ * (the shell keeps it too, for the next start) and on every change; only to Apps whose hello says they take it.
+ */
+function syncKeepConnected(): () => void {
+  let sent: boolean | undefined;
+  const send = () => {
+    if (!androidCan("keepConnected")) return;
+    const on = !!prefOf(get(), "keepConnected");
+    if (on === sent) return;
+    sent = on;
+    postAndroid({ t: "keepConnected", on });
+  };
+  const offHello = onAndroid("hello", () => ((sent = undefined), send()));
+  const offStore = useStore.subscribe((s, p) => (s.device !== p.device || s.config !== p.config) && send());
+  return () => (offHello(), offStore());
 }
 
 /**
