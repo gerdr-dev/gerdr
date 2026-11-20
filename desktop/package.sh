@@ -75,7 +75,14 @@ for arch in $ARCHS; do
   VOL=$(mktemp -d)
   ditto "$APP" "$VOL/$NAME.app"
   ln -s /Applications "$VOL/Applications"
-  hdiutil create -quiet -volname "$NAME" -srcfolder "$VOL" -ov -format ULMO "$DMG"
+  # Not -quiet: it hid why a release's dmg failed (only a diskimages-helper left behind said hdiutil was at fault).
+  # Retried: on GitHub's macOS runners it fails now and then (the image busy) and passes on a rerun (v0.2.53).
+  for try in 1 2 3; do
+    hdiutil create -volname "$NAME" -srcfolder "$VOL" -ov -format ULMO "$DMG" && break
+    [ "$try" = 3 ] && exit 1
+    echo "hdiutil failed (try $try), again in 10s" >&2
+    sleep 10
+  done
   rm -rf "$VOL"
   echo "$arch: $(du -sh "$APP" | cut -f1) app, $(du -h "$DMG" | cut -f1) dmg"
 done
