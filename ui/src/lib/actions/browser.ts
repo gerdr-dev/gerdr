@@ -16,7 +16,7 @@ import {
   type PaneLeaf,
 } from "../layout";
 import { get, setLayout } from "../store";
-import { isNative, nativeAskBrowserWindows } from "../native";
+import { isNative, nativeAskBrowserWindows, nativeBrowserWindow, nativeNewPathWindow } from "../native";
 
 // ---- Browser panes: a page of the project's own browser beside the chat (components/browser/, docs/dev/BROWSER-PANE.md) ----
 
@@ -71,6 +71,18 @@ if (typeof window !== "undefined") {
   // after this module and lib/native have both loaded: they import each other through lib/actions, so at this
   // module's own evaluation isNative may not be there yet ("isNative is not a function", the whole UI down)
   setTimeout(() => isNative() && nativeAskBrowserWindows(), 0);
+}
+
+/**
+ * Page tab in a window of its own: the desktop App's core brings forward the window it is in already, or opens one more
+ * window of Gerdr on /<project>?browser=<tab> (internal/desktop browserwin.go). A core that doesn't track them (it never
+ * answered) gets the plain new window; a plain browser opens that address in a new tab.
+ */
+export function openBrowserWindow(project: string, tab: number) {
+  const path = `/${encodeURIComponent(project)}?browser=${tab}`;
+  if (isNative() && useBrowserWindows.getState().known) nativeBrowserWindow(project, tab);
+  else if (isNative()) nativeNewPathWindow(project, path);
+  else window.open(path, "_blank");
 }
 
 /** The pages Gerdr has open (pushed by the server as "browser_tabs" whenever one opens or closes). */

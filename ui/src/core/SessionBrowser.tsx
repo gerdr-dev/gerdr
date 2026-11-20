@@ -1,13 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { AppWindow, Globe, PanelRightClose, SquareArrowOutUpRight, Undo2 } from "lucide-react";
+import { Globe, PanelRightClose, Undo2 } from "lucide-react";
 import { BrowserScreen } from "@/components/browser/BrowserScreen";
+import { BrowserOutCard, PopOutButton } from "@/components/browser/BrowserOut";
 import { Button } from "@/components/ui/button";
 import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import type { FloatFit } from "@/lib/layout";
-import { isNative, nativeBrowserWindow, nativeBrowserWindowClose, nativeBrowserWindowTab, nativeNewPathWindow } from "@/lib/native";
+import { isNative, nativeBrowserWindowTab } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 // Agents' pages outside Code's panes (docs/dev/BROWSER-PANE.md). In Code, a page an agent opens comes up as a Browser
@@ -193,25 +194,7 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
     return (
       <div className={box} style={{ width }}>
         {edge}
-        <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2 text-[12px]">
-          <Globe className="mr-1 size-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">{cur?.url}</span>
-          {hide}
-        </div>
-        <div className="grid flex-1 place-items-center bg-muted/40 p-6 text-center">
-          <div className="max-w-xs space-y-3">
-            <AppWindow className="mx-auto size-8 text-muted-foreground" />
-            <div className="text-[13px] text-muted-foreground">{t("browser.inWindow")}</div>
-            <div className="flex justify-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => nativeBrowserWindow(project, tab)}>
-                <AppWindow /> {t("browser.showWindow")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => nativeBrowserWindowClose(tab)}>
-                <Undo2 /> {t("browser.backToPanel")}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <BrowserOutCard project={project} tab={tab} url={cur?.url} end={hide} />
       </div>
     );
   return (
@@ -225,19 +208,12 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
         extra={
           <>
             {tab && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 shrink-0"
-                title={t("browser.newWindow")}
-                onClick={() => {
-                  openBrowserWindow(project, tab);
-                  // folded while the page is out (an older core can't say when it's back: then just folded)
-                  save({ ...st, closed: true, ...(useBrowserWindows.getState().known ? { out: tab, outSeen: false } : {}) });
-                }}
-              >
-                <SquareArrowOutUpRight className="size-3.5" />
-              </Button>
+              <PopOutButton
+                project={project}
+                tab={tab}
+                // folded while the page is out (an older core can't say when it's back: then just folded)
+                onOut={() => save({ ...st, closed: true, ...(useBrowserWindows.getState().known ? { out: tab, outSeen: false } : {}) })}
+              />
             )}
             {hide}
           </>
@@ -245,18 +221,6 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
       />
     </div>
   );
-}
-
-/**
- * Page tab in a window of its own: the desktop App's core brings forward the window it is in already, or opens one more
- * window of Gerdr on /<project>?browser=<tab> (internal/desktop browserwin.go). A core that doesn't track them (it never
- * answered) gets the plain new window; a plain browser opens that address in a new tab.
- */
-export function openBrowserWindow(project: string, tab: number) {
-  const path = `/${encodeURIComponent(project)}?browser=${tab}`;
-  if (isNative() && useBrowserWindows.getState().known) nativeBrowserWindow(project, tab);
-  else if (isNative()) nativeNewPathWindow(project, path);
-  else window.open(path, "_blank");
 }
 
 /** The page this window shows alone (?browser=<tab>: openBrowserWindow), 0 = a usual window. */

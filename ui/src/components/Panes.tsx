@@ -38,6 +38,7 @@ import { api, type FileStat } from "@/lib/api";
 import { FileActions, FileContent } from "./FileViewer";
 import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
+import { BrowserOutCard, PopOutButton } from "./browser/BrowserOut";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -56,6 +57,8 @@ import {
   toggleFloatPane,
   toggleZoom,
   setBrowserFit,
+  useBrowserWindows,
+  useBrowserTabs,
 } from "@/lib/actions";
 import {
   dockedRoot,
@@ -680,6 +683,22 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const fitDrawn = useContext(FloatFitDrawn);
   const viewOnly = useContext(FloatViewOnly);
   const drag = usePaneDrag(pane.id, { label: t("browser.empty") });
+  // the page moved to a window of its own (BrowserOut): this pane holds its card meanwhile, and stays, since a Browser
+  // pane closed closes its page (server/browserpanes.go)
+  const out = useBrowserWindows((w) => !!b.tab && w.tabs.includes(b.tab));
+  const canPopOut = useBrowserWindows((w) => w.known);
+  const url = useBrowserTabs((s) => s.tabs.find((x) => x.tab === b.tab)?.url) ?? b.url;
+  const zoomBtn = zoomed && (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="size-6 shrink-0"
+      onClick={toggleZoom}
+      title={keyText("zoom") ? t("panes.restoreKey", { key: keyText("zoom") }) : t("panes.restore")}
+    >
+      <Minimize2 className="size-3.5" />
+    </Button>
+  );
   return (
     <div
       data-pane-id={pane.id}
@@ -693,38 +712,57 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       )}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
-      <BrowserScreen
-        project={b.project}
-        tab={b.tab}
-        lastURL={b.url}
-        paneId={pane.id}
-        focused={focused}
-        fit={tab.float?.[pane.id] ? fitOf(tab.float[pane.id]) : undefined}
-        size={b.fit}
-        onSize={(f) => setBrowserFit(pane.id, f)}
-        onFitDrawn={fitDrawn}
-        viewOnly={viewOnly}
-        headClassName={cn(headH, !focused && many && "opacity-70")}
-        onHeadPointerDown={drag.onPointerDown}
-        extra={
-          <>
-            {zoomed && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6 shrink-0"
-                onClick={toggleZoom}
-                title={keyText("zoom") ? t("panes.restoreKey", { key: keyText("zoom") }) : t("panes.restore")}
-              >
-                <Minimize2 className="size-3.5" />
-              </Button>
-            )}
-            <PaneCount count={count} />
-          </>
-        }
-        paneItems={<PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} />}
-        Body={PaneBody}
-      />
+      {out && b.tab ? (
+        <BrowserOutCard
+          project={b.project}
+          tab={b.tab}
+          url={url}
+          headClassName={cn(headH, !focused && many && "opacity-70")}
+          onHeadPointerDown={drag.onPointerDown}
+          Body={PaneBody}
+          end={
+            <>
+              {zoomBtn}
+              <PaneCount count={count} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-6 shrink-0">
+                    <MoreHorizontal className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          }
+        />
+      ) : (
+        <BrowserScreen
+          project={b.project}
+          tab={b.tab}
+          lastURL={b.url}
+          paneId={pane.id}
+          focused={focused}
+          fit={tab.float?.[pane.id] ? fitOf(tab.float[pane.id]) : undefined}
+          size={b.fit}
+          onSize={(f) => setBrowserFit(pane.id, f)}
+          onFitDrawn={fitDrawn}
+          viewOnly={viewOnly}
+          headClassName={cn(headH, !focused && many && "opacity-70")}
+          onHeadPointerDown={drag.onPointerDown}
+          extra={
+            <>
+              {/* to a window of its own (the App only: it tracks them; not while floating, already out of the way) */}
+              {b.tab && canPopOut && !tab.float?.[pane.id] && <PopOutButton project={b.project} tab={b.tab} />}
+              {zoomBtn}
+              <PaneCount count={count} />
+            </>
+          }
+          paneItems={<PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} />}
+          Body={PaneBody}
+        />
+      )}
     </div>
   );
 }

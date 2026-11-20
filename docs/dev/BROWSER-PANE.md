@@ -45,7 +45,9 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   It is a move, not a copy (asked for: the window turned to pictures when the column was opened again, and each click
   opened another window): the core keeps which window has which page (internal/desktop browserwin.go, the window's
   page saying so), the column shows a card for a page that is out (show the window / put it back), opening it again
-  brings that window forward, and closing the window puts the page back in the column.
+  brings that window forward, and closing the window puts the page back in the column. A Code Browser pane has the
+  same button (`components/browser/BrowserOut.tsx`); it can't fold, so it holds the card while the page is out, and it
+  stays: a Browser pane closed closes its page (`server/browserpanes.go`).
 
 ## Why not the obvious ways
 
