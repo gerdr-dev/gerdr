@@ -241,7 +241,7 @@ func effortFor(m resolved, e string) string {
 	}
 	if e == "off" {
 		switch m.Thinking {
-		case "deepseek", "adaptive", "updates":
+		case "deepseek", "adaptive", "updates", "gemini":
 			return "off"
 		}
 		for _, x := range []string{"none", "minimal"} {

@@ -169,7 +169,7 @@ MCP sign-in, the login shell's PATH, `GERDR_NATIVE_SESSION_ID` and secrets.json 
 `native.Options` by `internal/agentwire` (keep it that way — `go list -deps ./agents/... | grep gerdr/internal` must
 stay empty; the claude / codex adapters get Gerdr's skill / MCP settings the same way, through their `Ext`
 interfaces). `acpx`, `sysenv` and `rpcline` are public for the same reason. The model layer `native/llm`
-speaks three protocols (Chat Completions, Responses, Anthropic Messages; the protocol is picked per provider,
+speaks four protocols (Chat Completions, Responses, Anthropic Messages, Gemini generateContent; the protocol is picked per provider,
 `Provider.API`), each hand-written rather than through an SDK so every gateway quirk is visible and fixable in one place.
 Why not pi: interjections, subagents and rewind are missing from or the wrong shape in pi's loop, and pi is
 sixty thousand lines; our loop is about a hundred (`loop.go`) and every step is visible. Config is the `llm` key of
@@ -190,6 +190,12 @@ config.json (example in the README), read fresh every turn.
    from Text / Reasoning / ToolCalls: thinking blocks carry signatures, newer Claude models check that earlier turns
    weren't edited, and the split fields lose the block order. Anything that edits a message must clear `Blocks`
    (`keepPartial` does). Thinking needs `display:"summarized"`, or newer models stream empty thinking text.
+   Gemini (native API, ported from pi's google.js / google-shared.js): its OpenAI-compatible endpoint drops thought
+   signatures, which Gemini 3+ requires back on the current turn's function calls, hence a protocol of its own. A
+   turn is stored as its parts plus the model (`Message.Blocks` = `{model, parts}`); signatures go back only to that
+   same model and only when valid base64, never moved between parts; to another model thoughts become plain text.
+   Function calls have no id on the Gemini API (we make one up and never send it, except to claude- / gpt-oss-
+   behind Google). Tool images go inside `functionResponse.parts` on Gemini 3+, a separate user content before.
 4. **插话不打断工具**：排队，下一次调模型前接到历史末尾。`Now` 掐当前这次生成；正在跑工具时，前台 bash 等 `urgentGrace`（1.5s）
    还没完就自己转后台，同一批里还没开始的调用直接回「没跑：先读用户的话」。Only cutting the stream made an urgent steer wait out a
    two-minute command like a plain one, and people kept withdrawing and resending it. Sub-agents and read-only parallel

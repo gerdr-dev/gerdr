@@ -34,7 +34,7 @@ type Provider struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
 	// API is the provider's protocol: "" = OpenAI-compatible (each model picks chat / responses), anthropic =
-	// Anthropic Messages for every model (Model.API is ignored). Chosen when adding the provider: a gateway can't
+	// Anthropic Messages, gemini = Google's native Gemini API (generateContent); for those two Model.API is ignored. Chosen when adding the provider: a gateway can't
 	// be told apart by its URL.
 	API     string `json:"api,omitempty"`
 	BaseURL string `json:"baseUrl"`
@@ -55,7 +55,8 @@ type Model struct {
 	API string `json:"api,omitempty"`
 	// Thinking：思考开关的格式。Chat Completions：deepseek = thinking:{type:enabled|disabled}，空 = reasoning_effort；
 	// Anthropic: adaptive = thinking:{type:adaptive} with a reasoning summary; updates = the model's short progress
-	// notes instead (Opus/Sonnet 5.5, Fable 5+, the default there). Guessed from the id; empty = no thinking param.
+	// notes instead (Opus/Sonnet 5.5, Fable 5+, the default there). Gemini: gemini = thinkingConfig with the thought
+	// summaries. Guessed from the id; empty = no thinking param.
 	Thinking string `json:"thinking,omitempty"`
 	// Efforts：思考档位（原样发给接口的值），从低到高；DefaultEffort 是默认档。都空 = 按 id 猜。
 	Efforts       []string `json:"efforts,omitempty"`
@@ -176,8 +177,8 @@ func (c Config) find(key string) (resolved, bool) {
 
 // withDefaults is the model with this provider's protocol and the defaults guessed from its id.
 func (p Provider) withDefaults(m Model) Model {
-	if p.API == "anthropic" {
-		m.API = "anthropic"
+	if p.API == "anthropic" || p.API == "gemini" {
+		m.API = p.API
 	}
 	return withDefaults(m)
 }
@@ -196,8 +197,11 @@ func withDefaults(m Model) Model {
 	if i := strings.LastIndex(id, "/"); i >= 0 {
 		id = id[i+1:]
 	}
-	if m.API == "anthropic" {
+	switch m.API {
+	case "anthropic":
 		return anthropicDefaults(m, id)
+	case "gemini":
+		return geminiDefaults(m, id)
 	}
 	gpt := strings.HasPrefix(id, "gpt-") || strings.HasPrefix(id, "o3") || strings.HasPrefix(id, "o4") || strings.HasPrefix(id, "codex")
 	deepseek := strings.Contains(id, "deepseek")
@@ -289,6 +293,38 @@ func anthropicDefaults(m Model, id string) Model {
 	}
 	if m.Images == nil {
 		v := true // as in withDefaults: "images": false in the config for a model that can't
+		m.Images = &v
+	}
+	if m.Name == "" {
+		m.Name = m.ID
+	}
+	return m
+}
+
+// geminiDefaults: the guesses for a model on the Gemini protocol, from pi's catalog. Thinking models (2.5 and later)
+// get thought summaries and levels (Gemini 3+ Pro: low / high; others minimal → high, a budget on 2.5); every
+// Gemini has a 1M window. Anything else behind Google's API (claude-…) gets no thinking parameters.
+func geminiDefaults(m Model, id string) Model {
+	if llm.GeminiReasons(id) {
+		if m.Thinking == "" {
+			m.Thinking = "gemini"
+		}
+		if len(m.Efforts) == 0 {
+			m.Efforts = llm.GeminiEfforts(id)
+		}
+		if m.DefaultEffort == "" {
+			m.DefaultEffort = "high"
+		}
+	}
+	if m.Window == 0 {
+		if strings.HasPrefix(id, "gemini") || strings.HasPrefix(id, "gemma") {
+			m.Window = 1_048_576
+		} else {
+			m.Window = 200_000
+		}
+	}
+	if m.Images == nil {
+		v := true
 		m.Images = &v
 	}
 	if m.Name == "" {

@@ -1,5 +1,5 @@
-// Package llm is how the native agent talks to models: a vendor-neutral message format and three wire
-// protocols (OpenAI Chat Completions, OpenAI Responses, Anthropic Messages), hand-written so every gateway quirk
+// Package llm is how the native agent talks to models: a vendor-neutral message format and four wire
+// protocols (OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, Gemini generateContent), hand-written so every gateway quirk
 // is visible in one place (DeepSeek's reasoning_content must be sent back, Responses reasoning goes back with its
 // encrypted_content, Claude's thinking blocks are replayed verbatim…; each noted in its file).
 //
@@ -149,13 +149,16 @@ type Endpoint struct {
 	Headers map[string]string // 额外的请求头
 }
 
-// New 按协议名拿客户端：chat（Chat Completions）| responses | anthropic（Messages）。
+// New returns the client for a protocol: chat (Chat Completions) | responses | anthropic (Messages) | gemini
+// (Google's native generateContent).
 func New(api string, ep Endpoint) Client {
 	switch api {
 	case "responses":
 		return &responses{ep: ep}
 	case "anthropic":
 		return &anthropic{ep: ep}
+	case "gemini":
+		return &gemini{ep: ep}
 	}
 	return &chat{ep: ep}
 }

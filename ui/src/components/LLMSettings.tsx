@@ -12,14 +12,14 @@ import { setConfig, useStore, type LLMConfig, type LLMModel, type LLMProvider } 
 
 // 设置 → Agent 里「引擎」那块的 Native 服务商：native 引擎直接调的模型接口。用 native 引擎的 agent 可以只挑几家（AgentDef.providers）。
 // 存进 config.json 的 llm（后端 native/config.go 读，每轮现取：改了下一轮就用新的）。配了至少一个模型，新建会话时才出现 Gerdr Agent。
-// The protocol is picked per provider (a gateway can't be recognized by its URL): OpenAI-compatible or Anthropic.
+// The protocol is picked per provider (a gateway can't be recognized by its URL): OpenAI-compatible, Anthropic or Gemini.
 // On OpenAI-compatible ones the backend guesses per model id (GPT → Responses, others → Chat Completions); thinking
 // levels and context window are guessed too. Wrong guesses are fixed in config.json (api / efforts / window on the model).
 
 const stop = (e: React.KeyboardEvent) => e.stopPropagation();
 const EMPTY: LLMConfig = {}; // 选择器里别 `?? {}`：每次一个新对象，zustand 认成变了，无限重渲染
 
-type Protocol = "openai" | "anthropic";
+type Protocol = "openai" | "anthropic" | "gemini";
 type Draft = { id: string; name: string; api: Protocol; baseUrl: string; keyMode: "key" | "env"; apiKey: string; apiKeyEnv: string; models: LLMModel[] };
 
 // Getters: the labels go through t()
@@ -35,12 +35,22 @@ const PROTOCOLS: Record<Protocol, { readonly label: string; readonly baseUrl: st
     model: "deepseek-v4-pro",
   },
   anthropic: { label: "Anthropic", baseUrl: "https://api.anthropic.com", key: "sk-ant-…", model: "claude-opus-5-5" },
+  gemini: { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta", key: "AIza…", model: "gemini-3-pro-preview" },
 };
+
+// The badge and the test result's name for each protocol a provider / model can speak.
+const PROTOCOL_NAMES: Record<string, string> = {
+  anthropic: "Anthropic Messages",
+  gemini: "Gemini generateContent",
+  responses: "Responses",
+  chat: "Chat Completions",
+};
+const HINTS = { openai: "llmSettings.openaiHint", anthropic: "llmSettings.anthropicHint", gemini: "llmSettings.geminiHint" } as const;
 
 const toDraft = (p: LLMProvider): Draft => ({
   id: p.id,
   name: p.name ?? "",
-  api: p.api === "anthropic" ? "anthropic" : "openai",
+  api: p.api === "anthropic" || p.api === "gemini" ? p.api : "openai",
   baseUrl: p.baseUrl,
   keyMode: p.apiKeyEnv && !p.apiKey ? "env" : "key",
   apiKey: p.apiKey ?? "",
@@ -49,13 +59,13 @@ const toDraft = (p: LLMProvider): Draft => ({
 });
 
 function fromDraft(d: Draft): LLMProvider {
-  if (!d.baseUrl.trim()) throw new Error(t(d.api === "anthropic" ? "llmSettings.needBaseUrl" : "llmSettings.needBaseUrlV1"));
+  if (!d.baseUrl.trim()) throw new Error(t(d.api === "openai" ? "llmSettings.needBaseUrlV1" : "llmSettings.needBaseUrl"));
   if (!/^https?:\/\//.test(d.baseUrl.trim())) throw new Error(t("llmSettings.badBaseUrl"));
   if (!d.id.trim()) throw new Error(t("llmSettings.needName"));
   const p: LLMProvider = {
     id: d.id,
     name: d.name.trim() || undefined,
-    api: d.api === "anthropic" ? "anthropic" : undefined,
+    api: d.api === "openai" ? undefined : d.api,
     baseUrl: d.baseUrl.trim().replace(/\/+$/, ""),
     models: d.models,
   };
@@ -120,7 +130,7 @@ export function LLMSettings() {
           <div className="flex items-center gap-2">
             {/* Capped and truncated rather than wrapped: the URL next to it shrinks first */}
             <span className="max-w-[50%] shrink-0 truncate font-medium">{p.name || p.id}</span>
-            {p.api === "anthropic" && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">Anthropic</span>}
+            {p.api && <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">{PROTOCOLS[p.api].label}</span>}
             <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground">{p.baseUrl}</span>
             {!p.apiKey && !p.apiKeyEnv && <span className="shrink-0 text-[12px] text-warn">{t("llmSettings.noKey")}</span>}
             {p.apiKeyEnv && !p.apiKey && (
@@ -228,7 +238,7 @@ function Editor({
     setTesting(m.id);
     try {
       const r = await api.llmTest(p, m);
-      const proto = r.api === "anthropic" ? "Anthropic Messages" : r.api === "responses" ? "Responses" : "Chat Completions";
+      const proto = PROTOCOL_NAMES[r.api] ?? PROTOCOL_NAMES.chat;
       toast.success(t("llmSettings.testOk", { id: m.id, proto, reply: r.reply.slice(0, 60) }));
     } catch (e: any) {
       toast.error(t("llmSettings.testFailed", { id: m.id, error: e.message }));
@@ -371,7 +381,7 @@ function Editor({
         </div>
       </div>
       <div className="text-[12px] text-muted-foreground">
-        {rich(t(d.api === "anthropic" ? "llmSettings.anthropicHint" : "llmSettings.openaiHint"), {
+        {rich(t(HINTS[d.api]), {
           api: <code className="font-mono">api</code>,
           efforts: <code className="font-mono">efforts</code>,
           window: <code className="font-mono">window</code>,

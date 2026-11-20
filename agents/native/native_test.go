@@ -961,6 +961,28 @@ func TestAnthropicProviderDefaults(t *testing.T) {
 	}
 }
 
+func TestGeminiProviderDefaults(t *testing.T) {
+	c := Config{Providers: []Provider{{ID: "g", API: "gemini", BaseURL: "https://generativelanguage.googleapis.com", Models: []Model{
+		{ID: "gemini-4-neon-medium", API: "chat"}, {ID: "models/gemini-3-pro-preview"}, {ID: "gemini-2.0-flash"}, {ID: "claude-opus-5-5"},
+	}}}}
+	ms := c.models()
+	if m := ms[0]; m.API != "gemini" || m.Thinking != "gemini" || m.DefaultEffort != "high" || len(m.Efforts) != 3 || m.Efforts[0] != "low" || m.Window != 1_048_576 {
+		t.Fatalf("gemini 4: %+v", m.Model)
+	}
+	if m := ms[1]; len(m.Efforts) != 2 || m.Thinking != "gemini" { // 3 Pro: low / high only
+		t.Fatalf("3 pro: %+v", m.Model)
+	}
+	if m := ms[2]; m.Thinking != "" || len(m.Efforts) != 0 || m.Window != 1_048_576 {
+		t.Fatalf("2.0 flash: %+v", m.Model)
+	}
+	if m := ms[3]; m.API != "gemini" || m.Thinking != "" || m.Window != 200_000 {
+		t.Fatalf("claude behind Google: %+v", m.Model)
+	}
+	if effortFor(ms[0], "off") != "off" {
+		t.Fatal("off not passed through to the Gemini client")
+	}
+}
+
 // The fake reports 100 input tokens per request: with a 120-token window compaction is at 108 and the notice
 // at 86, so the second request carries the notice, and only that one (once per compaction cycle).
 func TestContextNote(t *testing.T) {

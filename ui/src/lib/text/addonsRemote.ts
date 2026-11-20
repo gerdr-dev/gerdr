@@ -150,7 +150,7 @@ export const zh = {
   "llmSettings.needName": "起个名字",
   "llmSettings.addedToast": "加好了：Gerdr Agent 和用 Native 引擎的 Agent 都能用它",
   "llmSettings.savedToast": "已保存（下一轮就用新的）",
-  "llmSettings.desc": "Gerdr 自己的引擎，直接调下面这些模型服务商（OpenAI 兼容或 Anthropic 接口）",
+  "llmSettings.desc": "Gerdr 自己的引擎，直接调下面这些模型服务商（OpenAI 兼容、Anthropic 或 Gemini 接口）",
   "llmSettings.configuredOne": "配了 {n} 家",
   "llmSettings.configured": "配了 {n} 家",
   "llmSettings.noProviders": "还没配服务商",
@@ -182,6 +182,8 @@ export const zh = {
   "llmSettings.filter": "在 {n} 个里找",
   "llmSettings.anthropicHint":
     "每个模型都走 Anthropic Messages（/v1/messages，地址带不带 /v1 都行）。Claude 4.6 及以后自动开 adaptive 思考，档位 low → max；别的模型不发思考参数。猜错了在 config.json 的模型上写 {efforts}、{window}、{maxOutput}。",
+  "llmSettings.geminiHint":
+    "每个模型都走 Gemini 原生接口（/v1beta/models/…:streamGenerateContent，地址带不带 /v1beta 都行，key 是 Google AI Studio 的）。Gemini 2.5 及以后自动开思考：3 Pro 是 low / high，Flash 是 minimal → high，别的 low → high（2.5 换成思考预算）；窗口 1M。猜错了在 config.json 的模型上写 {efforts}、{window}、{maxOutput}。",
   "llmSettings.openaiHint":
     "协议、思考档位、上下文窗口按模型 ID 猜：gpt / o 系列走 Responses，别的走 Chat Completions；DeepSeek 是纯文本模型、思考档位 关 / 高 / 最高。 猜错了在 config.json 的模型上写 {api}、{efforts}、{window}。",
 
@@ -475,7 +477,7 @@ export const en: Record<keyof typeof zh, string> = {
   "llmSettings.needName": "Give it a name",
   "llmSettings.addedToast": "Added: Gerdr Agent and agents on the Native engine can use it",
   "llmSettings.savedToast": "Saved (used from the next turn)",
-  "llmSettings.desc": "Gerdr's own engine, calling the model providers below directly (OpenAI-compatible or Anthropic API)",
+  "llmSettings.desc": "Gerdr's own engine, calling the model providers below directly (OpenAI-compatible, Anthropic or Gemini API)",
   "llmSettings.configuredOne": "{n} provider",
   "llmSettings.configured": "{n} providers",
   "llmSettings.noProviders": "No providers yet",
@@ -508,6 +510,8 @@ export const en: Record<keyof typeof zh, string> = {
   "llmSettings.filter": "Search {n} models",
   "llmSettings.anthropicHint":
     "Every model goes through Anthropic Messages (/v1/messages; the URL works with or without /v1). Claude 4.6 and later get adaptive thinking automatically, levels low → max; other models get no thinking parameters. If a guess is wrong, set {efforts}, {window} or {maxOutput} on the model in config.json.",
+  "llmSettings.geminiHint":
+    "Every model goes through Gemini's native API (/v1beta/models/…:streamGenerateContent; the URL works with or without /v1beta; the key is a Google AI Studio one). Gemini 2.5 and later think automatically: 3 Pro takes low / high, Flash minimal → high, others low → high (a thinking budget on 2.5); 1M window. If a guess is wrong, set {efforts}, {window} or {maxOutput} on the model in config.json.",
   "llmSettings.openaiHint":
     "Protocol, thinking levels and context window are guessed from the model ID: gpt / o models use Responses, others Chat Completions; DeepSeek is text-only, with thinking off / high / max. If a guess is wrong, set {api}, {efforts} or {window} on the model in config.json.",
 

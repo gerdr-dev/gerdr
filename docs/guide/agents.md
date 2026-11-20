@@ -13,8 +13,9 @@ way (`CODEX_HOME` / `OPENAI_API_KEY`). External ACP agents (e.g. `gemini --exper
 ## Gerdr Agent (GPT, DeepSeek… straight from the API)
 
 Gerdr ships its own agent that skips Claude Code / Codex and calls OpenAI-compatible APIs (Responses for GPT, Chat
-Completions for DeepSeek and others) or Anthropic's Messages API (`"api": "anthropic"` on the provider, with a base URL
-like `https://api.anthropic.com`). Configure models in `config.json` and *Gerdr Agent* appears when starting a
+Completions for DeepSeek and others), Anthropic's Messages API (`"api": "anthropic"` on the provider, with a base URL
+like `https://api.anthropic.com`) or Google's native Gemini API (`"api": "gemini"`, base URL
+`https://generativelanguage.googleapis.com/v1beta`, a Google AI Studio key). Configure models in `config.json` and *Gerdr Agent* appears when starting a
 session:
 
 ```json

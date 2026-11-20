@@ -13,7 +13,7 @@ API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令
 ## Gerdr Agent（直接用 GPT、DeepSeek、Claude 等模型的 API）
 
 Gerdr 自带一个 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼容的接口
-（GPT 走 Responses，DeepSeek 等走 Chat Completions）或 Anthropic 的接口（服务商上写 `"api": "anthropic"`，地址比如 `https://api.anthropic.com`）。在 `config.json` 里配了模型，新建会话时就多一个「Gerdr Agent」：
+（GPT 走 Responses，DeepSeek 等走 Chat Completions）、Anthropic 的接口（服务商上写 `"api": "anthropic"`，地址比如 `https://api.anthropic.com`）或 Google 的 Gemini 原生接口（`"api": "gemini"`，地址 `https://generativelanguage.googleapis.com/v1beta`，key 用 Google AI Studio 的）。在 `config.json` 里配了模型，新建会话时就多一个「Gerdr Agent」：
 
 ```json
 "llm": {

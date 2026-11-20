@@ -94,8 +94,8 @@ export type LoaderChoice = "dots" | `builtin:${string}` | `loader:${string}` | `
 
 /** config.json 的 llm：Gerdr Agent 直接调的模型接口（OpenAI 兼容或 Anthropic）。模型只写 id 时协议、思考档位按 id 猜（后端 native/config.go）。 */
 export type LLMModel = { id: string; name?: string; api?: "chat" | "responses"; efforts?: string[]; window?: number };
-/** api: the provider's protocol. Unset = OpenAI-compatible (each model picks Chat Completions / Responses); "anthropic" = Anthropic Messages. */
-export type LLMProvider = { id: string; name?: string; api?: "anthropic"; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
+/** api: the provider's protocol. Unset = OpenAI-compatible (each model picks Chat Completions / Responses); "anthropic" = Anthropic Messages; "gemini" = Google's native Gemini API. */
+export type LLMProvider = { id: string; name?: string; api?: "anthropic" | "gemini"; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
 export type LLMConfig = { providers?: LLMProvider[]; defaultModel?: string };
 
 /** What a project switches off, by name. */
