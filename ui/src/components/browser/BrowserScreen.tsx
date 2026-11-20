@@ -437,7 +437,10 @@ export function BrowserScreen({
     // add-on's panel). Without it a tab dragged over the page was drawn under it, drop preview and all (user report).
     // Set it only while the thing is shown: one on screen keeps this check running every frame.
     const OVER = "[data-radix-popper-content-wrapper] > *, [role=dialog], [role=alertdialog], [role=tooltip], [data-sonner-toast], [data-over-page]";
-    const overlays = () => Array.from(document.querySelectorAll<HTMLElement>(OVER));
+    // Only ones actually on screen: a panel's drawer left open in Work mode stays mounted in the Work view, which is
+    // visibility:hidden in Code mode (App.tsx), and panels portal into it (their usePortalContainer). Counted by its
+    // box alone, that unseen drawer kept the page aside for good, with no still either: a blank pane (user report)
+    const overlays = () => Array.from(document.querySelectorAll<HTMLElement>(OVER)).filter((o) => o.checkVisibility?.({ visibilityProperty: true }) ?? true);
     // The still: from the App's own process when it can (desktop/main.js gerdr:shot, a data URL in tens of ms, as
     // Claude Desktop does), else through the backend (an older App). Decoded here into a bitmap, so showing it is one
     // synchronous drawImage (see stillRef).
