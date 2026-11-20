@@ -186,7 +186,7 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
 
 /**
  * A window of its own for page tab: the desktop App opens one more window of Gerdr on /<project>?browser=<tab>
- * (desktop/core gerdr.go newWindow's path; an App older than that opens the project's usual window); a plain browser
+ * (internal/desktop gerdr.go newWindow's path; an App older than that opens the project's usual window); a plain browser
  * opens that address in a new tab.
  */
 export function openBrowserWindow(project: string, tab: number) {

@@ -103,7 +103,7 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		httpError(w, http.StatusBadGateway, i18n.S("页面刚打开就关了", "The page closed right after opening"))
 	})
 	// the desktop App is about to start its browser on its data directory, where projects' profiles are while it's
-	// installed: the headless browser on it must let go first (desktop/core gerdr.go releaseBrowser, internal/projbrowser)
+	// installed: the headless browser on it must let go first (internal/desktop gerdr.go releaseBrowser, internal/projbrowser)
 	mux.HandleFunc("POST /api/browser/release", func(w http.ResponseWriter, r *http.Request) {
 		if s.ProjBrowser != nil {
 			s.ProjBrowser.Release()

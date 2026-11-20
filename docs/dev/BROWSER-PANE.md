@@ -40,7 +40,7 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   the pages it opens and by its move into the App's browser), and the panel gets a browser column at its right
   (`core/SessionBrowser.tsx PanelBrowser`, opened by itself on the next open, × closes it until then; a third tab on
   a phone). Asked for: one place for the whole panel, not a tab beside each chat (the first cut). Its "open in new
-  window" asks the App for a window on `/<project>?browser=<tab>` (desktop/core `newWindow` with a `path`), which
+  window" asks the App for a window on `/<project>?browser=<tab>` (internal/desktop `newWindow` with a `path`), which
   App.tsx draws as that page alone (`BrowserWindow`); the App's real page moves there (one window per page).
 
 ## Why not the obvious ways
@@ -142,7 +142,7 @@ pane. Built 2026-11-18 on Lightron 0.5.0's `App.OpenView` (Lightron's docs/api.m
 
 ```
 the pane (BrowserScreen, nativeView) ──postMessage {type:"browserView", tab, rect, dpr} / {hide}──▶ the shell
-the core (desktop/core/views.go) ──el View.Place / Hide──▶ a WebContentsView inside Gerdr's window (desktop/main.js)
+the core (internal/desktop/views.go) ──el View.Place / Hide──▶ a WebContentsView inside Gerdr's window (desktop/main.js)
 the shell ──WebSocket /api/browser/ext, the extension's protocol + "app": true──▶ chromeext (app.go)
 projbrowser.Open: the App connected → OpenNative in the project's profile; else headless as before
 ```
@@ -248,7 +248,7 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
 - **A page is in one window.** With two App windows on the same project both UIs mount the pane. The last pane to
   place the page has it; the window it was taken from gets `gerdr:browsertaken` and shows the page's pictures (the
   stream) instead, until that pane lets go (`release` on its last hide) or its window closes (`gerdr:browserfree`).
-  A hide from a window that doesn't have the page is dropped (desktop/core views.go `placeView`, desktop/main.js): a
+  A hide from a window that doesn't have the page is dropped (internal/desktop views.go `placeView`, desktop/main.js): a
   new window's out-of-sight pane reported "hidden" and the page in the first window went black.
 - **The still stays up under the page** (Claude Desktop's "underlay frame", read from its bundle): drawn into the
   canvas each time one is taken (the pointer back from the page, a press, 500 ms after the pointer or the page's

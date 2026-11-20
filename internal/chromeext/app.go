@@ -9,7 +9,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// The desktop App's own browser (desktop/core/views.go, Electron's WebContentsViews) connects like an extension and speaks the same
+// The desktop App's own browser (internal/desktop/views.go, Electron's WebContentsViews) connects like an extension and speaks the same
 // protocol (hello, open, cdp, close; events cdp, closed), with "app": true in its hello and one more event, popup.
 // Its pages are a project's (projbrowser opens them here while the App runs, in the project's profile), shown in the
 // Browser pane as the real page: a window of the App's browser placed over the pane (Lightron's View), not a picture.

@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gerdr-dev/gerdr/desktop/core/el"
+	"github.com/gerdr-dev/gerdr/internal/desktop/el"
 
 	"github.com/gerdr-dev/gerdr/internal/selfupdate"
 )

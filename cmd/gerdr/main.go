@@ -33,6 +33,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/awake"
 	"github.com/gerdr-dev/gerdr/internal/chromeext"
 	"github.com/gerdr-dev/gerdr/internal/config"
+	"github.com/gerdr-dev/gerdr/internal/desktop"
 	"github.com/gerdr-dev/gerdr/internal/doctor"
 	"github.com/gerdr-dev/gerdr/internal/events"
 	"github.com/gerdr-dev/gerdr/internal/ext"
@@ -53,6 +54,12 @@ import (
 )
 
 func main() {
+	// The desktop App's core (internal/desktop, docs/dev/SHELL.md): desktop/main.js starts the bundle's binary this way,
+	// with Go-style flags, before anything of the CLI
+	if len(os.Args) > 1 && os.Args[1] == "shell-core" {
+		desktop.Main(os.Args[2:])
+		return
+	}
 	if chromeext.IsHostInvocation(os.Args) {
 		// Chrome started us as the browser extension's native host (browserhost.go)
 		if err := runBrowserHost(os.Args[1]); err != nil {

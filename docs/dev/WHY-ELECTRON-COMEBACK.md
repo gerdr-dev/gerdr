@@ -131,7 +131,8 @@ Most of the Browser pane is not shell code and stays:
 
 Built and installed on the author's Mac (arm64), not released:
 
-- `desktop/main.js` + `preload.js` (Electron 45.3.4), `desktop/core` (the chromeshell logic on `el`, the protocol
+- (Since split into a frozen loader and a hot half in the backend: docs/dev/SHELL.md; `desktop/core` is now
+  `internal/desktop`.) `desktop/main.js` + `preload.js` (Electron 45.3.4), `desktop/core` (the chromeshell logic on `el`, the protocol
   with main.js described in el.go), `desktop/package.sh` / `pack.js` (@electron/packager; ad hoc or the local
   signing identity), `tools/shell-id.sh` covers them.
 - The Browser pane's page is a `WebContentsView` placed over the pane; parked in a hidden window when not shown

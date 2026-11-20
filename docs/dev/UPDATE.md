@@ -1,5 +1,11 @@
 # Desktop App updates
 
+> **Since 2026-11-20** the App is split in two (docs/dev/SHELL.md): a frozen part (Electron, the loader
+> `desktop/main.js`, `preload.js`, packaging; what `tools/shell-id.sh` covers) and a hot part inside the gerdr binary
+> (`internal/desktop`: the core, `internal/selfupdate` with it, and the main-process script). A backend update carries
+> the hot part; one whose `HotID` differs from the running core's restarts the App when idle instead of only the
+> backend (`internal/desktop/app.go` applyUpdate). Where this page says `desktop/core`, read `internal/desktop`.
+
 > **Now (2026-11-18)**: the App is Electron again on macOS and Windows (docs/dev/WHY-ELECTRON-COMEBACK.md):
 > `desktop/main.js` with the Go core `desktop/core` beside it, which runs `internal/selfupdate` as the Lightron shells
 > did (`desktop/core/app.go`, `platform_*.go`: a dmg swapped in on macOS, the installer run with /S on Windows). Its

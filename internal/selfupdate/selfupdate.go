@@ -24,7 +24,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
-// Package selfupdate keeps a desktop shell's backend up to date (desktop/core, the Electron App's Go side, on macOS and
+// Package selfupdate keeps a desktop shell's backend up to date (internal/desktop, the Electron App's Go side, on macOS and
 // Windows). Ported from desktop/updater.js (docs/dev/UPDATE.md): the backend-only half. A release publishes the
 // brotli-compressed backend alone (~10MB) next to the Electron dmgs; it is downloaded into <data>/backend/<version>/
 // (on macOS moved to <data>/backend/gerdr when it starts: fixedPath) and run instead of the bundle's (never written into the bundle: its signature, and App Management). Restarting the

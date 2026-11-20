@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/gerdr-dev/gerdr/desktop/core/el"
+	"github.com/gerdr-dev/gerdr/internal/desktop/el"
 
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )

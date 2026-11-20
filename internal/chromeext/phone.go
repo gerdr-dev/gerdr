@@ -24,7 +24,7 @@ import (
 // up), and the bottom of the page couldn't be reached (user report). It ends when the App's pane shows the page
 // again (docked) or the pane says so.
 //
-// The shell says when its pane shows a page (the "shown" event, desktop/core/views.go). Headless pages don't need
+// The shell says when its pane shows a page (the "shown" event, internal/desktop/views.go). Headless pages don't need
 // this: their window is resized to the viewer (Tab.resize).
 
 type phoneLayout struct {

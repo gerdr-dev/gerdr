@@ -397,7 +397,7 @@ export function BrowserScreen({
   const stillRef = useRef<HTMLCanvasElement>(null);
   const placed = useRef({ left: 0, top: 0, width: 0, height: 0, radius: 0 });
   // A click in the App's page (a view drawn over this box, which never sees the click): this pane becomes the focused
-  // one, as a click anywhere else in it does (desktop/core views.go OnFocus)
+  // one, as a click anywhere else in it does (internal/desktop views.go OnFocus)
   useEffect(() => {
     if (!nativeView || !tab) return;
     const on = (e: Event) => (e as CustomEvent).detail === tab && (onFocus ? onFocus() : focusPane(paneId));

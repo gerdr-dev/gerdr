@@ -5,7 +5,8 @@
 #   desktop/package-win.sh                          # → desktop/dist/win/Gerdr-exp-<version>-windows-x64-setup.exe
 #   NAME=Gerdr VERSION=0.2.50 desktop/package-win.sh   # as the release does
 #
-# In it: Electron (desktop/main.js, preload.js), the core (desktop/core → resources\gerdr-shell.exe) and the backend
+# In it: Electron with the frozen loader (desktop/main.js, preload.js) and the backend, which also carries the core and
+# the App's main-process script (`gerdr.exe shell-core`, internal/desktop: docs/dev/SHELL.md), as
 # (resources\gerdr.exe). The installer needs makensis (brew install makensis / apt-get install nsis).
 set -e
 cd "$(dirname "$0")/.."
@@ -23,11 +24,10 @@ make ui >/dev/null
 (cd desktop && [ -d node_modules/electron ] || npm ci --no-audit --no-fund)
 RES=$(mktemp -d)
 GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$VERSION" -o "$RES/gerdr.exe" ./cmd/gerdr
-GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '-s -w -H windowsgui' -o "$RES/gerdr-shell.exe" ./desktop/core
 # the exe's icon (packager) and the installer's: bitmap entries (makensis crashes on PNG ones)
 go run ./desktop/mkico "$RES/icon.ico" desktop/res/icon.png 16 24 32 48 64 256
 go run ./desktop/mkico -bmp "$RES/setup.ico" desktop/res/icon.png 16 32 48
-node desktop/pack.js win32 x64 "$NAME" "$ID" "$VERSION" "$(git rev-parse --short HEAD)" "$SHELL_ID" "$RES/icon.ico" "$OUT" "$RES/gerdr.exe" "$RES/gerdr-shell.exe" >/dev/null
+node desktop/pack.js win32 x64 "$NAME" "$ID" "$VERSION" "$(git rev-parse --short HEAD)" "$SHELL_ID" "$RES/icon.ico" "$OUT" "$RES/gerdr.exe" >/dev/null
 APPDIR="$OUT/$NAME-win32-x64"
 
 ZIP="$OUT/$SLUG-$VERSION-windows-x64-portable.zip"

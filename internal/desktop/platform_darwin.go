@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"fmt"
@@ -120,10 +120,9 @@ else [ -d "$2" ] || mv "$old" "$2"; rm -rf "$3"; open "$2"; open "$4"; fi`
 	return true
 }
 
-// appBundle: Gerdr.app (this binary is its Contents/Resources/gerdr-shell).
+// appBundle: Gerdr.app (resources is its Contents/Resources; this binary may be a downloaded backend's).
 func appBundle() string {
-	exe, _ := os.Executable()
-	b, _ := filepath.Abs(filepath.Join(filepath.Dir(exe), "..", ".."))
+	b, _ := filepath.Abs(filepath.Join(resources, "..", ".."))
 	return b
 }
 
@@ -135,4 +134,11 @@ func writable(dir string) bool {
 	f.Close()
 	os.Remove(f.Name())
 	return true
+}
+
+// handoff runs bin's core in this process's place (same pid, same stdin / stdout to Electron). Returns only if it
+// couldn't.
+func handoff(bin string, args []string) {
+	err := syscall.Exec(bin, append([]string{bin, "shell-core"}, args...), os.Environ())
+	log.Printf("handoff to %s: %v", bin, err)
 }

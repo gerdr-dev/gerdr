@@ -2,7 +2,7 @@
   "name": "gerdr-desktop",
   "productName": "Gerdr",
   "version": "0.0.0",
-  "description": "Gerdr's desktop App: Electron for the windows, desktop/core (Go) for Gerdr's logic. docs/dev/WHY-ELECTRON-COMEBACK.md",
+  "description": "Gerdr's desktop App: the frozen loader; Gerdr's logic ships in the backend (internal/desktop). docs/dev/SHELL.md",
   "main": "main.js",
   "private": true,
   "devDependencies": {

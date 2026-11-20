@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gerdr-dev/gerdr/desktop/core/el"
+	"github.com/gerdr-dev/gerdr/internal/desktop/el"
 	"github.com/gorilla/websocket"
 )
 

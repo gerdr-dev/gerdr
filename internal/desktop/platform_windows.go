@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"fmt"
@@ -56,8 +56,13 @@ func (s *shell) installApp(file string) bool {
 		be.stop() // its exe has to be replaceable
 	}
 	quote := func(v string) string { return "'" + strings.ReplaceAll(v, "'", "''") + "'" }
-	script := fmt.Sprintf("Wait-Process -Id %d,%d -ErrorAction SilentlyContinue; Start-Process -FilePath %s -ArgumentList '/S'",
-		os.Getpid(), shellPid(), quote(file))
+	// and the bundle's gerdr.exe that handed the core over to this one (handoff): it waits for us, holding its exe
+	pids := fmt.Sprintf("%d,%d", os.Getpid(), shellPid())
+	if p := os.Getenv("GERDR_HANDOFF_PARENT"); p != "" {
+		pids += "," + p
+	}
+	script := fmt.Sprintf("Wait-Process -Id %s -ErrorAction SilentlyContinue; Start-Process -FilePath %s -ArgumentList '/S'",
+		pids, quote(file))
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	// CREATE_NO_WINDOW only: with DETACHED_PROCESS PowerShell exits at once without running the script (Lightron 0.4.0)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000 /* CREATE_NO_WINDOW */}
@@ -69,4 +74,19 @@ func (s *shell) installApp(file string) bool {
 		return false
 	}
 	return true
+}
+
+// handoff runs bin's core in this process's place. Windows has no exec: bin runs as a child on this process's stdin /
+// stdout, and this one waits and exits with it. Returns only if it couldn't start.
+func handoff(bin string, args []string) {
+	cmd := exec.Command(bin, append([]string{"shell-core"}, args...)...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GERDR_HANDOFF_PARENT=%d", os.Getpid()))
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := cmd.Start(); err != nil {
+		log.Printf("handoff to %s: %v", bin, err)
+		return
+	}
+	_ = cmd.Wait()
+	os.Exit(cmd.ProcessState.ExitCode())
 }

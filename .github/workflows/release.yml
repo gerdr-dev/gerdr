@@ -64,7 +64,7 @@ jobs:
             dv=$(jq -r '.app["darwin-arm64"].file // ""' prev/update.json | sed -nE 's/^Gerdr-(.+)-mac-arm64\.dmg$/\1/p')
             if [ -n "$dv" ] && jq -e --arg s "$shell" '.shell == $s and .app["darwin-x64"]' prev/update.json >/dev/null &&
               git rev-parse -q --verify "refs/tags/v$dv" >/dev/null &&
-              git diff --quiet "v$dv" HEAD -- desktop tools/shell-id.sh internal/selfupdate; then
+              git diff --quiet "v$dv" HEAD -- desktop tools/shell-id.sh; then
               dmg=reuse
             fi
             echo "dmg of $prev is v$dv; rebuild: $dmg"

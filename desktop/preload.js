@@ -8,6 +8,16 @@ contextBridge.exposeInMainWorld("gerdrNative", {
   getPathForFile: (f) => webUtils.getPathForFile(f),
   // a still of a project's page (tab: the backend's id), a data URL, straight from the main process (main.js)
   browserShot: (tab) => ipcRenderer.invoke("gerdr:shot", tab),
+  // Generic ways to the main-process script (internal/desktop/shell/main.js), so a new feature there needs no change
+  // here (this file is part of the frozen App: docs/dev/SHELL.md). invoke: ipcMain.handle("gerdr:" + name) there;
+  // on: what it sends with webContents.send("gerdr:" + name, …); returns the way to stop listening.
+  invoke: (name, ...args) => ipcRenderer.invoke("gerdr:" + String(name), ...args),
+  on: (name, cb) => {
+    const ch = "gerdr:" + String(name);
+    const f = (_e, ...args) => cb(...args);
+    ipcRenderer.on(ch, f);
+    return () => ipcRenderer.removeListener(ch, f);
+  },
   platform: process.platform,
   shell: "electron",
   // the window has no system title bar (macOS: only the traffic lights over the page, main.js trafficLightPosition):

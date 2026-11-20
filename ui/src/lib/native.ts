@@ -44,7 +44,7 @@ export function nativeNotify(title: string, body: string, sessionId?: string, sp
 
 /**
  * App 里: bring up the window showing `space` and go to the conversation there, as a notification click does (the
- * App's __noteClick, desktop/core gerdr.go noteClick; with no such window it goes to this one). false = not
+ * App's __noteClick, internal/desktop gerdr.go noteClick; with no such window it goes to this one). false = not
  * handled (a browser, or the Windows shell with its one window): the caller goes to it here.
  */
 export function nativeFocusSession(sessionId: string, space: string) {

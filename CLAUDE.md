@@ -1,8 +1,9 @@
 # Gerdr
 
 Claude Code / Codex 的图形界面：Go 后端（ACP 适配器 + hub + HTTP/WS）+ 界面源码（ui/，**没有打包环节**）+ 桌面 App
-（Electron, macOS and Windows: desktop/main.js + preload.js, and desktop/core, the Go process beside it that runs the
-backend, updates and the Browser pane's protocol; `make app` / `make install` / `make win`. Back on Electron since
+（Electron, macOS and Windows: a frozen loader desktop/main.js + preload.js, and the hot half inside the gerdr binary,
+internal/desktop: `gerdr shell-core` beside Electron, which runs the backend, updates and the Browser pane's protocol,
+and the main-process script internal/desktop/shell/main.js; docs/dev/SHELL.md; `make app` / `make install` / `make win`. Back on Electron since
 2026-11-18 because the Browser pane needs a page inside the window: docs/dev/WHY-ELECTRON-COMEBACK.md; the Lightron
 shells before it are in git history, why Chromium at all in docs/dev/WHY-ELECTRON.md）。
 使用说明见 README.md 和 docs/guide/（README 只放简介和安装，细节按主题分在 guide 里，中英各一份），设计理由和协议的坑见 docs/dev/ARCHITECTURE.md —— **改适配器 / hub / uisite 之前先读它**，
@@ -22,8 +23,9 @@ shells before it are in git history, why Chromium at all in docs/dev/WHY-ELECTRO
 - The desktop window's title bar is ours (no system bar, the traffic lights over the rail, `nativeTitleBar` in
   ui/src/lib/native.ts; a Work panel opts in with `"titleBar": true`): docs/dev/TITLEBAR.md.
 - Desktop App self-update (backend-only ~10MB vs whole App, applied only when idle; `internal/selfupdate`,
-  `tools/shell-id.sh`, `desktop/feed.sh`): docs/dev/UPDATE.md. Changing the App's files (desktop/main.js, preload.js,
-  package.json, desktop/core, internal/selfupdate: tools/shell-id.sh lists them) forces a full download for everyone.
+  `tools/shell-id.sh`, `desktop/feed.sh`): docs/dev/UPDATE.md. Changing the frozen App's files (desktop/main.js,
+  preload.js, package.json, the packaging: tools/shell-id.sh lists them) forces a full download for everyone, so a new
+  App feature goes in internal/desktop (the core, shell/main.js), which updates with the backend: docs/dev/SHELL.md.
 - The user's own Chrome through Gerdr's browser extension (`browser-extension/`, `internal/chromeext`, `gerdr browser`;
   the gerdr program is its native host): docs/dev/CHROME-EXT.md. Same protocol as Annulo's extension; keep them in step.
 - The Browser pane: each project's own headless browser (a profile per project, `internal/projbrowser`), its pages in

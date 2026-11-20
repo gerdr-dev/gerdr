@@ -1,7 +1,7 @@
 ; The Windows installer of the Electron App (package-win.sh): per user, no admin, into
 ; %LOCALAPPDATA%\Programs\<name> (where the WebView2 shell, tools/winshell, was installed: installing over it moves
 ; that one over), Start menu and desktop shortcuts, an entry in Installed apps, and starts it. /S (silent) is how the
-; App's own update runs it (desktop/core platform_windows.go installApp).
+; App's own update runs it (internal/desktop platform_windows.go installApp).
 ;   makensis -DSRC=<packaged dir> -DOUT=<setup.exe> -DICON=<ico> -DVERSION=<v> -DNAME=<name> -DREGKEY=<slug> installer.nsi
 Unicode true
 SetCompressor /SOLID lzma

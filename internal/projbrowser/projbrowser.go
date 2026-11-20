@@ -99,7 +99,7 @@ func (m *Manager) appChanged(connected bool) {
 }
 
 // Release stops the headless browser on the App's data directory: the App is starting its own on it
-// (desktop/core asks at start; the directory is one process's at a time).
+// (internal/desktop asks at start; the directory is one process's at a time).
 func (m *Manager) Release() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	m.Bridge.QuitApp(ctx)

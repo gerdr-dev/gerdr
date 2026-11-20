@@ -1,6 +1,7 @@
 #!/bin/sh
-# Builds the macOS App on Electron (docs/dev/WHY-ELECTRON-COMEBACK.md), one package per arch: Electron (desktop/main.js,
-# preload.js), the core beside it (desktop/core → Resources/gerdr-shell) and the backend (Resources/gerdr).
+# Builds the macOS App on Electron (docs/dev/WHY-ELECTRON-COMEBACK.md), one package per arch: Electron with the frozen
+# loader (desktop/main.js, preload.js) and the backend (Resources/gerdr), which also carries the core and the App's
+# main-process script (`gerdr shell-core`, internal/desktop: docs/dev/SHELL.md).
 #
 #   desktop/package.sh                 # → desktop/dist/<arch>/Gerdr exp.app, desktop/dist/Gerdr-exp-<v>-mac-<arch>.dmg / .zip
 #   desktop/package.sh install         # and put this Mac's arch in /Applications (an App there by that name: to the Trash)
@@ -55,10 +56,8 @@ for arch in $ARCHS; do
     GOOS=darwin GOARCH=$arch go build -ldflags "-s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$VERSION" -o "$RES/gerdr" ./cmd/gerdr
     sign "$RES/gerdr" io.github.zbysir.gerdr.backend
   fi
-  CGO_ENABLED=0 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags '-s -w' -o "$RES/gerdr-shell" ./desktop/core
-  sign "$RES/gerdr-shell" io.github.zbysir.gerdr.shell
   rm -rf "$OUT/$arch"
-  node desktop/pack.js darwin "$farch" "$NAME" "$ID" "$VERSION" "$(git rev-parse --short HEAD)" "$SHELL_ID" "$ICNS/icon.icns" "$OUT/$arch" "$RES/gerdr" "$RES/gerdr-shell" >/dev/null
+  node desktop/pack.js darwin "$farch" "$NAME" "$ID" "$VERSION" "$(git rev-parse --short HEAD)" "$SHELL_ID" "$ICNS/icon.icns" "$OUT/$arch" "$RES/gerdr" >/dev/null
   mv "$OUT/$arch/$NAME-darwin-$farch/$NAME.app" "$OUT/$arch/$NAME.app"
   rm -rf "$OUT/$arch/$NAME-darwin-$farch" "$RES"
   APP="$OUT/$arch/$NAME.app"

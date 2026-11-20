@@ -91,7 +91,7 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 		}
 		// Applying while busy makes the shell ask in a dialog on the computer, which nobody at a phone can answer. So
 		// the phone asks instead: a 409 with busy (what would be cut off) makes it show its own confirmation, and a
-		// confirmed click comes back with force, which the shell takes as already answered (desktop/core/app.go).
+		// confirmed click comes back with force, which the shell takes as already answered (internal/desktop/app.go).
 		if b.Op == "apply" && !b.Force && s.Hub != nil && s.applyCutsOff(st) {
 			if x := s.busy(); x.Turns+x.Waiting+x.Tasks+x.Terms > 0 {
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -113,7 +113,7 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 
 // applyCutsOff: whether applying the App's pending update would stop running agents. A new App with the background
 // service on doesn't: the agents run in the service, which carries on while the windows close and reopen (the shell
-// skips its own question then too, desktop/core/app.go applyUpdate).
+// skips its own question then too, internal/desktop/app.go applyUpdate).
 func (s *Server) applyCutsOff(status json.RawMessage) bool {
 	var st struct {
 		Pending *struct {

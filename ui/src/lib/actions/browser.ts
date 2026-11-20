@@ -29,7 +29,7 @@ function shown(l: Layout): Set<number> {
  * its pictures instead (BrowserScreen). */
 export const useNativeOwners = create<Record<number, string>>(() => ({}));
 
-/** The page is in another window of the App (a page is in one window: the last pane to place it has it, desktop/core
+/** The page is in another window of the App (a page is in one window: the last pane to place it has it, internal/desktop
  * views.go). This window's panes show its pictures until that pane lets go or its window closes. */
 const ELSEWHERE = "~another-window";
 if (typeof window !== "undefined") {

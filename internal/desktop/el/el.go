@@ -5,9 +5,14 @@
 //
 // Core → Electron: {"id": n, "op": …, …}; Electron answers {"ev": "reply", "id": n, "ok", "result", "error"}.
 //
+// The first line is always {"op": "script", "path", "hot"}: the main-process script to run (Options.ShellJS, the App's
+// own logic, which ships with this binary: docs/dev/SHELL.md). desktop/main.js, the frozen loader, takes that one
+// itself; every other line goes to the script, which answers "ready" once it runs.
+//
 //	start {url, port}            the backend is up: open the first window at its login link
 //	newWindow {url} → window id  windows {} → [ids]   focus {win}   load {win, url}   eval {win, js} → value
 //	badge {label}   menu {items}   dockMenu {items}   quit {}   webPid {win} → pid   engine {} → {exe, dataDir, kind}
+//	relaunch {}   focused {} → bool
 //	openExternal {url}   openPath {path, reveal}
 //	notify {win, title, body, sessionId, space}   dialog {kind, title, detail, buttons, defaultId, cancelId} → index
 //	openView {profile, url} → view id   viewCdp {view, method, params} → result   viewPlace {view, win, rect, radius}
@@ -58,13 +63,15 @@ type Options struct {
 	Name, ID, Version string
 	Icon              []byte
 	// URLFunc starts the backend and returns the first window's address (a login link). Not called in browser-only mode.
-	URLFunc   func() (string, error)
-	Host      string
-	Window    WindowOptions
-	Script    string
-	Menu      []MenuItem
-	DockMenu  []MenuItem
-	OnMessage func(w *Window, raw json.RawMessage)
+	URLFunc func() (string, error)
+	Host    string
+	Window  WindowOptions
+	// ShellJS: the main-process script desktop/main.js loads (its path on disk) and Hot, what it and this core are
+	// (HotID): sent first, before anything else (docs/dev/SHELL.md)
+	ShellJS, Hot string
+	Menu         []MenuItem
+	DockMenu     []MenuItem
+	OnMessage    func(w *Window, raw json.RawMessage)
 	// OnWindowClose: a window is gone (called once it is off Windows())
 	OnWindowClose func(w *Window)
 	// OnNoteClick: a notification shown with App.Notify was clicked.
@@ -147,6 +154,9 @@ func Run(o Options) error {
 	}
 	a := &App{opts: o, out: json.NewEncoder(os.Stdout), waiting: map[int64]chan reply{}, windows: map[string]*Window{},
 		views: map[string]*View{}, clicks: map[string]func(*Window){}, quit: make(chan struct{})}
+	if o.ShellJS != "" {
+		_ = a.send(map[string]any{"op": "script", "path": o.ShellJS, "hot": o.Hot})
+	}
 	go a.read(os.Stdin)
 	<-a.quit
 	return nil
@@ -413,6 +423,19 @@ func (a *App) OpenPath(p string, reveal bool) {
 
 // Quit quits the App.
 func (a *App) Quit() { _, _ = a.call(map[string]any{"op": "quit"}) }
+
+// Relaunch quits and starts the App again (a backend update with a new core or shell script: docs/dev/SHELL.md).
+func (a *App) Relaunch() error {
+	_, err := a.call(map[string]any{"op": "relaunch"})
+	return err
+}
+
+// Focused: one of the App's windows is the active one (the person may be using it). An error (a script without the
+// op) counts as focused.
+func (a *App) Focused() bool {
+	raw, err := a.call(map[string]any{"op": "focused"})
+	return err != nil || string(raw) != "false"
+}
 
 // Notify shows a notification; its click comes back to Options.OnNoteClick.
 func (a *App) Notify(w *Window, title, body, sessionID, space string) {

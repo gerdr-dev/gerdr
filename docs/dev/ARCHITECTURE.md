@@ -1064,10 +1064,12 @@ stream-json 模式下没人看得见）—— resume、回退、追上全部失�
 
 Electron on macOS and Windows (back since 2026-11-18: [WHY-ELECTRON-COMEBACK.md](WHY-ELECTRON-COMEBACK.md); the
 Lightron shells before it are in git history, [WHY-ELECTRON.md](WHY-ELECTRON.md) keeps why Chromium and the traps any
-shell meets: quitting, the parent process on Windows, menus, signing). `desktop/main.js` has the windows, the bridge
-(`preload.js`, `window.gerdrNative`), the Browser pane's pages (WebContentsViews), menus, Dock; `desktop/core`, a Go
-process beside it (protocol in `desktop/core/el/el.go`), starts the bundled `gerdr --app --parent-pid`, reads
-`GERDR_READY <url>` from its stdout, attaches to a Gerdr already running (the data dir is locked), and runs updates.
+shell meets: quitting, the parent process on Windows, menus, signing). Two halves ([SHELL.md](SHELL.md)): the frozen
+App (`desktop/main.js`, a loader, and `preload.js`, the bridge `window.gerdrNative`) and the hot half inside the gerdr
+binary (`internal/desktop`): `gerdr shell-core`, a Go process beside Electron (protocol in `internal/desktop/el/el.go`),
+and the main-process script it hands the loader (`internal/desktop/shell/main.js`: windows, the Browser pane's pages
+as WebContentsViews, menus, Dock). The core starts `gerdr --app --parent-pid`, reads `GERDR_READY <url>` from its
+stdout, attaches to a Gerdr already running (the data dir is locked), and runs updates.
 An App started from Finder has only the system dirs on its PATH, so the backend asks the login shell for its PATH once
 at start (`sysenv.AdoptLoginPath`), or it wouldn't find claude / codex. Building: `make app` (this Mac) / `make dmg` /
 `make win`; `make install` puts this Mac's build in /Applications.

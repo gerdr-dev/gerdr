@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"encoding/json"
@@ -223,6 +223,22 @@ func (s *shell) applyUpdate(ask, confirmed bool) {
 			s.app.Quit()
 		}
 		return
+	}
+	// A backend whose core or shell script differ from this one's (HotID) takes effect only in a new App process
+	// (docs/dev/SHELL.md): the App starts again, its windows reopen, the agents in the background service run on. Not
+	// on its own while a window of the App is in front: the person may be typing in it; the next idle poll tries again.
+	if next := hotIDOf(s.up.Backend().Path); next != "" && next != HotID() {
+		if !ask && s.app.Focused() {
+			return
+		}
+		log.Printf("update: %s has another core / shell script (%s, running %s): starting the App again", p.Version, next, HotID())
+		s.upMu.Lock()
+		s.upgrading = upgradeMark{p.Version, time.Now()}
+		s.upMu.Unlock()
+		if err := s.app.Relaunch(); err == nil {
+			return
+		}
+		log.Printf("update: relaunch failed: restarting the backend only")
 	}
 	s.upMu.Lock()
 	s.applying = true

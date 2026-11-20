@@ -1,3 +1,3 @@
-package main
+package desktop
 
 const backendName = "gerdr.exe"
