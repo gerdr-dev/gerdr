@@ -4,6 +4,8 @@ import { defaultComponents, useIsCodeFenceIncomplete } from "streamdown";
 import { useDark } from "@/core/theme";
 import { t } from "@/lib/i18n";
 import { drawnMermaid, mermaidImageURL, renderMermaid } from "@/lib/mermaid";
+import { addonCodeBlock } from "@/lib/addons";
+import { AddonCodeBlock } from "@/components/AddonSlot";
 
 const SETTLE_MS = 300;
 
@@ -77,9 +79,14 @@ function Source({ code, error }: { code: string; error?: string }) {
 const DefaultCode = (defaultComponents as Record<string, any>).code ?? "code";
 const hastText = (n: any): string => (n?.type === "text" ? n.value : (n?.children ?? []).map(hastText).join(""));
 
-/** Streamdown's code block component with ```mermaid drawn (FileViewer's Markdown; replies go through ChatHost.codeBlocks). */
+/**
+ * Streamdown's code block component with ```mermaid and add-ons' languages (g.codeBlock) drawn (FileViewer's Markdown;
+ * replies go through ChatHost.codeBlocks).
+ */
 export function MdCode(props: any) {
   const lang = /language-([\w-]+)/.exec(String(props.className ?? props.node?.properties?.className ?? ""))?.[1];
+  const reg = lang ? addonCodeBlock(lang) : undefined;
+  if (reg) return <AddonCodeBlock reg={reg} lang={lang!} code={hastText(props.node).replace(/\n$/, "")} />;
   if (lang === "mermaid") return <MermaidBlock code={hastText(props.node).replace(/\n$/, "")} />;
   return <DefaultCode {...props} />;
 }

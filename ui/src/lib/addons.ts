@@ -22,6 +22,7 @@ import { get, set, useStore, visibleSessions } from "./store";
 import { insertComposerText } from "./composerText";
 import { addonFetch, addonSocket } from "./appnet";
 import type { AddonBuild, AddonService, SessionSummary } from "./types";
+import type { PluginConfig } from "streamdown";
 
 type TabLabelFn = (tab: any, ctx: any) => string | void;
 type PaneTitleFn = (pane: any, ctx: any) => string | void;
@@ -162,6 +163,52 @@ export function useAddonTurnStat(info: { sessionId: string; ts?: number; ms: num
     }
   }
   return { timeClassName: classes.join(" ") || undefined, title, after: after.length ? after : undefined };
+}
+
+// ---- g.codeBlock / g.markdownPlugins: how Markdown is drawn, in replies and in .md files the viewer opens ----
+
+/** g.codeBlock: fenced code blocks of these languages drawn by an add-on's component (components/AddonSlot.tsx AddonCodeBlock). */
+export type CodeBlockReg = { addon: string; langs: string[]; Component: React.ComponentType<{ code: string; lang: string }> };
+export const codeBlockRegs: CodeBlockReg[] = [];
+type MarkdownPluginsFn = (markdown: string) => PluginConfig | void;
+const markdownPluginFns: Reg<MarkdownPluginsFn>[] = [];
+
+// Code blocks get their own version rather than addonVersion: ChatHost.codeBlocks is rebuilt on it, and a new host
+// redraws everything in every chat, which other add-on changes (a tab label) shouldn't cost.
+let codeBlockVersion = 0;
+const codeBlockSubs = new Set<() => void>();
+function codeBlocksChanged() {
+  codeBlockVersion++;
+  codeBlockSubs.forEach((f) => f());
+}
+export const useCodeBlockVersion = () =>
+  React.useSyncExternalStore(
+    (f) => (codeBlockSubs.add(f), () => void codeBlockSubs.delete(f)),
+    () => codeBlockVersion,
+  );
+
+/** The add-on drawing ```lang, the later one in load order when several do. */
+export function addonCodeBlock(lang: string): CodeBlockReg | undefined {
+  for (let i = codeBlockRegs.length - 1; i >= 0; i--) if (codeBlockRegs[i].langs.includes(lang)) return codeBlockRegs[i];
+}
+
+/**
+ * Add-ons' streamdown plugins for this Markdown (g.markdownPlugins), merged over each other in load order; undefined
+ * when none has any. A hook: the Markdown asks again when add-ons change. Values keep their identity (the Markdown
+ * remounts when they change: lib/markdownPlugins.ts pluginsKey), so an add-on returning the same objects costs nothing.
+ */
+export function useAddonMarkdownPlugins(md: string): PluginConfig | undefined {
+  useStore((s) => s.addonVersion);
+  let out: PluginConfig | undefined;
+  for (const r of markdownPluginFns) {
+    try {
+      const p = r.fn(md);
+      if (p) out = { ...out, ...p };
+    } catch (e) {
+      fail(r.addon, e);
+    }
+  }
+  return out;
 }
 
 // ---- g.theme: color tokens of index.css overridden by add-ons ----
@@ -565,6 +612,19 @@ function makeApi(id: string, hash: string) {
       };
     },
     turnStat: (fn: TurnStatFn) => own(turnStats, fn),
+    codeBlock: (lang: string | string[], Component: CodeBlockReg["Component"]) => {
+      const langs = (Array.isArray(lang) ? lang : [lang]).map((l) => String(l).trim()).filter(Boolean);
+      if (!langs.length || typeof Component !== "function") throw new Error("g.codeBlock: a language and a component are required");
+      const r: CodeBlockReg = { addon: id, langs, Component };
+      codeBlockRegs.push(r);
+      codeBlocksChanged();
+      return () => {
+        const i = codeBlockRegs.indexOf(r);
+        if (i >= 0) codeBlockRegs.splice(i, 1);
+        codeBlocksChanged();
+      };
+    },
+    markdownPlugins: (fn: MarkdownPluginsFn) => own(markdownPluginFns, fn),
     messageAction: (m: {
       id: string;
       title: string;
@@ -747,6 +807,11 @@ function unload(id: string) {
   for (const k of Object.keys(slots) as SlotName[]) remove(slots[k], id);
   remove(composerActions, id);
   remove(turnStats, id);
+  remove(markdownPluginFns, id);
+  if (codeBlockRegs.some((r) => r.addon === id)) {
+    remove(codeBlockRegs, id);
+    codeBlocksChanged();
+  }
   remove(menuItems, id);
   remove(messageActions, id);
   remove(settingActions, id);

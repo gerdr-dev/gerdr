@@ -1,5 +1,5 @@
 import { Component, createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { composerActions, fail, slots, type SlotName, type SlotReg } from "@/lib/addons";
+import { composerActions, fail, slots, type CodeBlockReg, type SlotName, type SlotReg } from "@/lib/addons";
 import { get, useStore } from "@/lib/store";
 import { composerSelection, insertComposerText, sendComposer, setComposerText } from "@/lib/composerText";
 import { Button } from "@/components/ui/button";
@@ -162,6 +162,35 @@ export function AddonLoader({ paused, className, fallback }: LoaderProps) {
     <AddonGuard key={pick.loader.key} addon={pick.loader.addon} fallback={fallback}>
       <C paused={paused} className={className} fallback={fallback} />
     </AddonGuard>
+  );
+}
+
+/**
+ * A fenced code block an add-on draws (g.codeBlock): in replies through ChatHost.codeBlocks (lib/chatHost.tsx), in .md
+ * files through FileViewer's MdCode. One that throws shows the block's source, so the reply still says what it said.
+ */
+export function AddonCodeBlock({ reg, lang, code }: { reg: CodeBlockReg; lang: string; code: string }) {
+  const C = reg.Component;
+  return (
+    <AddonGuard addon={reg.addon} fallback={<CodeSource lang={lang} code={code} />}>
+      <C code={code} lang={lang} />
+    </AddonGuard>
+  );
+}
+
+// Drawn like any code block (the chat's CSS styles data-streamdown="code-block")
+function CodeSource({ lang, code }: { lang: string; code: string }) {
+  return (
+    <div data-streamdown="code-block" className="my-4 flex flex-col rounded-xl border border-border">
+      <div data-streamdown="code-block-header" className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+        {lang}
+      </div>
+      <div data-streamdown="code-block-body">
+        <pre className="overflow-x-auto font-mono">
+          <code>{code}</code>
+        </pre>
+      </div>
+    </div>
   );
 }
 

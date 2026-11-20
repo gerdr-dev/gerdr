@@ -23,9 +23,9 @@ import {
   type SharedDraft,
 } from "./store";
 import { pushDraft, sameDraft } from "./sync";
-import { AddonComposerActions, AddonComposerOverlay, AddonLoader } from "@/components/AddonSlot";
+import { AddonCodeBlock, AddonComposerActions, AddonComposerOverlay, AddonLoader } from "@/components/AddonSlot";
 import { useComposerBox } from "./composerText";
-import { useAddonTurnStat } from "./addons";
+import { codeBlockRegs, useAddonTurnStat, useCodeBlockVersion } from "./addons";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { locale, t } from "./i18n";
 import { UsagePanel } from "@/components/UsageMeter";
@@ -309,10 +309,18 @@ function useTranscript(sessionId: string, sub?: string) {
   return { all: t.all, running: t.running, loaded, older, loadOlder: () => loadOlder(sessionId) };
 }
 
+/** ```mermaid is gerdr's own (MermaidBlock); add-ons' languages (g.codeBlock) go over it, the later add-on winning. */
+function codeBlocks(): Record<string, (code: string) => ReactNode> {
+  const out: Record<string, (code: string) => ReactNode> = { mermaid: (code) => <MermaidBlock code={code} /> };
+  for (const r of codeBlockRegs) for (const lang of r.langs) out[lang] = (code) => <AddonCodeBlock reg={r} lang={lang} code={code} />;
+  return out;
+}
+
 export function GerdrChatProvider({ children }: { children: ReactNode }) {
   const config = useStore((s) => s.config);
   const device = useStore((s) => s.device);
   const agents = useStore((s) => s.agents);
+  const codeBlockVersion = useCodeBlockVersion();
   const host = useMemo<ChatHost>(
     () => ({
       useTranscript,
@@ -356,8 +364,9 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       focusSession,
       refocus: refocusAfterDialog,
       codeActions: (code, lang, session) => (lang === "bang" ? <RunButton cmd={code} session={session} /> : null),
-      // Diagrams and formulas in replies, each loaded the first time a reply has one (lib/mermaid.ts, lib/markdownPlugins.ts)
-      codeBlocks: { mermaid: (code) => <MermaidBlock code={code} /> },
+      // Diagrams and formulas in replies, each loaded the first time a reply has one (lib/mermaid.ts, lib/markdownPlugins.ts),
+      // and the languages add-ons draw
+      codeBlocks: codeBlocks(),
       useMarkdownPlugins,
       composerOverlay: (session) => <Overlay session={session} />,
       composerTop: (session) => <LoginChip sessionId={session.id} />,
@@ -395,7 +404,9 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       },
       setPinnedCommands: (names) => setConfig({ pinnedCommands: names }),
     }),
-    [config, device, agents],
+    // codeBlockVersion: an add-on's g.codeBlock coming or going. A new host redraws the code blocks already on screen
+    // (they read it from context), which the memoized Markdown around them wouldn't
+    [config, device, agents, codeBlockVersion],
   );
   // The chat has its own zh / en texts (packages/chat/src/messages.ts): same language as the rest of the interface
   return (

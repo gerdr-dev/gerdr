@@ -308,6 +308,25 @@ declare global {
     turnStat(fn: (info: TurnStatInfo) => { className?: string; title?: string; after?: any } | void): Dispose;
 
     /**
+     * Draw fenced code blocks of these languages yourself (```plantuml, ```dot…), in replies and in .md files the
+     * viewer opens. The component gets the block's text and language. While a reply streams it is drawn again as the
+     * text grows, so `code` can be cut off mid-way: wait until it stops changing before anything slow. Goes over
+     * Gerdr's own (```mermaid); two add-ons on one language: the later one in load order. One that throws shows the
+     * block's source instead. A heavy library: import it the first time a block needs it (see GUIDE.md, "Drawing
+     * code blocks").
+     */
+    codeBlock(lang: string | string[], component: Component<{ code: string; lang: string }>): Dispose;
+
+    /**
+     * Streamdown plugins for the Markdown in replies and .md files (streamdown 2.7's PluginConfig: math, cjk, code,
+     * mermaid, renderers). fn is called on every render of each Markdown with its text, so keep it cheap and return
+     * undefined for text yours has nothing to do with. Return the same objects every time (make them once): a new
+     * object redraws that Markdown from scratch. Keys you return replace Gerdr's (math: $$…$$ with KaTeX); several
+     * add-ons merge in load order, the later one winning per key. Fenced blocks of a language: g.codeBlock is simpler.
+     */
+    markdownPlugins(fn: (markdown: string) => MarkdownPlugins | void): Dispose;
+
+    /**
      * Recolor gerdr: override its color tokens, per mode. A value is any CSS color, including relative ones
      * ("oklch(from #e5569b calc(l + 0.1) c h)"); a token left out (or "") keeps gerdr's own. Several add-ons: by
      * add-on id, the later one winning per token. Undone when disposed or the add-on is unloaded.
@@ -549,6 +568,8 @@ declare global {
   }
 
   type Component<P> = (props: P) => any;
+  /** streamdown 2.7's PluginConfig (https://streamdown.ai/docs/plugins), what g.markdownPlugins returns. */
+  type MarkdownPlugins = { math?: any; cjk?: any; code?: any; mermaid?: any; renderers?: { language: string | string[]; component: Component<any> }[] };
 
   /** What JSX compiles to (set by gerdr; tsconfig.json points JSX at them). */
   const __gerdrH: any;

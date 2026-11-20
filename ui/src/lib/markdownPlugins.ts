@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { PluginConfig } from "streamdown";
+import { useAddonMarkdownPlugins } from "./addons";
 
 /**
  * Streamdown plugins for the Markdown in replies and .md files (ChatHost.useMarkdownPlugins, FileViewer): math,
@@ -55,15 +56,19 @@ function katexStyles() {
 
 let withMath: PluginConfig | undefined;
 
-/** ChatHost.useMarkdownPlugins: math for Markdown that has some, once KaTeX is in. */
+/**
+ * ChatHost.useMarkdownPlugins: math for Markdown that has some, once KaTeX is in, with add-ons' plugins
+ * (g.markdownPlugins) over it.
+ */
 export function useMarkdownPlugins(md: string): PluginConfig | undefined {
   const m = useSyncExternalStore(subscribe, () => math);
   const want = hasMath(md);
   useEffect(() => {
     if (want) load();
   }, [want]);
-  if (!want || !m) return undefined;
-  return (withMath ??= { math: m.math });
+  const fromAddons = useAddonMarkdownPlugins(md);
+  const own = want && m ? (withMath ??= { math: m.math }) : undefined;
+  return fromAddons ? { ...own, ...fromAddons } : own;
 }
 
 // One number per plugin object: a key for a MessageResponse that changes exactly when its plugin objects do (it

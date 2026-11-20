@@ -51,6 +51,13 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   plain callback: answers depend on the time (cache-clock colors by prompt-cache age), so Gerdr's implementation
   (`useAddonTurnStat`) re-renders every 30s while any add-on uses it. `latest` (the newest turn's line) is worked out in
   `buildRows`, since only the chat's transcript knows which turn is last.
+- `g.codeBlock` / `g.markdownPlugins` reach the Markdown in replies (`ChatHost.codeBlocks` / `useMarkdownPlugins`,
+  lib/chatHost.tsx, lib/markdownPlugins.ts) and in .md files (FileViewer's `MdCode`), the same hooks Gerdr's own
+  mermaid and math use, so a new diagram language needs no Gerdr change and no `@gerdr/chat` release. The chat's
+  Markdown is memoized on its text, so registrations must reach blocks already drawn: code blocks have their own
+  version (`useCodeBlockVersion`) that rebuilds the ChatHost (blocks read it from context; not `addonVersion`, since
+  a new host redraws every chat), and plugins come through a hook whose objects key the Markdown (`pluginsKey`).
+  Add-on blocks sit in an `AddonGuard` whose fallback is the source.
 - `g.theme` writes one `<style id="gerdr-addon-theme">` from all registrations (lib/addons.ts `applyThemes`). The
   selectors are `html:root:not(.dark)` / `html:root.dark`: higher specificity than index.css's `:root` / `.dark`, so
   load order doesn't matter, and a light-only override can't win in dark mode the way a plain `html:root` would.

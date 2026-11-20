@@ -14,6 +14,7 @@ import { HostTag } from "./HostTag";
 import { t } from "@/lib/i18n";
 import { useCopied } from "@/lib/useCopied";
 import { pluginsKey, useMarkdownPlugins } from "@/lib/markdownPlugins";
+import { useCodeBlockVersion } from "@/lib/addons";
 import { MdCode } from "./chat/MermaidBlock";
 
 /** 文本最多读这么多：再大的多半是日志 / 数据文件，整个塞进 DOM 手机上会卡死，给下载。 */
@@ -214,11 +215,13 @@ const mdComponents = { code: MdCode };
 function MdFile({ text }: { text: string }) {
   const { meta, body } = splitFrontMatter(text);
   const plugins = useMarkdownPlugins(body);
+  const codeBlocks = useCodeBlockVersion();
   return (
     <div className="gerdr-md mx-auto max-w-[860px] px-5 py-4">
       {meta !== null && <FrontMatter raw={meta} />}
-      {/* MessageResponse redraws only when the text changes: a plugin loaded afterwards needs a new key */}
-      <MessageResponse key={pluginsKey(plugins)} plugins={plugins} components={mdComponents}>
+      {/* MessageResponse redraws only when the text changes: a plugin loaded afterwards, or an add-on's code block
+          (g.codeBlock) coming or going, needs a new key */}
+      <MessageResponse key={`${pluginsKey(plugins)}:${codeBlocks}`} plugins={plugins} components={mdComponents}>
         {body}
       </MessageResponse>
     </div>

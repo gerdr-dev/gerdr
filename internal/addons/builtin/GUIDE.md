@@ -152,6 +152,8 @@ own gesture is sideways (a slider, swipe to send) puts `data-no-swipe` on itself
 | The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.selection` (the caret), `ctx.insert()` (at the caret), `ctx.setText(text, caret?)` |
 | Right-click menu (desktop and Android App) | `g.contextMenu({ id, title, when, run })` | `{ selection, sessionId }` |
 | The line under each finished turn | `g.turnStat(fn)` | `fn(info)` returns `{ className, title, after }` |
+| A fenced code block of a language (```plantuml), in replies and .md files | `g.codeBlock(lang, Component)` | `{ code, lang }`: see [Drawing code blocks](#drawing-code-blocks) |
+| How Markdown is parsed / drawn (math, CJK, highlighting) | `g.markdownPlugins(fn)` | `fn(markdown)` returns streamdown plugins |
 | Your add-on's settings, laid out your way (Settings → Add-ons → 设置) | `g.slot("settings", Component)` | `{ Field, values, set }`: see [Your own settings layout](#your-own-settings-layout) |
 | A button on each message (read aloud, translate…) | `g.messageAction({ id, title, icon, when, run })` | `run(msg, ctx)`: see [Buttons on a message](#buttons-on-a-message) |
 
@@ -223,6 +225,34 @@ Rules that keep it looking like Gerdr:
 - A phone has no hover: don't hide what matters in a `title` tooltip.
 - `g.turnStat`'s `fn` runs on every render of the line and every 30s: keep it cheap. `info.latest` marks the newest
   turn, `info.now` is the time to compare against.
+
+### Drawing code blocks
+
+`g.codeBlock("dot", Component)` (or a list of languages) draws every ```dot block in replies and in `.md` files the
+viewer opens with your component, which gets `{ code, lang }`. Gerdr draws ```mermaid diagrams and `$$…$$` math itself;
+registering `mermaid` replaces its drawing.
+
+- A reply streams in: the block is drawn again each time its text grows, so `code` may be half a diagram. Draw after
+  it has stopped changing for a moment (Gerdr waits 300ms for mermaid), and keep what you drew per `code` in a Map
+  outside the component: a long chat unmounts rows scrolled away and mounts them again.
+- npm packages can't be imported, but a library can be loaded when the first block needs it, through Gerdr's copy of
+  esm.sh (cached on this machine): put the URL in a variable so the bundler leaves it alone, and load it once.
+
+```tsx
+let viz: Promise<any> | undefined;
+const loadViz = () => (viz ??= import(new URL("/_esm/@viz-js/viz@3.11.0", location.origin).href).then((m) => m.instance()));
+g.codeBlock("dot", ({ code }) => {
+  const [svg, setSvg] = g.React.useState("");
+  g.React.useEffect(() => {
+    const t = setTimeout(() => loadViz().then((v) => setSvg(v.renderSVGElement(code).outerHTML)).catch(() => {}), 300);
+    return () => clearTimeout(t);
+  }, [code]);
+  return svg ? <div className="my-4 overflow-x-auto" dangerouslySetInnerHTML={{ __html: svg }} /> : <pre className="my-4 text-xs">{code}</pre>;
+});
+```
+
+`g.markdownPlugins(fn)` is the lower level: streamdown's own plugins (`math`, `cjk`, `code`, `renderers`), for what
+isn't a fenced block. `fn(markdown)` runs on every render: return the same objects each time, made once.
 
 ### Buttons on a message
 
