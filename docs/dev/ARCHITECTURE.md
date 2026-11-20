@@ -1020,6 +1020,12 @@ menu written for the variables keeps a sane width and no gap.
   it, so `transcript_stat` also returns each message's uuid (`newUserIds`). Comparing texts alone kept misfiring on
   shapes the adapter rewrites (an attachment's resource_link becomes an "@path" block, `!` output, joined blocks) and
   reloaded whole conversations; the text is now only the fallback for agents without ids.
+- **Stop (Esc) answers before the agent has stopped** (`Session.Escape` / `finishStop`): a claude still starting up
+  (the session's first message) takes a second or more to act on the interrupt, and the stop button hung that long.
+  So once the interrupt is sent the turn is over for Gerdr: its turn_end is logged (or, rolled back, the message is cut
+  from the log and handed back), the status reads idle, and whatever the agent still sends of that turn is dropped
+  (`stopTurn` in `emit`; its own turn_end too, or there'd be two). The agent's side is rewound once it has really
+  stopped; until then `Session.stopping` is set and Send / Rewind wait for it, so a new message can't land mid-rollback.
 - **Only imported sessions have an "elsewhere"** (`Record.GerdrOnly`): a session started in Gerdr, or forked into
   a copy only Gerdr writes to (Takeover), skips both the holders check before a message and the catch-up. If someone
   resumes it in a terminal anyway, the two copies fork and Gerdr keeps its own — the user's choice, after the

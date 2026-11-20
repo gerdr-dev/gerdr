@@ -158,15 +158,20 @@ type Session struct {
 	orphanSince int64             // 载入时日志里有一轮没收尾：最后一条日志的时间（只在 New 里用一次）
 	steering    map[string]string // 正在插的话（msgID → 早到的队列状态），见 SendFrom
 	deferred    []*deferredMsg    // slash commands sent mid-turn, waiting for the turn to end (deferred.go)
-	lastCatch   time.Time         // 正在从 agent 记录重新载入（CatchUp / Reload），别重入
-	lastErr     string
-	lastLogin   string // lastErr is a failed sign-in: the command that signs the agent in again (acpx.LoginCommandKey)
-	modes       *acp.SessionModeState
-	config      []acp.SessionConfigOption
-	commands    []acp.AvailableCommand
-	pending     map[string]*pending
-	turnMsg     string // 正在跑的那一轮是哪条消息开的
-	auto        bool   // 正在跑的这一轮是 agent 自己开的（后台任务跑完了在汇报），没有 runTurn 在等
+	// Stop answers at once and finishes in the background (rewind.go Escape): stopping is non-nil, and closed, from
+	// the press until the agent has stopped and been rewound; the session reads as idle meanwhile, and Send / Rewind
+	// wait for it. stopTurn: the stopped turn hasn't ended at the agent yet; what it still sends is dropped (emit).
+	stopping  chan struct{}
+	stopTurn  bool
+	lastCatch time.Time // 正在从 agent 记录重新载入（CatchUp / Reload），别重入
+	lastErr   string
+	lastLogin string // lastErr is a failed sign-in: the command that signs the agent in again (acpx.LoginCommandKey)
+	modes     *acp.SessionModeState
+	config    []acp.SessionConfigOption
+	commands  []acp.AvailableCommand
+	pending   map[string]*pending
+	turnMsg   string // 正在跑的那一轮是哪条消息开的
+	auto      bool   // 正在跑的这一轮是 agent 自己开的（后台任务跑完了在汇报），没有 runTurn 在等
 	// autoNext：「agent 自己开了一轮」先于上一轮 session/prompt 的响应到了（两条路，顺序不保证）。
 	// runTurn 收尾时看到它就直接接上一个 auto 的轮次，不然这一轮在界面上是「闲着」。
 	autoNext bool
@@ -377,7 +382,7 @@ func (s *Session) contextLocked() *ContextInfo {
 }
 
 func (s *Session) turnInfoLocked() *TurnInfo {
-	if !s.running {
+	if !s.running || s.stopping != nil {
 		return nil
 	}
 	return &TurnInfo{StartedAt: s.turnStarted, OutputTokens: s.turnTokens}
@@ -432,7 +437,23 @@ func (s *Session) Events() []*Event {
 }
 
 // emit 记一条日志并广播（流式片段并进上一条还没落盘的，见 chatlog.Add）。
+// While a stopped turn winds down at the agent (stopTurn), what it still sends is dropped: the person already saw it
+// stop, and a rolled-back turn is already gone from the log (Escape).
 func (s *Session) emit(e *Event) {
+	switch e.Kind {
+	case EvUpdate, EvTurnEnd, EvPermission, EvPermissionDone, EvAsk, EvAskDone, EvSteerState:
+		s.mu.Lock()
+		drop := s.stopTurn
+		s.mu.Unlock()
+		if drop {
+			return
+		}
+	}
+	s.record(e)
+}
+
+// record is emit without the stopped-turn filter.
+func (s *Session) record(e *Event) {
 	e.Seq = s.h.nextSeq()
 	e.TS = now()
 	var use []acpx.Tokens
@@ -527,6 +548,7 @@ func (s *Session) setStatus() {
 	s.mu.Lock()
 	st := StIdle
 	switch {
+	case s.stopping != nil: // stopped as far as the person is concerned (Escape)
 	case len(s.pending) > 0:
 		st = StWaiting
 	case s.running:

@@ -34,31 +34,34 @@ const rewoundKeep = 50
 //   - agent 已经在回了：最后那几条它还没处理的插话，先收回（claude 的 cancel_async_message）再打断 ——
 //     先打断的话 claude 会把排着的插话留到下一轮去跑；收回的那几条从对话里删掉、放回去。
 //     codex 收不回插话（turn/steer 一发就进了这一轮），只打断。
+//
+// It answers as soon as the interrupt is sent, without waiting for the agent to stop: a claude still starting up (the
+// first message of a session) takes a second or more to settle, and the stop button sat there that long (user
+// report, "escape: slow" with stopped=1.17s). From the answer on the session reads as stopped: the turn is ended (or,
+// rolled back, gone) in the log, the status is idle, what the agent still sends of that turn is dropped (emit). The
+// rest runs in finishStop: waiting for the agent, then rewinding its own record; Send / Rewind wait for that.
 func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	out := EscapeResult{Content: []json.RawMessage{}}
 	s.escMu.Lock()
 	defer s.escMu.Unlock()
 	s.mu.Lock()
-	running, auto, turnMsg, agentSID := s.running, s.auto, s.turnMsg, s.rec.AgentSessionID
+	running, stopping, auto, turnMsg, agentSID := s.running, s.stopping != nil, s.auto, s.turnMsg, s.rec.AgentSessionID
 	s.loadLocked()
 	evs := append([]*Event(nil), s.events...)
 	s.mu.Unlock()
-	if !running {
+	if !running || stopping { // already stopping: the first press took everything back
 		return out, nil
 	}
 	// 要收回的插话：最后一次 agent 有动静之后的用户消息，加上这一轮里还标着「排队中」的插话（chatlog.StopPlan）
 	tail, quiet := chatlog.StopPlan(evs)
 	untouched := quiet && !auto && turnMsg != ""
 
-	// Stops that take seconds were reported (codex from the phone; claude, ~2s until the words came back) but didn't
-	// reproduce on a copy of the same session (~270ms). Log where the time goes when it's slow, so the next one shows
-	// which step it was. Each step is the time since the start (cumulative); 300ms because the healthy path is ~250ms.
 	t0 := time.Now()
-	var tAttach, tWithdraw, tCancel, tStopped time.Duration
+	var tAttach, tWithdraw, tCancel time.Duration
 	defer func() {
 		if d := time.Since(t0); d > 300*time.Millisecond {
 			s.h.log.Warn("escape: slow", "session", s.ID(), "agent", s.rec.Agent, "took", d, "attach", tAttach, "withdraw", tWithdraw,
-				"cancel", tCancel, "stopped", tStopped, "rollback", untouched)
+				"cancel", tCancel, "rollback", untouched)
 		}
 	}()
 	c, err := s.ensureAttached(ctx)
@@ -90,42 +93,98 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 		return out, err
 	}
 	tCancel = time.Since(t0)
-	// Wait for the turn to really stop (a rewind needs it stopped). claude settles ~15ms after the interrupt, so poll
-	// finely: at 100ms a step this alone added up to 100ms to every Esc. Still gives up after 20s.
+
+	// From here on the turn is stopped for everyone watching.
+	done := make(chan struct{})
+	s.mu.Lock()
+	ending := s.running // false: it ended by itself meanwhile, its turn_end is already out
+	ev := &Event{Kind: EvTurnEnd, MessageID: turnMsg, StopReason: string(acp.StopReasonCancelled), Auto: auto,
+		DurationMs: now() - s.turnStarted, OutputTokens: s.turnTokens}
+	s.stopping, s.stopTurn = done, ending
+	s.mu.Unlock()
+	rollback := ""
+	if untouched {
+		rollback = turnMsg
+		out.RolledBack = true
+		for _, e := range evs {
+			if e.Kind == EvUser && (e.MessageID == turnMsg || containsEvent(tail, e)) {
+				out.Content = append(out.Content, s.h.inflate(e.Content)...)
+			}
+		}
+		s.truncateFrom(turnMsg) // the agent's side is rewound once it has stopped (finishStop)
+	} else {
+		if len(withdrawn) > 0 {
+			s.dropUserEvents(withdrawn, &out)
+		}
+		if ending {
+			s.record(ev)
+		}
+	}
+	s.setStatus()
+	go s.finishStop(done, rollback, t0)
+	return out, nil
+}
+
+// finishStop is the slow half of Escape: wait for the agent to really stop (claude settles ~15ms after the interrupt
+// once it runs, a second or more while it starts up; gives up after 20s), then take a rolled-back message out of the
+// agent's own record. Until it's done the session reads as idle and Send / Rewind wait (waitStopping).
+func (s *Session) finishStop(done chan struct{}, rollback string, t0 time.Time) {
+	defer func() {
+		s.mu.Lock()
+		s.stopTurn = false
+		if s.stopping == done {
+			s.stopping = nil
+		}
+		s.mu.Unlock()
+		close(done)
+		s.setStatus()
+		s.h.broadcastSession(s) // Summary.Turn reads stopping too, and setStatus only broadcasts a status change
+	}()
 	for i := 0; i < 1000; i++ {
 		s.mu.Lock()
-		r := s.running
+		r := s.stopTurn
 		s.mu.Unlock()
 		if !r {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	tStopped = time.Since(t0)
+	if d := time.Since(t0); d > 300*time.Millisecond {
+		s.h.log.Info("escape: agent stopped late", "session", s.ID(), "agent", s.rec.Agent, "took", d, "rollback", rollback != "")
+	}
+	if rollback == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	c, err := s.ensureAttached(ctx)
+	if err == nil {
+		err = s.rewindAgent(ctx, c, s.agentSID(), rollback)
+	}
+	// agent 那边找不到这条：打断得太快，它还没把消息记进会话（claude 还没写进记录 / codex 还没建出那一轮）——
+	// 等于它压根没收到（实测：发出去 150ms 就按 Esc 是这种）。
+	switch {
+	case err == nil:
+		s.h.saveIndex() // the agent may have moved to a new session id (rekey)
+	case !strings.Contains(errText(err), "not found"):
+		s.h.log.Warn("escape: rewind failed", "session", s.ID(), "err", err)
+	}
+}
 
-	if untouched {
-		_, err := s.Rewind(ctx, turnMsg)
-		// agent 那边找不到这条：打断得太快，它还没把消息记进会话（claude 还没写进记录 / codex 还没建出那一轮）——
-		// 等于它压根没收到，只在 gerdr 这边把这一轮删掉就行（实测：发出去 150ms 就按 Esc 是这种）。
-		if err != nil && strings.Contains(err.Error(), "not found") {
-			s.truncateFrom(turnMsg)
-			err = nil
-		}
-		if err == nil {
-			out.RolledBack = true
-			for _, e := range evs {
-				if e.Kind == EvUser && (e.MessageID == turnMsg || containsEvent(tail, e)) {
-					out.Content = append(out.Content, s.h.inflate(e.Content)...)
-				}
-			}
-			return out, nil
-		}
-		s.h.log.Warn("escape: rewind failed", "err", err)
+// waitStopping waits for a stop still finishing in the background (Escape).
+func (s *Session) waitStopping(ctx context.Context) error {
+	s.mu.Lock()
+	ch := s.stopping
+	s.mu.Unlock()
+	if ch == nil {
+		return nil
 	}
-	if len(withdrawn) > 0 {
-		s.dropUserEvents(withdrawn, &out)
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	return out, nil
 }
 
 // Warm：把会话的 agent 进程先起来（见 acpx.MethodWarm）。
@@ -253,6 +312,9 @@ type RewindResult struct {
 // 以前用影子 git 仓库给 cwd 打快照、一起恢复文件，但 cwd 以外改的文件管不到、同目录多个会话的快照
 // 互相覆盖，坑太多，删掉了。
 func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, error) {
+	if err := s.waitStopping(ctx); err != nil {
+		return RewindResult{}, err
+	}
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
@@ -278,9 +340,29 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 	if steer && !c.SteerRewind() {
 		return RewindResult{}, errors.New(i18n.S("插话的消息不能单独回退，回退它所在那一轮开头的那条", "A message sent mid-turn can't be rewound on its own; rewind the message that started its turn"))
 	}
+	if err := s.rewindAgent(ctx, c, agentSID, messageID); err != nil {
+		return RewindResult{}, fmt.Errorf(i18n.S("回退对话失败：%s", "rewinding the conversation failed: %s"), errText(err))
+	}
+	out := RewindResult{Content: s.h.inflate(content)}
+	evs := s.rewriteLog(func() {
+		s.events = s.events[:idx]
+		if steer {
+			// Cut mid-turn: the turn_end went with the rest. Close the turn so a reload doesn't leave it open.
+			s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn)})
+		}
+		s.lastErr = ""
+	})
+	s.h.broadcastEvents(s.rec.ID, evs, true)
+	s.setStatus()
+	s.h.saveIndex()
+	return out, nil
+}
+
+// rewindAgent takes the conversation back to before messageID on the agent's side only (gerdr's log is the caller's).
+func (s *Session) rewindAgent(ctx context.Context, c *agenthost.Host, agentSID, messageID string) error {
 	res, err := agenthost.Call[acpx.RewindResponse](ctx, c, acpx.MethodRewind, acpx.RewindRequest{SessionId: acp.SessionId(agentSID), MessageId: messageID})
 	if err != nil {
-		return RewindResult{}, fmt.Errorf(i18n.S("回退对话失败：%s", "rewinding the conversation failed: %s"), errText(err))
+		return err
 	}
 	if res.SessionId != "" && string(res.SessionId) != agentSID {
 		s.h.rekey(s, string(res.SessionId))
@@ -296,17 +378,5 @@ func (s *Session) Rewind(ctx context.Context, messageID string) (RewindResult, e
 		s.rec.Fork = res.Fork
 		s.mu.Unlock()
 	}
-	out := RewindResult{Content: s.h.inflate(content)}
-	evs := s.rewriteLog(func() {
-		s.events = s.events[:idx]
-		if steer {
-			// Cut mid-turn: the turn_end went with the rest. Close the turn so a reload doesn't leave it open.
-			s.events = append(s.events, &Event{Seq: s.h.nextSeqLocked(), TS: now(), Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn)})
-		}
-		s.lastErr = ""
-	})
-	s.h.broadcastEvents(s.rec.ID, evs, true)
-	s.setStatus()
-	s.h.saveIndex()
-	return out, nil
+	return nil
 }

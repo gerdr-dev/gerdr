@@ -28,7 +28,11 @@ type fakeAgent struct {
 	steers     []string
 	release    chan struct{}
 	finished   chan string
-	forkBefore string // the last MethodFork's Before
+	forkBefore string        // the last MethodFork's Before
+	silent     bool          // the first turn says nothing (Escape rolls it back)
+	stopDelay  time.Duration // how long the first turn takes to stop after Cancel (a claude still starting up)
+	started    chan struct{} // the first prompt reached the agent (nil = not reported)
+	rewinds    []string      // MethodRewind's message ids
 }
 
 func (f *fakeAgent) SetConn(c *acp.AgentSideConnection) { f.conn = c }
@@ -51,14 +55,30 @@ func (f *fakeAgent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.Prompt
 	f.mu.Unlock()
 	if first {
 		// say something first: a turn the agent already answered in (Escape takes back only what's queued)
-		_ = f.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: p.SessionId, Update: acp.UpdateAgentMessageText("on it")})
+		if !f.silent {
+			_ = f.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: p.SessionId, Update: acp.UpdateAgentMessageText("on it")})
+		}
+		if f.started != nil {
+			close(f.started)
+		}
 		<-f.release
+		if f.stopDelay > 0 { // still talking while it winds down: none of this may reach the log
+			_ = f.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: p.SessionId, Update: acp.UpdateAgentMessageText("late")})
+			return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+		}
 	}
 	f.finished <- t
 	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 }
 
 func (f *fakeAgent) Cancel(ctx context.Context, p acp.CancelNotification) error {
+	if f.stopDelay > 0 {
+		go func() {
+			time.Sleep(f.stopDelay)
+			close(f.release)
+		}()
+		return nil
+	}
 	select {
 	case <-f.release:
 	default:
@@ -81,6 +101,13 @@ func (f *fakeAgent) HandleExtensionMethod(ctx context.Context, method string, pa
 		return acpx.SteerResponse{Outcome: acpx.SteerInjected}, nil
 	case acpx.MethodWithdraw:
 		return acpx.WithdrawResponse{}, nil
+	case acpx.MethodRewind:
+		var p acpx.RewindRequest
+		_ = json.Unmarshal(params, &p)
+		f.mu.Lock()
+		f.rewinds = append(f.rewinds, p.MessageId)
+		f.mu.Unlock()
+		return acpx.RewindResponse{}, nil
 	case acpx.MethodFork:
 		var p acpx.ForkRequest
 		_ = json.Unmarshal(params, &p)

@@ -52,6 +52,10 @@ type SendOpts struct {
 // SendWith is SendFrom with every option.
 func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o SendOpts) (SendResult, error) {
 	clientID, from, urgent, fold := o.ClientID, o.From, o.Urgent, strings.TrimSpace(o.Fold)
+	// A stop still finishing in the background (Escape): the new turn goes after it, or it would land mid-rollback
+	if err := s.waitStopping(ctx); err != nil {
+		return SendResult{}, err
+	}
 	// Nothing typed is still a message when `!` output is waiting to go along (shell.go): sending it on its own is how
 	// the user hands the agent a command's result without having to say something
 	if len(content) == 0 {
@@ -315,6 +319,9 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	}
 	s.running = false
 	s.turnMsg = ""
+	// Stopped with Escape: its turn_end already went out (or the turn was rolled back), this one would come twice
+	stopped := s.stopTurn
+	s.stopTurn = false
 	s.quiet = err == nil && clearOnly(s.events)
 	go s.markSynced(10 * time.Second) // 这一轮是我们写的：记下文件现在多大（claude 在一轮之后还会补写标题之类，等一会儿再量）
 	if err != nil {
@@ -339,7 +346,9 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 		held = s.popDeferredLocked()
 	}
 	s.mu.Unlock()
-	s.emit(ev)
+	if !stopped {
+		s.emit(ev)
+	}
 	go s.autoTitle()
 	if next {
 		s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})

@@ -199,8 +199,10 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 			s.quiet = false
 		}
 		var held *deferredMsg
+		stopped := false
 		if end {
 			s.running, s.auto = false, false
+			stopped, s.stopTurn = s.stopTurn, false // Escape already ended it (runTurn does the same)
 			for id, p := range s.pending {
 				close(p.ch)
 				delete(s.pending, id)
@@ -216,7 +218,9 @@ func (s *Session) onGerdrInfo(g map[string]any) {
 			s.mu.Lock()
 			dur, tok := now()-s.turnStarted, s.turnTokens
 			s.mu.Unlock()
-			s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok})
+			if !stopped {
+				s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok})
+			}
 			s.flush(true)
 			s.setStatus()
 			if held != nil {
