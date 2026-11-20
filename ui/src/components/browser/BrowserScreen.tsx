@@ -177,8 +177,8 @@ export function BrowserScreen({
   const fixed = fit ?? size;
   // Pictures only where the real page can't be: floating (it is drawn under our overlays and scaled down) or another
   // device. A size picked for a docked pane keeps the App's real page, laid out at that size (asked for: picking a
-  // phone turned the pane into pictures): as wide as the size, centred, or the pane's width with the page shrunk by
-  // Emulation's scale when the size is wider (sized below, chromeext Fit.Scale)
+  // phone turned the pane into pictures), as Chrome's device toolbar does: shrunk by Emulation's scale when the size is
+  // wider than the box, centred, the box's background around it (nativeLayout; sized and placed together in report)
   const nativeView = canNative && owner === paneId && !fit;
   const sizeRef = useRef(size);
   sizeRef.current = size;
@@ -195,14 +195,10 @@ export function BrowserScreen({
       queueFit(fitOn.current, null);
       fitOn.current = null;
     }
+    // the App's real page: report() below sizes it as it places it, from the same numbers (nativeLayout)
+    if (nativeView) return;
     if (fixed && tab && live) {
-      const f = FLOAT_FITS[fixed];
-      if (nativeView && !fit) {
-        // the real page: as tall as the box at the scale it is shown at
-        if (!boxSize.w || !boxSize.h) return;
-        const scale = Math.min(1, boxSize.w / f.w);
-        queueFit(tab, { ...f, h: Math.round(boxSize.h / scale), pin: true, scale: scale < 1 ? scale : undefined });
-      } else queueFit(tab, { ...f, pin: !fit });
+      queueFit(tab, { ...FLOAT_FITS[fixed], pin: !fit });
       fitOn.current = tab;
     } else if (fitOn.current != null) {
       // back to the pane's own size: told again once the size is cleared (a headless window measured its frame
@@ -210,7 +206,7 @@ export function BrowserScreen({
       void queueFit(fitOn.current, null).then(() => sendWS({ t: "cfg", ...want() }));
       fitOn.current = null;
     }
-  }, [fit, size, tab, live, nativeView, nativeView && size ? `${boxSize.w}x${boxSize.h}` : ""]);
+  }, [fit, size, tab, live, nativeView]);
   // a size picked or dropped: the real page placed again (narrower, centred)
   useEffect(() => placeNow.current?.(), [size]);
   // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
@@ -413,6 +409,7 @@ export function BrowserScreen({
     const box = boxRef.current;
     if (!box) return;
     let last = "";
+    let sentFit = ""; // the emulated size last asked for (nativeLayout)
     let raf = 0;
     let covered = false; // one of ours is over the box: the still shows, the page is off
     let shot = 0; // which cover the still being taken is for
@@ -537,10 +534,22 @@ export function BrowserScreen({
       // the box, so the still moves with it
       // A size picked (sizeRef): the page as wide as that size and centred, or the whole box when the size is wider
       // (the page is then shrunk to it). Not against the pane's corners when narrower: no rounding
-      const sz = sizeRef.current;
-      const vw = sz ? Math.min(r.width, FLOAT_FITS[sz].w) : r.width;
-      const spot = vw < r.width ? new DOMRect(r.x + (r.width - vw) / 2, r.y, vw, r.height) : r;
-      const round = vw < r.width ? 0 : radius;
+      const lay0 = nativeLayout(r.width, r.height, sizeRef.current);
+      const spot = lay0.w < r.width ? new DOMRect(r.x + lay0.x, r.y, lay0.w, r.height) : r;
+      const round = lay0.w < r.width ? 0 : radius;
+      // The page's emulated size follows the box with the placing, from the same numbers: computed apart (the box's
+      // size in a state, a stale one in another window) the emulated area and the view differed, and the view's
+      // unpainted part showed the still under it (user report). This pane has the real page, so its size is the page's:
+      // none clears one another pane or window left (a page moved to its own window kept the column's scale)
+      const fk = lay0.fit ? JSON.stringify(lay0.fit) : "none";
+      if (shown && fk !== sentFit) {
+        sentFit = fk;
+        queueFit(tab, lay0.fit);
+        // the still under the page is the old shape now: off until a fresh one (settle), or it shows round the new
+        // page while the browser catches up
+        if (upSince && !covered) drop();
+        settle();
+      }
       const place = () => {
         const left = Math.ceil(spot.x),
           top = Math.ceil(spot.y);
@@ -1049,7 +1058,8 @@ export function BrowserScreen({
         </DropdownMenu>
       </div>
       <Body>
-        <div ref={boxRef} className="group/view relative h-full w-full overflow-hidden bg-background">
+        {/* a device's page narrower than the box sits on a muted ground, as in Chrome's device toolbar */}
+        <div ref={boxRef} className={cn("group/view relative h-full w-full overflow-hidden", nativeView && size ? "bg-muted" : "bg-background")}>
           {/* View only (the pane's border goes dashed, Panes.tsx): what that means, said where the pointer is */}
           {viewOnly && (
             <div className="pointer-events-none absolute right-2 bottom-2 z-10 rounded-md whitespace-nowrap bg-popover/90 px-2 py-1 text-[11px] text-popover-foreground opacity-0 shadow-sm ring-1 ring-border transition-opacity group-hover/view:opacity-100">
@@ -1162,4 +1172,21 @@ function queueFit(tab: number, f: { w: number; h: number; mobile: boolean; devic
   fitQueue.set(tab, next);
   void next.finally(() => fitQueue.get(tab) === next && fitQueue.delete(tab));
   return next;
+}
+
+/**
+ * Where the App's real page goes in a box of w x h with size picked, and the size it is emulated at: as Chrome's device
+ * toolbar, the device's width shrunk to fit (scale) and centred, its height the box's (a page scrolls). No size: the
+ * whole box, nothing emulated. x / w in CSS px of the box.
+ */
+function nativeLayout(w: number, h: number, size?: FloatFit) {
+  if (!size || w <= 0 || h <= 0) return { x: 0, w, fit: null };
+  const f = FLOAT_FITS[size];
+  const scale = Math.min(1, w / f.w);
+  const vw = Math.min(w, Math.round(f.w * scale));
+  return {
+    x: (w - vw) / 2,
+    w: vw,
+    fit: { w: f.w, h: Math.round(h / scale), mobile: f.mobile, device: f.device, pin: true, scale: scale < 1 ? Math.round(scale * 1000) / 1000 : undefined },
+  };
 }

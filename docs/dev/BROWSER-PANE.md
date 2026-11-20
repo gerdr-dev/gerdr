@@ -209,9 +209,13 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   is the pane's own size, and on a phone the phone layout above, with the browser's own user agent (asked for: no
   reload when a phone looks). pc / pad / mobile lay the page out at that size like a floating pane (same `FLOAT_FITS`,
   same user agents). In the App a docked pane keeps the real page (asked for: pictures only for a floating pane or
-  another device): the view is placed as wide as the size and centred, or across the whole pane with the page shrunk
-  by Emulation's `scale` when the size is wider (`Fit.Scale`, its height the pane's divided by the scale), and the
-  pinned size survives the App's pane showing it (`desktopShown` only drops a floating box's). Elsewhere it is the
+  another device), as Chrome's device toolbar does: the device's width shrunk to fit by Emulation's `scale`
+  (`Fit.Scale`, its height the pane's divided by the scale), centred on a muted ground. The view is placed over exactly
+  that area, and the size is sent from the same numbers in the same place (`nativeLayout`, BrowserScreen `report`):
+  computed apart, the emulated area was smaller than the view and its unpainted part showed the still kept under the
+  page (below). The pane with the real page owns its size: one without a size clears it (a page moved into its own
+  window kept the column's scale). A size change drops the still until a fresh one. The pinned size survives the App's
+  pane showing it (`desktopShown` only drops a floating box's). Elsewhere it is the
   stream's pictures. Asked for on
   the phone, which had no way to get a site's desktop page. Unlike a floating box's size it is pinned (`Fit.Pin`): it
   wins over a remote viewer's phone layout, since the person on the phone picked it. The layout is shared, so every
