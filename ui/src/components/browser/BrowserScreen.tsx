@@ -175,7 +175,14 @@ export function BrowserScreen({
   fitDrawn.current = onFitDrawn;
   // the size the page is laid out at: the floating box's, else the one picked for the pane; none = the pane's own
   const fixed = fit ?? size;
-  const nativeView = canNative && owner === paneId && !fixed;
+  // Pictures only where the real page can't be: floating (it is drawn under our overlays and scaled down) or another
+  // device. A size picked for a docked pane keeps the App's real page, laid out at that size (asked for: picking a
+  // phone turned the pane into pictures): as wide as the size, centred, or the pane's width with the page shrunk by
+  // Emulation's scale when the size is wider (sized below, chromeext Fit.Scale)
+  const nativeView = canNative && owner === paneId && !fit;
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+  const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
   // Floating: the page laid out at the picked size, whatever the box's (shrunk to it, sites showed their phone
   // layout). Cleared here only when it stops floating while shown, or the pane moves to another page; not when the
   // pane unmounts (its tab switched away and dropped): cleared then, the page went back to its docked shape and the
@@ -189,7 +196,13 @@ export function BrowserScreen({
       fitOn.current = null;
     }
     if (fixed && tab && live) {
-      queueFit(tab, { ...FLOAT_FITS[fixed], pin: !fit });
+      const f = FLOAT_FITS[fixed];
+      if (nativeView && !fit) {
+        // the real page: as tall as the box at the scale it is shown at
+        if (!boxSize.w || !boxSize.h) return;
+        const scale = Math.min(1, boxSize.w / f.w);
+        queueFit(tab, { ...f, h: Math.round(boxSize.h / scale), pin: true, scale: scale < 1 ? scale : undefined });
+      } else queueFit(tab, { ...f, pin: !fit });
       fitOn.current = tab;
     } else if (fitOn.current != null) {
       // back to the pane's own size: told again once the size is cleared (a headless window measured its frame
@@ -197,7 +210,9 @@ export function BrowserScreen({
       void queueFit(fitOn.current, null).then(() => sendWS({ t: "cfg", ...want() }));
       fitOn.current = null;
     }
-  }, [fit, size, tab, live]);
+  }, [fit, size, tab, live, nativeView, nativeView && size ? `${boxSize.w}x${boxSize.h}` : ""]);
+  // a size picked or dropped: the real page placed again (narrower, centred)
+  useEffect(() => placeNow.current?.(), [size]);
   // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
   // retry. The App's real page would cover it, so it's kept out of sight meanwhile (read by the placing below)
   const failedRef = useRef(false);
@@ -520,10 +535,22 @@ export function BrowserScreen({
       const radius = cs ? Math.max(0, (parseFloat(cs.borderBottomLeftRadius) || 0) - (parseFloat(cs.borderBottomWidth) || 0)) : 0;
       // where desktop/main.js placeView puts the page (at the page's zoom of 1): inwards to whole pixels. Relative to
       // the box, so the still moves with it
+      // A size picked (sizeRef): the page as wide as that size and centred, or the whole box when the size is wider
+      // (the page is then shrunk to it). Not against the pane's corners when narrower: no rounding
+      const sz = sizeRef.current;
+      const vw = sz ? Math.min(r.width, FLOAT_FITS[sz].w) : r.width;
+      const spot = vw < r.width ? new DOMRect(r.x + (r.width - vw) / 2, r.y, vw, r.height) : r;
+      const round = vw < r.width ? 0 : radius;
       const place = () => {
-        const left = Math.ceil(r.x),
-          top = Math.ceil(r.y);
-        placed.current = { left: left - r.x, top: top - r.y, width: Math.floor(r.x + r.width) - left, height: Math.floor(r.y + r.height) - top, radius };
+        const left = Math.ceil(spot.x),
+          top = Math.ceil(spot.y);
+        placed.current = {
+          left: left - r.x,
+          top: top - r.y,
+          width: Math.floor(spot.x + spot.width) - left,
+          height: Math.floor(spot.y + spot.height) - top,
+          radius: round,
+        };
         lay();
       };
       if (over && !covered) {
@@ -539,11 +566,11 @@ export function BrowserScreen({
         last = ""; // placed again below, over the still, which stays
       }
       if (covered) return;
-      const key = shown ? [r.x, r.y, r.width, r.height, window.devicePixelRatio, radius].map((n) => Math.round(n * 10) / 10).join(",") : "hidden";
+      const key = shown ? [spot.x, spot.y, spot.width, spot.height, window.devicePixelRatio, round].map((n) => Math.round(n * 10) / 10).join(",") : "hidden";
       if (key === last) return;
       last = key;
       if (shown) place();
-      nativeBrowserView(tab, shown ? r : null, radius);
+      nativeBrowserView(tab, shown ? spot : null, round);
     };
     placeNow.current = report;
     const ro = new ResizeObserver(report);
@@ -587,7 +614,6 @@ export function BrowserScreen({
   }, [nativeView, tab]);
 
   // The page follows the pane's size (debounced: a drag of the split sends one resize at the end)
-  const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
     const el = boxRef.current;
     if (!el || !live) return;
@@ -786,7 +812,9 @@ export function BrowserScreen({
       cv.removeEventListener("wheel", onWheel);
       cancelAnimationFrame(raf);
     };
-  }, [live]);
+    // nativeView: the canvas is only there without the App's real page; attached at [live] alone, a pane that went
+    // from the real page to pictures (a size picked, floated) had a canvas with no wheel: it couldn't be scrolled
+  }, [live, nativeView]);
 
   // ---- keys ----
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1129,7 +1157,7 @@ const SIZE_ICONS: Record<FloatFit, typeof Monitor> = { pc: Monitor, pad: Tablet,
 
 // One request at a time per page, so a clear and the next set (another size picked) land in that order
 const fitQueue = new Map<number, Promise<unknown>>();
-function queueFit(tab: number, f: { w: number; h: number; mobile: boolean; device?: string; pin?: boolean } | null) {
+function queueFit(tab: number, f: { w: number; h: number; mobile: boolean; device?: string; pin?: boolean; scale?: number } | null) {
   const next = (fitQueue.get(tab) ?? Promise.resolve()).then(() => api.browserFit(tab, f).catch(() => {}));
   fitQueue.set(tab, next);
   void next.finally(() => fitQueue.get(tab) === next && fitQueue.delete(tab));

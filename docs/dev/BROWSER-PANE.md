@@ -208,7 +208,11 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
 - **A page size picked for any pane** (its ⋯ menu, every device; `PaneLeaf.browser.fit`, `gerdr pane fit`): Auto (unset)
   is the pane's own size, and on a phone the phone layout above, with the browser's own user agent (asked for: no
   reload when a phone looks). pc / pad / mobile lay the page out at that size like a floating pane (same `FLOAT_FITS`,
-  same user agents), shown as the stream's pictures, the App's real page kept off (it can't be scaled). Asked for on
+  same user agents). In the App a docked pane keeps the real page (asked for: pictures only for a floating pane or
+  another device): the view is placed as wide as the size and centred, or across the whole pane with the page shrunk
+  by Emulation's `scale` when the size is wider (`Fit.Scale`, its height the pane's divided by the scale), and the
+  pinned size survives the App's pane showing it (`desktopShown` only drops a floating box's). Elsewhere it is the
+  stream's pictures. Asked for on
   the phone, which had no way to get a site's desktop page. Unlike a floating box's size it is pinned (`Fit.Pin`): it
   wins over a remote viewer's phone layout, since the person on the phone picked it. The layout is shared, so every
   device shows the page at that size; a desktop draws it at most at its own size and within the box, a phone

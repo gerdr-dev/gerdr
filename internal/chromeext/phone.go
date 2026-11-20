@@ -54,6 +54,10 @@ type Fit struct {
 	// Pin: the person picked this size for the page in its pane's menu (any device, docked or not), so it wins over a
 	// remote viewer's phone layout. A floating pane's size doesn't: at its size the page ran below a phone's pane
 	Pin bool `json:"-"`
+	// Scale: the page drawn at this fraction of its size (Emulation's scale), for the App's real page in a pane
+	// narrower than the size picked (a desktop page in a 600 px pane): the page keeps that layout and is shrunk to
+	// fit, as pictures would be, but stays the real page. 0 = 1. Headless pages show as pictures, scaled by the viewer.
+	Scale float64 `json:"-"`
 }
 
 func (t *Tab) phone() *phoneLayout {
@@ -79,12 +83,15 @@ func (t *Tab) desktopShown(on bool) {
 	p.mu.Lock()
 	p.desktop = on
 	was := deviceOf(p.fit)
-	if on {
-		p.fit = nil // docked again: the page takes the pane's size, and is the browser it is again
+	// docked again: the page takes the pane's size, and is the browser it is again; unless the person picked a size
+	// for it (Pin): the pane then shows the real page at that size (asked for: not pictures of it)
+	clear := on && p.fit != nil && !p.fit.Pin
+	if clear {
+		p.fit = nil
 	}
 	p.mu.Unlock()
 	t.applyPhone()
-	if on {
+	if clear {
 		t.applyDevice(was, "")
 	}
 }
@@ -318,7 +325,11 @@ func (t *Tab) applyPhone() {
 		t.send(ctx, "Emulation.setTouchEmulationEnabled", params)
 	}
 	if want.W > 0 {
-		params, _ := json.Marshal(map[string]any{"width": want.W, "height": want.H, "deviceScaleFactor": 0, "mobile": want.Mobile})
+		m := map[string]any{"width": want.W, "height": want.H, "deviceScaleFactor": 0, "mobile": want.Mobile}
+		if want.Scale > 0 && want.Scale < 1 {
+			m["scale"] = want.Scale
+		}
+		params, _ := json.Marshal(m)
 		t.send(ctx, "Emulation.setDeviceMetricsOverride", params)
 		if want.Mobile != (was.W > 0 && was.Mobile) {
 			touch(want.Mobile)

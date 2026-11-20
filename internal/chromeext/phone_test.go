@@ -233,6 +233,52 @@ func TestPinnedFit(t *testing.T) {
 	}
 }
 
+// A size picked for a docked pane stays while the App's pane shows the real page (only a floating box's ends then),
+// drawn at the scale it is shown at.
+func TestPinnedFitShown(t *testing.T) {
+	tab := newTab(2000005, "https://example.com/")
+	tab.Native = true
+	var mu sync.Mutex
+	var got []string
+	tab.send = func(_ context.Context, method string, p json.RawMessage) (json.RawMessage, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch method {
+		case "Emulation.setDeviceMetricsOverride":
+			var m struct {
+				Width, Height int
+				Scale         float64
+			}
+			json.Unmarshal(p, &m)
+			got = append(got, fmt.Sprintf("%dx%d@%g", m.Width, m.Height, m.Scale))
+		case "Emulation.clearDeviceMetricsOverride":
+			got = append(got, "clear")
+		}
+		return json.RawMessage(`{}`), nil
+	}
+	last := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(got) == 0 {
+			return ""
+		}
+		return got[len(got)-1]
+	}
+	tab.setFit(&Fit{W: 1280, H: 1600, Pin: true, Scale: 0.5})
+	if l := last(); l != "1280x1600@0.5" {
+		t.Fatalf("pinned and scaled: %s", l)
+	}
+	tab.desktopShown(true)
+	if l := last(); l != "1280x1600@0.5" {
+		t.Fatalf("the App's pane shows it: %s", l)
+	}
+	tab.setFit(&Fit{W: 1280, H: 800})
+	tab.desktopShown(true) // a floating box's size ends when docked
+	if l := last(); l != "clear" {
+		t.Fatalf("floating size, docked: %s", l)
+	}
+}
+
 // A page playing a phone gives each cross-site iframe the same device as it attaches (paused until then), its nested
 // ones too, and always lets it run.
 func TestFrameDevice(t *testing.T) {

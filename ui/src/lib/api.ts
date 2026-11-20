@@ -317,8 +317,8 @@ export const api = {
   browserClose: (tab: number) => req("POST", "/api/browser/close", { tab }),
   /** A page's fixed size (null: back to the pane's own size; server/browserapi.go, chromeext SetFit). pin: picked in the
    * pane's menu, which wins over a phone's own layout; a floating box's size doesn't */
-  browserFit: (tab: number, f: { w: number; h: number; mobile: boolean; device?: string; pin?: boolean } | null) =>
-    req("POST", "/api/browser/fit", f ? { tab, width: f.w, height: f.h, mobile: f.mobile, device: f.device, pin: !!f.pin } : { tab }),
+  browserFit: (tab: number, f: { w: number; h: number; mobile: boolean; device?: string; pin?: boolean; scale?: number } | null) =>
+    req("POST", "/api/browser/fit", f ? { tab, width: f.w, height: f.h, mobile: f.mobile, device: f.device, pin: !!f.pin, scale: f.scale } : { tab }),
   /** A still of a page as it is now (an object URL; revoke it when done): shown in place of the App's real page while
    * one of our menus / dialogs is over it (server/browserapi.go) */
   browserShot: async (tab: number) => {

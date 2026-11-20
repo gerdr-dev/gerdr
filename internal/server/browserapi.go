@@ -193,6 +193,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			Device string `json:"device"`
 			// pin: picked for the page (the pane's page size, not a floating box's): wins over a phone's own layout
 			Pin bool `json:"pin"`
+			// scale: the App's real page shrunk to fit a pane narrower than width (chromeext Fit.Scale)
+			Scale float64 `json:"scale"`
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
@@ -201,6 +203,9 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		var f *chromeext.Fit
 		if in.Width > 0 && in.Height > 0 {
 			f = &chromeext.Fit{W: min(in.Width, 4000), H: min(in.Height, 4000), Mobile: in.Mobile, Pin: in.Pin}
+			if in.Scale > 0.1 && in.Scale < 1 {
+				f.Scale = in.Scale
+			}
 			if in.Device == "phone" || in.Device == "tablet" {
 				f.Device = in.Device
 			}
