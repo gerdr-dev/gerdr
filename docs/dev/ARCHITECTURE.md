@@ -296,7 +296,8 @@ session's model would lose every tool.
   from the id (`-image`, `gpt-image`, `dall-e`, `nano-banana`), not `imagen`: that is Google's `:predict` API, which we
   don't speak. The automatic pick only takes models of kind image: a provider on the Gemini protocol (a gateway)
   doesn't necessarily have Nano Banana.
-- Gemini: `generateContent` with `responseModalities ["TEXT","IMAGE"]` and `imageConfig.aspectRatio` / `imageSize`
+- Gemini: `generateContent` with `responseModalities ["IMAGE"]` (with TEXT allowed too, Nano Banana now and then
+  answers with only a sentence; a 400 about modalities retries with `["TEXT","IMAGE"]`) and `imageConfig.aspectRatio` / `imageSize`
   (`imageSize` only on Pro image models — sent only when asked for). Pro models also return draft images as parts with
   `thought: true`: skip them. No `n`: n requests in parallel. A refusal comes as text or finishReason `IMAGE_SAFETY`
   with no image: reported as the error. Multi-turn editing with thought signatures isn't used: each call is one

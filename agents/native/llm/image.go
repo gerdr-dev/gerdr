@@ -64,7 +64,12 @@ func GeminiImage(ctx context.Context, ep Endpoint, model string, req ImageReques
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i], errs[i] = geminiImageOnce(ctx, ep, GeminiModel(model), req)
+			results[i], errs[i] = geminiImageOnce(ctx, ep, GeminiModel(model), req, []string{"IMAGE"})
+			var he *HTTPError
+			if errs[i] != nil && errors.As(errs[i], &he) && he.Status == 400 && strings.Contains(strings.ToLower(he.Body), "modalit") {
+				// A model / gateway that wants text allowed alongside: ask that way instead
+				results[i], errs[i] = geminiImageOnce(ctx, ep, GeminiModel(model), req, []string{"TEXT", "IMAGE"})
+			}
 		}()
 	}
 	wg.Wait()
@@ -102,10 +107,13 @@ func noImage(text string) error {
 	return &APIError{Msg: "the model returned no image"}
 }
 
-func geminiImageOnce(ctx context.Context, ep Endpoint, model string, req ImageRequest) (ImageResult, error) {
+// geminiImageOnce asks for modalities: IMAGE only by default. With TEXT allowed too, Nano Banana now and then
+// answered a plain prompt with a sentence ("好的，请看一只橘猫…") and no image (measured 2026-11-20 on
+// gemini-2.5-flash-image; IMAGE only gave an image every time).
+func geminiImageOnce(ctx context.Context, ep Endpoint, model string, req ImageRequest, modalities []string) (ImageResult, error) {
 	parts := []any{map[string]any{"text": req.Prompt}}
 	parts = append(parts, geminiParts(req.Images)...)
-	gc := map[string]any{"responseModalities": []string{"TEXT", "IMAGE"}}
+	gc := map[string]any{"responseModalities": modalities}
 	ic := map[string]any{}
 	if req.Aspect != "" {
 		ic["aspectRatio"] = req.Aspect

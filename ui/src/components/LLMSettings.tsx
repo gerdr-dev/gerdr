@@ -1,10 +1,11 @@
-import { Check, Download, Image as ImageIcon, Loader2, Pencil, Plus, Star, X } from "lucide-react";
+import { Check, Download, Image as ImageIcon, Loader2, Pencil, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
@@ -458,20 +459,9 @@ export function ImageModels() {
   const providers = (llm.providers ?? []).filter((p) => p.api !== "anthropic");
   const { rows, current } = imageRows(llm);
   const [adding, setAdding] = useState(false);
-  const [testing, setTesting] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [trying, setTrying] = useState<string | null>(null);
   const save = (next: LLMConfig) => setConfig({ llm: next });
-
-  const test = async (r: ImageRow) => {
-    setTesting(r.key);
-    try {
-      const res = await api.llmTest(r.provider, r.model);
-      toast.success(t("llmSettings.imageTestOk", { id: r.model.id, reply: res.reply }));
-    } catch (e: any) {
-      toast.error(t("llmSettings.testFailed", { id: r.model.id, error: e.message }));
-    } finally {
-      setTesting(null);
-    }
-  };
   const remove = (r: ImageRow) =>
     save({
       ...llm,
@@ -491,39 +481,52 @@ export function ImageModels() {
           {rows.map((r) => {
             const isDefault = r.key === current;
             const pinned = r.key === llm.imageModel;
+            if (editing === r.key) return <ImageAdder key={r.key} providers={providers} llm={llm} edit={r} onDone={() => setEditing(null)} />;
             return (
-              <div key={r.key} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-3 py-2 text-[13px]">
-                <ImageIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 truncate font-mono text-[12px]">{r.model.id}</span>
-                <span className="shrink-0 text-[12px] text-muted-foreground">{t("llmSettings.imageFrom", { provider: r.provider.name || r.provider.id })}</span>
-                <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">{r.provider.api === "gemini" ? "Gemini" : "OpenAI"}</span>
-                {isDefault && (
-                  <span className="shrink-0 rounded-sm bg-brand/10 px-1 text-[11px] text-brand">
-                    {t(pinned ? "llmSettings.imageDefault" : "llmSettings.imageDefaultAuto")}
+              <div key={r.key} className="rounded-md border text-[13px]">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-2">
+                  <ImageIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 truncate font-mono text-[12px]">{r.model.id}</span>
+                  <span className="shrink-0 text-[12px] text-muted-foreground">
+                    {t("llmSettings.imageFrom", { provider: r.provider.name || r.provider.id })}
                   </span>
-                )}
-                <span className="flex-1" />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-7 data-[on=true]:text-brand"
-                  data-on={pinned}
-                  title={t(pinned ? "llmSettings.imageUnpin" : "llmSettings.imagePin")}
-                  onClick={() => save({ ...llm, imageModel: pinned ? undefined : r.key })}
-                >
-                  <Star className="size-3.5" fill={pinned ? "currentColor" : "none"} />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2"
-                  onClick={() => test(r)}
-                  disabled={testing === r.key}
-                  title={t("llmSettings.imageTestTitle")}
-                >
-                  {testing === r.key ? <Loader2 className="size-3.5 animate-spin" /> : t("llmSettings.test")}
-                </Button>
-                <ConfirmDelete title={t("llmSettings.removeModel")} onConfirm={() => remove(r)} />
+                  <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">
+                    {r.provider.api === "gemini" ? "Gemini" : "OpenAI"}
+                  </span>
+                  {isDefault && (
+                    <span className="shrink-0 rounded-sm bg-brand/10 px-1 text-[11px] text-brand">
+                      {t(pinned ? "llmSettings.imageDefault" : "llmSettings.imageDefaultAuto")}
+                    </span>
+                  )}
+                  <span className="flex-1" />
+                  {/* Words, not a star: a star read as "favourite" and nobody could tell what it did. Pinned → back to automatic */}
+                  {(!isDefault || pinned) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2"
+                      title={t(pinned ? "llmSettings.imageUnpinTitle" : "llmSettings.imagePinTitle")}
+                      onClick={() => save({ ...llm, imageModel: pinned ? undefined : r.key })}
+                    >
+                      {t(pinned ? "llmSettings.imageUnpin" : "llmSettings.imagePin")}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 data-[on=true]:bg-muted"
+                    data-on={trying === r.key}
+                    onClick={() => setTrying(trying === r.key ? null : r.key)}
+                    title={t("llmSettings.imageTestTitle")}
+                  >
+                    {t("llmSettings.imageTry")}
+                  </Button>
+                  <Button size="icon" variant="ghost" className="size-7" title={t("common.edit")} onClick={() => setEditing(r.key)}>
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <ConfirmDelete title={t("llmSettings.removeModel")} onConfirm={() => remove(r)} />
+                </div>
+                {trying === r.key && <ImageTry modelKey={r.key} onClose={() => setTrying(null)} />}
               </div>
             );
           })}
@@ -545,12 +548,81 @@ export function ImageModels() {
   );
 }
 
+/**
+ * Trying an image model for real: a prompt (prefilled, editable), Generate, and the image itself shown here. Goes
+ * through /api/image like `gerdr image gen`, so it tests what the agents will get. Each try costs one generation,
+ * hence nothing runs until Generate is pressed. Errors stay in the panel (the provider's own words), not a toast.
+ */
+function ImageTry({ modelKey, onClose }: { modelKey: string; onClose: () => void }) {
+  const [prompt, setPrompt] = useState(() => t("llmSettings.imageTryPrompt"));
+  const [busy, setBusy] = useState(false);
+  const [secs, setSecs] = useState(0);
+  const [res, setRes] = useState<{ src: string; text: string; ms: number } | null>(null);
+  const [err, setErr] = useState("");
+  const run = async () => {
+    if (!prompt.trim() || busy) return;
+    setBusy(true);
+    setErr("");
+    setSecs(0);
+    const start = Date.now();
+    const tick = setInterval(() => setSecs(Math.round((Date.now() - start) / 1000)), 1000);
+    try {
+      const r = await api.imageGen({ prompt, model: modelKey });
+      const im = r.images[0];
+      setRes({ src: `data:${im.mime};base64,${im.data}`, text: r.text, ms: Date.now() - start });
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      clearInterval(tick);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2 border-t px-3 py-2.5">
+      <Textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => {
+          stop(e);
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) run();
+        }}
+        rows={2}
+        className="min-h-0 resize-y text-[13px]"
+        placeholder={t("llmSettings.imageTryPlaceholder")}
+      />
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-[12px] text-muted-foreground">
+          {busy ? t("llmSettings.imageTryBusy", { n: secs }) : t("llmSettings.imageTryCost")}
+        </span>
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          {t("common.cancel")}
+        </Button>
+        <Button size="sm" onClick={run} disabled={busy || !prompt.trim()}>
+          {busy && <Loader2 className="size-3.5 animate-spin" />}
+          {t(res ? "llmSettings.imageTryAgain" : "llmSettings.imageTryGo")}
+        </Button>
+      </div>
+      {err && <div className="text-[12px] break-words text-bad">{err}</div>}
+      {res && (
+        <div className="space-y-1">
+          <img src={res.src} alt={prompt} className="max-h-80 max-w-full rounded-md border" />
+          <div className="text-[12px] text-muted-foreground">
+            {t("llmSettings.imageTryDone", { s: (res.ms / 1000).toFixed(1) })}
+            {res.text && ` · ${res.text}`}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Adding an image model: to a provider there already is, or with a new provider (the only way when there is none
- *  yet, e.g. someone on Claude Code only) — then the provider is saved with just this model. */
-function ImageAdder({ providers, llm, onDone }: { providers: LLMProvider[]; llm: LLMConfig; onDone: () => void }) {
-  const [target, setTarget] = useState(providers[0]?.id ?? NEW);
+ *  yet, e.g. someone on Claude Code only) — then the provider is saved with just this model. With edit, the same form
+ *  changes one: its id, or which provider it is on (moved there, the default following it). */
+function ImageAdder({ providers, llm, edit, onDone }: { providers: LLMProvider[]; llm: LLMConfig; edit?: ImageRow; onDone: () => void }) {
+  const [target, setTarget] = useState(edit?.provider.id ?? providers[0]?.id ?? NEW);
   const firstProto: ImageProtocol = providers[0]?.api === "gemini" || !providers[0] ? "gemini" : "openai";
-  const [model, setModel] = useState<string>(IMAGE_PROTOCOLS[firstProto]);
+  const [model, setModel] = useState<string>(edit?.model.id ?? IMAGE_PROTOCOLS[firstProto]);
   const [proto, setProto] = useState<ImageProtocol>("gemini");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -564,6 +636,7 @@ function ImageAdder({ providers, llm, onDone }: { providers: LLMProvider[]; llm:
   const pickTarget = (v: string) => {
     setTarget(v);
     setFetched(null);
+    if (edit) return; // keep the id being edited
     const p = providers.find((x) => x.id === v);
     setModel(IMAGE_PROTOCOLS[v === NEW ? proto : p?.api === "gemini" ? "gemini" : "openai"]);
   };
@@ -599,7 +672,22 @@ function ImageAdder({ providers, llm, onDone }: { providers: LLMProvider[]; llm:
   const onSave = () => {
     const id = model.trim();
     if (!id) return toast.error(t("llmSettings.imageNeedModel"));
-    const list = llm.providers ?? [];
+    let list = llm.providers ?? [];
+    let imageModel = llm.imageModel;
+    if (edit) {
+      // Take it off where it was (keeping its other settings), then put it where it goes now
+      const old = edit.model;
+      list = list.map((p) => (p.id === edit.provider.id ? { ...p, models: p.models.filter((m) => m.id !== old.id) } : p));
+      const p = list.find((x) => x.id === target);
+      if (!p) return;
+      const moved: LLMModel = { ...old, id, kind: imageId(id) ? undefined : "image" };
+      if (!moved.kind) delete moved.kind;
+      const models = p.models.some((m) => m.id === id) ? p.models.map((m) => (m.id === id ? moved : m)) : [...p.models, moved];
+      if (imageModel === edit.key) imageModel = `${p.id}/${id}`;
+      setConfig({ llm: { ...llm, imageModel, providers: list.map((x) => (x.id === p.id ? { ...x, models } : x)) } });
+      toast.success(t("llmSettings.savedToast"));
+      return onDone();
+    }
     if (isNew) {
       const p = newProvider();
       if (!/^https?:\/\//.test(p.baseUrl)) return toast.error(t("llmSettings.badBaseUrl"));
@@ -629,7 +717,7 @@ function ImageAdder({ providers, llm, onDone }: { providers: LLMProvider[]; llm:
                     {p.name || p.id}
                   </SelectItem>
                 ))}
-                <SelectItem value={NEW}>{t("llmSettings.imageNewProvider")}</SelectItem>
+                {!edit && <SelectItem value={NEW}>{t("llmSettings.imageNewProvider")}</SelectItem>}
               </SelectContent>
             </Select>
           </>
@@ -702,7 +790,9 @@ function ImageAdder({ providers, llm, onDone }: { providers: LLMProvider[]; llm:
           ))}
         </div>
       )}
-      <div className="text-[12px] text-muted-foreground">{t(isNew ? "llmSettings.imageAddNewHint" : "llmSettings.imageAddHint")}</div>
+      <div className="text-[12px] text-muted-foreground">
+        {t(edit ? "llmSettings.imageEditHint" : isNew ? "llmSettings.imageAddNewHint" : "llmSettings.imageAddHint")}
+      </div>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onDone}>
           {t("common.cancel")}

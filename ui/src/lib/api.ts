@@ -309,6 +309,9 @@ export const api = {
   memoryRead: (path: string) => req<{ content: string }>("GET", `/api/memory/file?path=${encodeURIComponent(path)}`),
   memoryWrite: (path: string, content: string) => req("PUT", "/api/memory/file", { path, content }),
   memoryDelete: (path: string) => req("DELETE", `/api/memory/file?path=${encodeURIComponent(path)}`),
+  /** Image generation with a configured image model ("" = the default), as `gerdr image gen` does; images come back base64. */
+  imageGen: (b: { prompt: string; model?: string; aspect?: string; images?: { mime: string; data: string }[] }) =>
+    req<{ model: string; text: string; images: { mime: string; data: string }[] }>("POST", "/api/image", b),
   llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
   doctor: () => req<DoctorReport | null>("GET", "/api/doctor"),
   /** deep = also run every claude / codex install found (can pop macOS's "malware blocked" dialog for a blocked one) */

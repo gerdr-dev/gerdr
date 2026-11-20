@@ -62,7 +62,7 @@ func TestGeminiImage(t *testing.T) {
 		t.Errorf("path %q key %q", path, key)
 	}
 	gc := got["generationConfig"].(map[string]any)
-	if fmt.Sprint(gc["responseModalities"]) != "[TEXT IMAGE]" || fmt.Sprint(gc["imageConfig"]) != "map[aspectRatio:16:9]" {
+	if fmt.Sprint(gc["responseModalities"]) != "[IMAGE]" || fmt.Sprint(gc["imageConfig"]) != "map[aspectRatio:16:9]" {
 		t.Errorf("generationConfig %v", gc)
 	}
 	parts := got["contents"].([]any)[0].(map[string]any)["parts"].([]any)
@@ -159,5 +159,29 @@ func TestOpenAISize(t *testing.T) {
 		if got := openAISize(tc.model, tc.aspect, tc.size); got != tc.want {
 			t.Errorf("openAISize(%q, %q, %q) = %q, want %q", tc.model, tc.aspect, tc.size, got, tc.want)
 		}
+	}
+}
+
+// A gateway that refuses IMAGE alone gets asked again with TEXT allowed.
+func TestGeminiImageModalityFallback(t *testing.T) {
+	b64 := base64.StdEncoding.EncodeToString(tinyPNG(t))
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]any
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &got)
+		m := fmt.Sprint(got["generationConfig"].(map[string]any)["responseModalities"])
+		seen = append(seen, m)
+		if m == "[IMAGE]" {
+			w.WriteHeader(400)
+			fmt.Fprint(w, `{"error":{"message":"Model does not support the requested response modalities: image"}}`)
+			return
+		}
+		fmt.Fprintf(w, `{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":%q}}]},"finishReason":"STOP"}]}`, b64)
+	}))
+	defer srv.Close()
+	res, err := GeminiImage(context.Background(), Endpoint{BaseURL: srv.URL}, "gemini-x-image", ImageRequest{Prompt: "x"})
+	if err != nil || len(res.Images) != 1 || fmt.Sprint(seen) != "[[IMAGE] [TEXT IMAGE]]" {
+		t.Fatalf("err %v images %d requests %v", err, len(res.Images), seen)
 	}
 }
