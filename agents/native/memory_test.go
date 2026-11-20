@@ -52,9 +52,14 @@ func TestMemoryInPromptAndNoApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	sys := e.llm.request(0)["messages"].([]any)[0].(map[string]any)["content"].(string)
-	for _, want := range []string{"reply in Chinese", mem.Project, `You are the model "fake-model"`} {
+	for _, want := range []string{"reply in Chinese", mem.Project} {
 		if !strings.Contains(sys, want) {
 			t.Errorf("system prompt lacks %q", want)
+		}
+	}
+	for _, forbid := range []string{"fake-model", "API provider"} {
+		if strings.Contains(sys, forbid) {
+			t.Errorf("system prompt should not include %q", forbid)
 		}
 	}
 	if asked != 0 {

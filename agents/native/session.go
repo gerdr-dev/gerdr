@@ -483,7 +483,7 @@ func (s *session) newRun(ctx context.Context) *run {
 			}
 		}
 	}
-	r.system = s.a.systemPrompt(s, cwd, r.model)
+	r.system = s.a.systemPrompt(s, cwd)
 	return r
 }
 

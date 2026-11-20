@@ -35,7 +35,7 @@ const subagentPrompt = `You are a sub-agent of a coding agent running inside Ger
 
 // systemPrompt is a main session's system prompt: the base prompt (or Options.SystemPrompt), the environment,
 // instruction files, skills, memory, gerdr's GUI hint and the role's prompt, minus what Options turned off.
-func (a *Agent) systemPrompt(s *session, cwd string, model resolved) string {
+func (a *Agent) systemPrompt(s *session, cwd string) string {
 	base := basePrompt
 	custom := a.opt.SystemPrompt != nil
 	if custom {
@@ -43,7 +43,7 @@ func (a *Agent) systemPrompt(s *session, cwd string, model resolved) string {
 	}
 	var b strings.Builder
 	b.WriteString(base)
-	b.WriteString(envSection(cwd, model))
+	b.WriteString(envSection(cwd))
 	if !a.opt.NoInstructionFiles {
 		for _, f := range instructionFiles(cwd) {
 			fmt.Fprintf(&b, "\n# Instructions from %s\n\n%s\n", f.path, strings.TrimSpace(f.content))
@@ -76,11 +76,11 @@ func (a *Agent) systemPrompt(s *session, cwd string, model resolved) string {
 }
 
 // subagentSystemPrompt: a sub-agent's task comes from the main agent, so no instruction files, skills or memory.
-func subagentSystemPrompt(cwd string, model resolved) string {
-	return subagentPrompt + envSection(cwd, model)
+func subagentSystemPrompt(cwd string) string {
+	return subagentPrompt + envSection(cwd)
 }
 
-func envSection(cwd string, model resolved) string {
+func envSection(cwd string) string {
 	var b strings.Builder
 	b.WriteString("\n\n# Environment\n")
 	fmt.Fprintf(&b, "- Working directory: %s\n", cwd)
@@ -91,14 +91,8 @@ func envSection(cwd string, model resolved) string {
 	}
 	fmt.Fprintf(&b, "- Platform: %s/%s, shell: %s\n", runtime.GOOS, runtime.GOARCH, shellName())
 	fmt.Fprintf(&b, "- Today's date: %s\n", time.Now().Format("2006-01-02"))
-	// 不写的话问「你是什么模型」它只能猜（用户问过）
-	if model.ID != "" {
-		pn := model.Provider.Name
-		if pn == "" {
-			pn = model.Provider.ID
-		}
-		fmt.Fprintf(&b, "- You are the model %q (shown to the user as %q), called through the %q API provider\n", model.ID, model.Name, pn)
-	}
+	// Model and provider names are intentionally omitted (same as Claude Code): don't inject
+	// synthetic identity or leak gateway/provider details into the prompt.
 	return b.String()
 }
 
