@@ -54,6 +54,23 @@ export const FLOAT_FITS: Record<FloatFit, { w: number; h: number; mobile: boolea
   pad: { w: 820, h: 1180, mobile: true, device: "tablet", pw: [240, 320, 460] },
   mobile: { w: 390, h: 844, mobile: true, device: "phone", pw: [170, 230, 300] },
 };
+// A floating Browser box (Code's FloatPane, a panel's PanelFloat) below this share of its fit's largest page width:
+// too small to hit what you mean, so its page only shows and a press anywhere moves it (asked for)
+export const FLOAT_OPERABLE = 0.6;
+/** A floating box's edges and corners, each resizing it at its shape. */
+export type FloatEdge = { l?: boolean; r?: boolean; t?: boolean; b?: boolean };
+// prettier-ignore
+export const FLOAT_EDGES: { e: FloatEdge; cls: string }[] = [
+  { e: { l: true }, cls: "inset-y-2 left-0 w-1.5 cursor-ew-resize" },
+  { e: { r: true }, cls: "inset-y-2 right-0 w-1.5 cursor-ew-resize" },
+  { e: { t: true }, cls: "inset-x-2 top-0 h-1.5 cursor-ns-resize" },
+  { e: { b: true }, cls: "inset-x-2 bottom-0 h-1.5 cursor-ns-resize" },
+  { e: { l: true, t: true }, cls: "left-0 top-0 size-3 cursor-nwse-resize" },
+  { e: { r: true, b: true }, cls: "right-0 bottom-0 size-3 cursor-nwse-resize" },
+  { e: { r: true, t: true }, cls: "right-0 top-0 size-3 cursor-nesw-resize" },
+  { e: { l: true, b: true }, cls: "left-0 bottom-0 size-3 cursor-nesw-resize" },
+];
+
 export const fitOf = (b: FloatBox): FloatFit => (b.fit && b.fit in FLOAT_FITS ? b.fit : "pc");
 export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string; float?: Record<string, FloatBox> };
 /** space: which session (see Space below) it belongs to; unset = the default one. */

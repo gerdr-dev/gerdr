@@ -71,6 +71,9 @@ import {
   phoneRoot,
   setFloatBox,
   setFloatFit,
+  FLOAT_EDGES as EDGES,
+  FLOAT_OPERABLE,
+  type FloatEdge as Edge,
   type FloatFit,
   setRatio,
   updateTab,
@@ -269,24 +272,9 @@ export function TabView({ tab }: { tab: Tab }) {
 const FloatFitDrawn = createContext<((fit: FloatFit) => void) | undefined>(undefined);
 /** A floating Browser pane shrunk below FLOAT_OPERABLE of its fit's largest size: its page is only looked at. */
 const FloatViewOnly = createContext(false);
-// Below this share of the fit's largest size the page is too small to hit what you mean, so it only shows (asked for)
-const FLOAT_OPERABLE = 0.6;
 
 /** The title bar's drag of a floating pane: it moves the pane inside its tab instead of moving it elsewhere (usePaneDrag). */
 const FloatMove = createContext<((e: React.PointerEvent<HTMLElement>) => void) | undefined>(undefined);
-
-type Edge = { l?: boolean; r?: boolean; t?: boolean; b?: boolean };
-// prettier-ignore
-const EDGES: { e: Edge; cls: string }[] = [
-  { e: { l: true }, cls: "inset-y-2 left-0 w-1.5 cursor-ew-resize" },
-  { e: { r: true }, cls: "inset-y-2 right-0 w-1.5 cursor-ew-resize" },
-  { e: { t: true }, cls: "inset-x-2 top-0 h-1.5 cursor-ns-resize" },
-  { e: { b: true }, cls: "inset-x-2 bottom-0 h-1.5 cursor-ns-resize" },
-  { e: { l: true, t: true }, cls: "left-0 top-0 size-3 cursor-nwse-resize" },
-  { e: { r: true, b: true }, cls: "right-0 bottom-0 size-3 cursor-nwse-resize" },
-  { e: { r: true, t: true }, cls: "right-0 top-0 size-3 cursor-nesw-resize" },
-  { e: { l: true, b: true }, cls: "left-0 bottom-0 size-3 cursor-nesw-resize" },
-];
 
 /**
  * A pane floating over the split of its tab (picture-in-picture): dragged by its title bar, resized from its edges,

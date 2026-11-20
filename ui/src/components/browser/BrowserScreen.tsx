@@ -1166,7 +1166,7 @@ export function BrowserScreen({
             anywhere on it moves the floating box, as its title bar does */}
         <div
           ref={boxRef}
-          data-browser-box
+          data-browser-box={paneId}
           onPointerDown={viewOnly ? onHeadPointerDown : undefined}
           className={cn(
             "group/view relative h-full w-full overflow-hidden",

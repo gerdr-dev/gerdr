@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { PortalContext } from "@/core/portal";
 import { PanelKeyContext, setPanelShown } from "@/core/visible";
 import { useClearBadge } from "@/lib/badges";
-import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
+import { AgentIcon, StatusDot, dotRank, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
 import { PanelBrowser, PanelBrowserButton, usePanelBrowserClosed } from "@/core/SessionBrowser";
@@ -656,7 +656,9 @@ function ChatStrip({ onOpen, extra }: { onOpen: () => void; extra?: React.ReactN
           <PanelRightOpen className="size-3.5" />
         </Button>
       </div>
-      {session && (
+      {/* only a dot that shows something: an idle one is transparent, and its empty slot pushed the folded browser
+          column's button far below this column's (user report) */}
+      {session && dotRank(dotStatus(session), false) < 9 && (
         <button title={session.title || t("workView.showChat")} onClick={onOpen} className="flex size-7 items-center justify-center">
           <StatusDot status={dotStatus(session)} />
         </button>
@@ -830,6 +832,7 @@ function WorkViewBody() {
       sessions={sessions}
       width={full ? undefined : browserW}
       edge={full ? undefined : <ChatEdge width={browserW} onWidth={setBrowserW} def={BROWSER_W} />}
+      onWidth={full ? undefined : setBrowserW}
     />
   );
   const hasPages = useBrowserTabs((s) => s.tabs.some((x) => !x.gone && !!x.session && sessions.has(x.session)));

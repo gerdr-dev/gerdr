@@ -255,6 +255,10 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   centred in a wide pane wasted the chat's room; `fitPaneWidth` in lib/actions/browser.ts). Only from the ⋯ menu, on
   the device that picked it and a wide screen: done on every device reading the synced layout, two screens of different
   sizes would each set their own ratio. `gerdr pane fit` doesn't move the split.
+  A panel's browser column does the same with its width (SessionBrowser `onPicked`, WorkView's `gerdr.workBrowserW`),
+  and its floating box has the three sizes in its ⋯ menu too (`Column.fit`), its shape held until a picture of the new
+  size is drawn, as Code's floating pane. It also resizes from any edge and goes view-only below `FLOAT_OPERABLE`
+  (dashed border, a press anywhere moves it), the same table and threshold as Code's (`FLOAT_EDGES` in lib/layout.ts).
   A page in its own window (SessionBrowser `BrowserWindow`) sizes the window instead, for every size, pc too: the
   window's width changes by what the page area is off (`nativeFitWindow` → shell/main.js `fitWindow`, out of zoom
   first, kept on its screen; the usual 640 minimum width goes down for a phone's page).

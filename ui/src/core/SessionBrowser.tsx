@@ -1,13 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { Globe, PanelRight, PanelRightClose, PictureInPicture2, Undo2 } from "lucide-react";
+import { Check, Globe, Monitor, PanelRight, PanelRightClose, PictureInPicture2, Smartphone, Tablet, Undo2 } from "lucide-react";
 import { BrowserScreen } from "@/components/browser/BrowserScreen";
 import { BrowserOutCard, PopOutButton } from "@/components/browser/BrowserOut";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { FLOAT_FITS, type FloatFit } from "@/lib/layout";
+import { FLOAT_EDGES, FLOAT_FITS, FLOAT_OPERABLE, type FloatEdge, type FloatFit } from "@/lib/layout";
 import { isNative, nativeBrowserWindowTab, nativeFitWindow } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +50,10 @@ function PageBrowser({
   fit,
   onHeadPointerDown,
   ownWindow,
+  items,
+  onFitDrawn,
+  onPicked,
+  viewOnly,
 }: {
   project: string;
   tab?: number;
@@ -59,6 +64,14 @@ function PageBrowser({
   onHeadPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
   /** the page alone in a window (BrowserWindow): a size picked sizes the window to it */
   ownWindow?: boolean;
+  /** more ⋯ menu items (a floating column's sizes) */
+  items?: ReactNode;
+  /** floating: a picture of fit's shape was drawn (PanelFloat switches its box then) */
+  onFitDrawn?: (f: FloatFit) => void;
+  /** a size was picked in the ⋯ menu, with how much wider the page area is than it (CSS px) */
+  onPicked?: (f: FloatFit | undefined, over: number) => void;
+  /** floating, too small to use: the page only shows, a press on it moves the box (BrowserScreen viewOnly) */
+  viewOnly?: boolean;
 }) {
   const id = useId();
   const tabRef = useRef(tab);
@@ -88,11 +101,16 @@ function PageBrowser({
       size={size}
       onSize={(f) => {
         setSize(f);
+        const box = f ? document.querySelector<HTMLElement>(`[data-browser-box="${CSS.escape(`page-browser${id}`)}"]`) : null;
+        const over = box && f ? box.clientWidth - FLOAT_FITS[f].w : 0;
         // the window takes the page's width: the page area grows / shrinks by what it is off from the size
-        const box = ownWindow && f ? document.querySelector<HTMLElement>("[data-browser-box]") : null;
-        if (box && f) nativeFitWindow(FLOAT_FITS[f].w - box.clientWidth);
+        if (ownWindow && over) nativeFitWindow(-over);
+        onPicked?.(f, over);
       }}
       fit={fit}
+      paneItems={items}
+      viewOnly={viewOnly}
+      onFitDrawn={onFitDrawn}
       onFocus={() => {}}
       headClassName="h-10"
       onHeadPointerDown={onHeadPointerDown}
@@ -135,7 +153,8 @@ function useStickyProject(tab: number | undefined, pages: BrowserTab[]): string 
 // out: the page moved to a window of its own from here, the column folded meanwhile; outSeen: its window came up (the
 // core listed it), so the window going away means it is back (the column opens on it again)
 // float: over the panel's corner instead of a column (box: its place, px from the panel's right / top, and width)
-type Column = { tab?: number; closed: boolean; seen: number; out?: number; outSeen?: boolean; float?: boolean; box?: FloatSpot };
+// fit: the floating box's page size (unset = pc)
+type Column = { tab?: number; closed: boolean; seen: number; out?: number; outSeen?: boolean; float?: boolean; box?: FloatSpot; fit?: FloatFit };
 type FloatSpot = { r: number; t: number; w: number };
 const useColumns = create<Record<string, Column>>(() => ({}));
 
@@ -190,7 +209,20 @@ export function usePanelBrowserClosed(panel: string, sessions: Set<string>): boo
  * of it started (sessions: their ids). Opens by itself when one of them opens a page, on that page; closed with its ×
  * until the next one. "Open in new window" moves the page to a window of its own (BrowserWindow).
  */
-export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; sessions: Set<string>; width?: number; edge?: ReactNode }) {
+export function PanelBrowser({
+  panel,
+  sessions,
+  width,
+  edge,
+  onWidth,
+}: {
+  panel: string;
+  sessions: Set<string>;
+  width?: number;
+  edge?: ReactNode;
+  /** the column's width set (a phone / tablet size picked narrows it to that size) */
+  onWidth?: (w: number) => void;
+}) {
   const { st, save, last, tab, project, has } = usePanelColumn(panel, sessions);
   const inWindow = useBrowserWindows((w) => !!tab && w.tabs.includes(tab));
   const cur = useBrowserTabs((s) => s.tabs.find((x) => x.tab === tab));
@@ -252,12 +284,49 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
       {hide}
     </>
   );
-  if (floating)
+  if (floating) {
+    const fit = st.fit ?? "pc";
+    // another size: the box takes its shape at its default width (a phone's box at a desktop's width ran off the panel)
+    const pick = (f: FloatFit) => {
+      if (f === fit) return;
+      const c = useColumns.getState()[panel] ?? st;
+      save({ ...c, fit: f, box: c.box && { ...c.box, w: FLOAT_FITS[f].pw[1] + 2 } });
+    };
+    const items = (
+      <>
+        <DropdownMenuSeparator />
+        {(Object.keys(FLOAT_FITS) as FloatFit[]).map((f) => {
+          const Icon = FIT_ICONS[f];
+          return (
+            <DropdownMenuItem key={f} onClick={() => pick(f)}>
+              <Icon /> {t(`panes.fit.${f}`)}
+              <span className="ml-auto text-[11px] text-muted-foreground">
+                {FLOAT_FITS[f].w}×{FLOAT_FITS[f].h}
+              </span>
+              {f === fit ? <Check /> : <span className="size-4" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </>
+    );
     return (
-      <PanelFloat spot={st.box} onSpot={(b) => save({ ...useColumns.getState()[panel], box: b })}>
-        {(onMove) => <PageBrowser project={project} tab={tab} onTab={(n) => save({ ...st, tab: n })} fit="pc" onHeadPointerDown={onMove} extra={extra} />}
+      <PanelFloat fit={fit} spot={st.box} onSpot={(b) => save({ ...useColumns.getState()[panel], box: b })}>
+        {(onMove, onFitDrawn, viewOnly) => (
+          <PageBrowser
+            project={project}
+            tab={tab}
+            onTab={(n) => save({ ...st, tab: n })}
+            fit={fit}
+            onHeadPointerDown={onMove}
+            extra={extra}
+            items={items}
+            onFitDrawn={onFitDrawn}
+            viewOnly={viewOnly}
+          />
+        )}
       </PanelFloat>
     );
+  }
   return (
     // width: a column at the panel's right; none: the whole space (a phone's 浏览器 tab)
     <div className={box} style={{ width }}>
@@ -266,6 +335,9 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
         project={project}
         tab={tab}
         onTab={(n) => save({ ...st, tab: n })}
+        // a phone / tablet size in a column wider than it: the column narrows to it, never widens (that took the
+        // chat's and the panel's room), as a docked Browser pane in Code (lib/actions/browser.ts fitPaneWidth)
+        onPicked={(f, over) => width && onWidth && (f === "mobile" || f === "pad") && over > 2 && onWidth(width - over)}
         extra={
           <>
             {tab && (
@@ -285,43 +357,81 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
   );
 }
 
-const FLOAT_W = { min: 280, def: 440, max: 960 };
+const FIT_ICONS: Record<FloatFit, typeof Monitor> = { pc: Monitor, pad: Tablet, mobile: Smartphone };
 const FLOAT_HEAD = 41; // the title bar (h-10) and its border
-const floatH = (w: number) => ((w - 2) * FLOAT_FITS.pc.h) / FLOAT_FITS.pc.w + FLOAT_HEAD;
+// the box's width range: the fit's page widths (FLOAT_FITS pw, as a floating pane in Code) and the border
+const floatW = (f: FloatFit) => {
+  const [min, def, max] = FLOAT_FITS[f].pw;
+  return { min: min + 2, def: def + 2, max: max + 2 };
+};
+const floatH = (w: number, f: FloatFit) => ((w - 2) * FLOAT_FITS[f].h) / FLOAT_FITS[f].w + FLOAT_HEAD;
 
 /**
  * A panel's browser floating over its top right corner, as a floating Browser pane in Code (Panes.tsx FloatPane): the
- * page's pictures laid out at a desktop's size, dragged by its title bar, resized from its bottom-left corner at the
- * page's shape, kept inside the panel. Positioned against the Work view's body (WorkView: its relative box).
+ * page's pictures laid out at the size picked in its ⋯ menu, dragged by its title bar, resized from any edge at the
+ * page's shape, kept inside the panel; too small to use, the page only shows and a press anywhere moves it. Positioned against the Work view's body (WorkView: its relative box).
  */
 function PanelFloat({
+  fit: want,
   spot,
   onSpot,
   children,
 }: {
+  fit: FloatFit;
   spot?: FloatSpot;
   onSpot: (s: FloatSpot) => void;
-  children: (onMove: (e: React.PointerEvent<HTMLElement>) => void) => ReactNode;
+  children: (onMove: (e: React.PointerEvent<HTMLElement>) => void, onFitDrawn: (f: FloatFit) => void, viewOnly: boolean) => ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const s = spot ?? { r: 12, t: 12, w: FLOAT_W.def };
-  const gesture = (e: React.PointerEvent<HTMLElement>, resize: boolean) => {
+  // Another size picked: the box keeps its old shape until a picture of the new one is drawn (or a moment passed), then
+  // both change together, as a floating pane in Code does (Panes.tsx FloatPane): switched at once, the old picture
+  // showed in the new box
+  const [fit, setFit] = useState(want);
+  useEffect(() => {
+    if (fit === want) return;
+    const id = setTimeout(() => setFit(want), 1500);
+    return () => clearTimeout(id);
+  }, [want, fit]);
+  const onFitDrawn = (f: FloatFit) => f === want && setFit(f);
+  const FLOAT_W = floatW(fit);
+  // the place it had in the old shape, kept while held
+  const lastSpot = useRef(spot);
+  if (fit === want) lastSpot.current = spot;
+  const at = fit === want ? spot : lastSpot.current;
+  const s = at ? { ...at, w: Math.min(Math.max(at.w, FLOAT_W.min), FLOAT_W.max) } : { r: 12, t: 12, w: FLOAT_W.def };
+  const { w: PW, h: PH } = FLOAT_FITS[fit];
+  // edge: resizing from that edge / corner at the page's shape (a side's move is the width's, a top / bottom's turns
+  // into the width giving that height), the edges across from it staying put; none: a move
+  const gesture = (e: React.PointerEvent<HTMLElement>, edge?: FloatEdge, cursor = "grabbing") => {
     if (e.button !== 0) return;
     // the title bar's own buttons and address bar keep their clicks
-    if (!resize && (e.target as Element).closest("button, a, input, textarea, [role=menuitem]")) return;
+    if (!edge && (e.target as Element).closest("button, a, input, textarea, [role=menuitem]")) return;
     const room = (ref.current?.offsetParent as HTMLElement | null)?.getBoundingClientRect();
     if (!room) return;
     e.preventDefault();
+    e.stopPropagation();
     const x0 = e.clientX,
       y0 = e.clientY;
-    const fit = (n: FloatSpot): FloatSpot => {
-      const w = Math.min(Math.max(FLOAT_W.min, Math.min(n.w, FLOAT_W.max)), room.width);
-      return { w, r: Math.min(Math.max(0, n.r), room.width - w), t: Math.min(Math.max(0, n.t), Math.max(0, room.height - floatH(w))) };
-    };
+    const h0 = floatH(s.w, fit);
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - x0,
         dy = ev.clientY - y0;
-      onSpot(fit(resize ? { ...s, w: s.w - dx } : { ...s, r: s.r - dx, t: s.t + dy }));
+      if (!edge) {
+        const r = Math.min(Math.max(0, s.r - dx), room.width - s.w);
+        onSpot({ ...s, r, t: Math.min(Math.max(0, s.t + dy), Math.max(0, room.height - h0)) });
+        return;
+      }
+      const dw = edge.l ? -dx : edge.r ? dx : ((edge.t ? -dy : dy) * PW) / PH;
+      // the room on the side that moves: left / bottom from the fixed right / top edge, or the other way round
+      const right = s.r,
+        left = room.width - s.r - s.w,
+        top = s.t,
+        bottom = room.height - s.t - h0;
+      const maxW = edge.r ? s.w + right : s.w + left;
+      const maxH = edge.t ? h0 + top : h0 + bottom;
+      const w = Math.max(FLOAT_W.min, Math.min(s.w + dw, FLOAT_W.max, maxW, ((maxH - FLOAT_HEAD) * PW) / PH + 2));
+      const h = floatH(w, fit);
+      onSpot({ w, r: edge.r ? s.r - (w - s.w) : s.r, t: edge.t ? s.t - (h - h0) : s.t });
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -330,20 +440,24 @@ function PanelFloat({
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-    document.body.style.cursor = resize ? "nesw-resize" : "grabbing";
+    document.body.style.cursor = cursor;
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
   };
+  // shrunk below FLOAT_OPERABLE of the size's largest page: only looked at, a press anywhere moves it (as Code's)
+  const viewOnly = (s.w - 2) / FLOAT_FITS[fit].pw[2] < FLOAT_OPERABLE;
   return (
     <div
       ref={ref}
-      className="absolute z-30 flex max-w-full flex-col overflow-hidden rounded-md border bg-background shadow-2xl"
-      style={{ right: s.r, top: s.t, width: s.w, height: floatH(s.w) }}
+      className={cn("absolute z-30 flex max-w-full flex-col overflow-hidden rounded-md border bg-background shadow-2xl", viewOnly && "border-dashed")}
+      style={{ right: s.r, top: s.t, width: s.w, height: floatH(s.w, fit) }}
     >
-      {children((e) => gesture(e, false))}
-      <div className="absolute bottom-0 left-0 size-3 cursor-nesw-resize touch-none" onPointerDown={(e) => gesture(e, true)} />
+      {children((e) => gesture(e), onFitDrawn, viewOnly)}
+      {FLOAT_EDGES.map(({ e: g, cls }, i) => (
+        <div key={i} className={cn("absolute touch-none", cls)} onPointerDown={(e) => gesture(e, g, getComputedStyle(e.currentTarget).cursor)} />
+      ))}
     </div>
   );
 }
