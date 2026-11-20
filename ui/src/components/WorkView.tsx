@@ -10,7 +10,7 @@ import { useClearBadge } from "@/lib/badges";
 import { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
-import { PanelBrowser } from "@/core/SessionBrowser";
+import { PanelBrowser, PanelBrowserButton, usePanelBrowserClosed } from "@/core/SessionBrowser";
 import { useBrowserTabs } from "@/lib/actions";
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
@@ -644,24 +644,30 @@ function useChatHidden(key: string): [boolean, (v: boolean) => void] {
 }
 
 /** The folded agent column: open it again, and see at a glance whether the agent is working or waiting for you. */
-function ChatStrip({ onOpen }: { onOpen: () => void }) {
+// extra: the folded browser column's button (PanelBrowserButton), so the two folded columns share one strip
+function ChatStrip({ onOpen, extra }: { onOpen: () => void; extra?: React.ReactNode }) {
   const id = useWorkSession();
   const session = useStore((s) => (id ? s.sessions[id] : undefined));
   return (
-    <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-l py-2">
-      <Button variant="ghost" size="icon" className="size-7" title={t("workView.showChat")} aria-label={t("workView.showChat")} onClick={onOpen}>
-        <PanelRightOpen className="size-4" />
-      </Button>
+    <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-l pb-2">
+      {/* the first button on the line of the headers' (h-10, centred), as in the open column it stands for */}
+      <div className="flex h-10 shrink-0 items-center">
+        <Button variant="ghost" size="icon" className="size-7" title={t("workView.showChat")} aria-label={t("workView.showChat")} onClick={onOpen}>
+          <PanelRightOpen className="size-3.5" />
+        </Button>
+      </div>
       {session && (
         <button title={session.title || t("workView.showChat")} onClick={onOpen} className="flex size-7 items-center justify-center">
           <StatusDot status={dotStatus(session)} />
         </button>
       )}
+      {extra}
     </div>
   );
 }
 
-function ChatHeader({ onHide }: { onHide?: () => void }) {
+// extra: after the hide button (the folded browser column's way back)
+function ChatHeader({ onHide, extra }: { onHide?: () => void; extra?: React.ReactNode }) {
   const all = useWorkChats();
   const current = useWorkSession();
   const unread = useStore((s) => s.unread);
@@ -761,6 +767,19 @@ function ChatHeader({ onHide }: { onHide?: () => void }) {
           <PanelRightClose className="size-3.5 pointer-coarse:size-4" />
         </Button>
       )}
+      {extra && <div style={noDrag}>{extra}</div>}
+    </div>
+  );
+}
+
+/** A folded browser column beside a panel with no agent column ("chat": false): its button in a strip of its own. */
+function BrowserStrip({ panel, sessions }: { panel: string; sessions: Set<string> }) {
+  if (!usePanelBrowserClosed(panel, sessions)) return null;
+  return (
+    <div className="flex w-10 shrink-0 flex-col items-center border-l">
+      <div className="flex h-10 shrink-0 items-center">
+        <PanelBrowserButton panel={panel} sessions={sessions} />
+      </div>
     </div>
   );
 }
@@ -827,6 +846,7 @@ function WorkViewBody() {
           <WorkFrames />
         </div>
         {browser()}
+        <BrowserStrip panel={project} sessions={sessions} />
       </div>
     );
   if (phone) {
@@ -873,11 +893,11 @@ function WorkViewBody() {
         <WorkFrames />
       </div>
       {/* Folded away: a strip with the way back and the agent's state. The chat stays mounted (its scroll, its draft). */}
-      {hidden && <ChatStrip onOpen={() => setHidden(false)} />}
+      {hidden && <ChatStrip onOpen={() => setHidden(false)} extra={<PanelBrowserButton panel={project} sessions={sessions} />} />}
       {/* max-w: a window made smaller after dragging still leaves the Work site some room */}
       <div className={cn("relative flex max-w-[70%] shrink-0 flex-col border-l", hidden && "hidden")} style={{ width: chatW }}>
         <ChatEdge width={chatW} onWidth={setChatW} />
-        <ChatHeader onHide={() => setHidden(true)} />
+        <ChatHeader onHide={() => setHidden(true)} extra={<PanelBrowserButton panel={project} sessions={sessions} className="pointer-coarse:size-9" />} />
         <div className="min-h-0 flex-1" data-composer-scope>
           <WorkChat />
         </div>
