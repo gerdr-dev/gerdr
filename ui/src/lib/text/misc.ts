@@ -64,6 +64,9 @@ export const zh = {
   "fileViewer.binary": "这是个二进制文件，没法预览。",
   "fileViewer.cantRead": "读不了：{error}",
   "fileViewer.reading": "读取中…",
+  // MermaidBlock
+  "mermaidBlock.zoom": "点开放大",
+  "mermaidBlock.failed": "图没画出来：{error}",
   "fileViewer.downloadSize": "下载（{size}）",
 
   // NameDialogs
@@ -245,6 +248,9 @@ export const en: Record<keyof typeof zh, string> = {
   "fileViewer.binary": "This is a binary file and can't be previewed.",
   "fileViewer.cantRead": "Couldn't read it: {error}",
   "fileViewer.reading": "Loading…",
+  // MermaidBlock
+  "mermaidBlock.zoom": "Open to zoom",
+  "mermaidBlock.failed": "Couldn't draw the diagram: {error}",
   "fileViewer.downloadSize": "Download ({size})",
 
   // NameDialogs

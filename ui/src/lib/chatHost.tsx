@@ -32,6 +32,8 @@ import { UsagePanel } from "@/components/UsageMeter";
 import { RunButton } from "@/components/chat/RunButton";
 import { LoginChip } from "@/components/chat/LoginChip";
 import { timedEscape } from "./escTiming";
+import { useMarkdownPlugins } from "./markdownPlugins";
+import { MermaidBlock } from "@/components/chat/MermaidBlock";
 
 /**
  * gerdr's side of the chat package (@gerdr/chat, ui/packages/chat): where its data comes from (the store, fed over
@@ -354,6 +356,9 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       focusSession,
       refocus: refocusAfterDialog,
       codeActions: (code, lang, session) => (lang === "bang" ? <RunButton cmd={code} session={session} /> : null),
+      // Diagrams and formulas in replies, each loaded the first time a reply has one (lib/mermaid.ts, lib/markdownPlugins.ts)
+      codeBlocks: { mermaid: (code) => <MermaidBlock code={code} /> },
+      useMarkdownPlugins,
       composerOverlay: (session) => <Overlay session={session} />,
       composerTop: (session) => <LoginChip sessionId={session.id} />,
       useTurnStat: useAddonTurnStat,

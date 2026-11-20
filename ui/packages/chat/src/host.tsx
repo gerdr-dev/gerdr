@@ -1,4 +1,5 @@
 import { createContext, useContext, type ComponentType, type ReactNode, type RefObject } from "react";
+import type { PluginConfig } from "streamdown";
 import type { DraftImage, DraftStore } from "./drafts";
 import { LightboxHost } from "./components/Lightbox";
 import { TooltipProvider } from "./ui/tooltip";
@@ -123,6 +124,12 @@ export interface ChatHost {
   renderTool?(part: ToolPart, ctx: { sessionId: string; running: boolean }): ReactNode | undefined;
   /** Render fenced code blocks of these languages yourself (```chart). */
   codeBlocks?: Record<string, (code: string) => ReactNode>;
+  /**
+   * Streamdown plugins for this Markdown (gerdr: $$ math $$ with KaTeX), given its text. Called as a React
+   * hook on every render, so a host can load a heavy plugin only once some Markdown needs it and return it then
+   * (the Markdown is drawn again when the answer changes). undefined = Streamdown's defaults.
+   */
+  useMarkdownPlugins?(markdown: string): PluginConfig | undefined;
   /** Extra actions on a shell code block in a reply (gerdr: run it in this session / a terminal). */
   codeActions?(code: string, lang: string, session: ChatSession): ReactNode;
   /** Slots around the composer: above it (chips), in its bottom bar (model menu), and an overlay (dialogs). */

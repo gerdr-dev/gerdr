@@ -233,9 +233,30 @@ export const fixWindowsPaths = (md: string) => {
 
 const components: Components = { a: A, img: Img, p: P, inlineCode: InlineCode, code: CodeBlock };
 
+// One number per plugin object, so the key changes exactly when the set of plugin objects does
+const pluginIds = new WeakMap<object, number>();
+let nextPluginId = 0;
+const pluginsKey = (plugins?: StreamdownProps["plugins"]) =>
+  Object.values(plugins ?? {})
+    .map((p) => {
+      if (!pluginIds.has(p)) pluginIds.set(p, ++nextPluginId);
+      return pluginIds.get(p);
+    })
+    .join();
+
 export function Markdown({ children }: { children: string }) {
+  const plugins = useChatHost().useMarkdownPlugins?.(children);
   return (
-    <MessageResponse remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} urlTransform={urlTransform}>
+    <MessageResponse
+      // MessageResponse redraws only when the text changes: other plugins from the host (one it loaded afterwards) need
+      // a new key
+      key={pluginsKey(plugins)}
+      plugins={plugins}
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
+      components={components}
+      urlTransform={urlTransform}
+    >
       {fixWindowsPaths(children)}
     </MessageResponse>
   );

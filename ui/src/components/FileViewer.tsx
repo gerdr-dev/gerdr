@@ -13,6 +13,8 @@ import { get, set, useStore } from "@/lib/store";
 import { HostTag } from "./HostTag";
 import { t } from "@/lib/i18n";
 import { useCopied } from "@/lib/useCopied";
+import { pluginsKey, useMarkdownPlugins } from "@/lib/markdownPlugins";
+import { MdCode } from "./chat/MermaidBlock";
 
 /** 文本最多读这么多：再大的多半是日志 / 数据文件，整个塞进 DOM 手机上会卡死，给下载。 */
 const TEXT_MAX = 2 << 20;
@@ -201,16 +203,26 @@ function TextBody({ stat, url }: { stat: FileStat; url: string }) {
   }, [url, stat.size]);
   if (why) return <NoPreview stat={stat} why={why} />;
   if (text === null) return <div className="p-10 text-center text-[13px] text-muted-foreground">{t("fileViewer.reading")}</div>;
-  if (stat.mime === "text/markdown") {
-    const { meta, body } = splitFrontMatter(text);
-    return (
-      <div className="gerdr-md mx-auto max-w-[860px] px-5 py-4">
-        {meta !== null && <FrontMatter raw={meta} />}
-        <MessageResponse>{body}</MessageResponse>
-      </div>
-    );
-  }
+  if (stat.mime === "text/markdown") return <MdFile text={text} />;
   return <pre className="min-w-max p-4 font-mono text-[12px] leading-relaxed whitespace-pre">{text}</pre>;
+}
+
+// Module level: Streamdown takes these as component types, a new object per render would remount the whole file
+const mdComponents = { code: MdCode };
+
+/** A .md file as Markdown: Mermaid diagrams and $$ math $$ drawn as in a reply (MermaidBlock, lib/markdownPlugins.ts). */
+function MdFile({ text }: { text: string }) {
+  const { meta, body } = splitFrontMatter(text);
+  const plugins = useMarkdownPlugins(body);
+  return (
+    <div className="gerdr-md mx-auto max-w-[860px] px-5 py-4">
+      {meta !== null && <FrontMatter raw={meta} />}
+      {/* MessageResponse redraws only when the text changes: a plugin loaded afterwards needs a new key */}
+      <MessageResponse key={pluginsKey(plugins)} plugins={plugins} components={mdComponents}>
+        {body}
+      </MessageResponse>
+    </div>
+  );
 }
 
 /**
