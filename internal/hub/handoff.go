@@ -93,17 +93,26 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 		return nil, err
 	}
 	src.mu.Lock()
-	running := src.running
+	running, turnMsg := src.running, src.turnMsg
 	srcRec := src.rec
 	src.loadLocked()
-	evs := make([]*Event, 0, len(src.events))
-	for _, e := range src.events {
+	// A fork while a turn runs takes what is settled: everything before the running turn (forkCut). A switch of
+	// agents still waits for the turn: it continues the very conversation, the running turn included.
+	end := len(src.events)
+	if running && o.Fork {
+		end = forkCut(src.events, turnMsg)
+	}
+	evs := make([]*Event, 0, end)
+	for _, e := range src.events[:end] {
 		c := *e // the two sessions' logs must not share event objects
 		evs = append(evs, &c)
 	}
 	src.mu.Unlock()
-	if running {
+	if running && !o.Fork {
 		return nil, errors.New(i18n.S("这个会话还在跑：先停下这一轮，再换 agent 接着聊", "This session is still running: stop the current turn before switching agents"))
+	}
+	if running && len(evs) == 0 {
+		return nil, errors.New(i18n.S("这个会话的第一轮还在跑，还没有能 Fork 的内容", "This session's first turn is still running: there's nothing to fork yet"))
 	}
 	// The same agent only from code (a panel replacing a broken or reconfigured conversation) or as a fork: otherwise a
 	// person would just open the old one
@@ -136,10 +145,16 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 	} else if fork {
 		srcRec.Title, srcRec.CustomTitle, srcRec.TitleKey, srcRec.PluginTitleFor = forkTitle(srcRec.Title), srcRec.TitleFixed, "", ""
 	}
-	if fork && !forkText {
+	if fork && !forkText && (!running || turnMsg != "") {
 		// The same engine copies its own session; another engine (or a session that can't be copied) gets the
 		// history as text, below
-		s, err := h.forkSame(ctx, o, srcRec, evs)
+		// While a turn runs, the agent's copy is cut before the message that started it. A turn nobody sent (a
+		// background task's report) has no such message, so it goes as text, cut where the chat log is.
+		before := ""
+		if running {
+			before = turnMsg
+		}
+		s, err := h.forkSame(ctx, o, srcRec, evs, before)
 		if err == nil {
 			return s, nil
 		}
@@ -163,6 +178,25 @@ func (h *Hub) continueFrom(ctx context.Context, o CreateOptions) (*Session, erro
 		h.adoptHistory(s, srcRec, evs)
 	}
 	return s, nil
+}
+
+// forkCut: where the settled part of a log ends while a turn runs: at the user message that started it (turnMsg), or,
+// for a turn nobody sent, after the last turn that ended. What the running turn has said so far, and anything sent
+// into it, is left out: it isn't finished, and the original goes on with it.
+func forkCut(evs []*Event, turnMsg string) int {
+	for i := len(evs) - 1; i >= 0; i-- {
+		e := evs[i]
+		if turnMsg != "" && e.Kind == EvUser && e.MessageID == turnMsg {
+			return i
+		}
+		if turnMsg == "" && e.Kind == EvTurnEnd {
+			return i + 1
+		}
+	}
+	if turnMsg != "" {
+		return len(evs) // the turn's message isn't in the log (shouldn't happen): don't drop anything
+	}
+	return 0
 }
 
 // History is a conversation brought from another computer (CreateOptions.History). From: where it was, for the

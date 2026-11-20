@@ -28,7 +28,7 @@ func TestCopyTranscript(t *testing.T) {
 	}
 	_ = os.WriteFile(filepath.Join(dir, src, "tool-results", "x.txt"), []byte("big output"), 0o600)
 
-	if err := copyTranscript(path, src, id); err != nil {
+	if err := copyTranscript(path, src, id, ""); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, id+".jsonl"))
@@ -53,5 +53,41 @@ func TestCopyTranscript(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, id+".jsonl.tmp")); err == nil {
 		t.Fatal("temp file left")
+	}
+}
+
+// A fork while a turn runs stops at the line of the message that started the turn, and leaves out a last line still
+// being written when that message isn't in the file yet.
+func TestCopyTranscriptBefore(t *testing.T) {
+	dir := t.TempDir()
+	src, id := "11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"
+	lines := []string{
+		`{"parentUuid":null,"type":"user","uuid":"u1","sessionId":"` + src + `","message":{"role":"user","content":"hi"}}`,
+		`{"parentUuid":"u1","type":"assistant","uuid":"a1","sessionId":"` + src + `","message":{"role":"assistant","content":"ok"}}`,
+		`{"parentUuid":"a1","type":"user","uuid":"u2","sessionId":"` + src + `","message":{"role":"user","content":"next"}}`,
+		`{"parentUuid":"u2","type":"assistant","uuid":"a2","sessionId":"` + src + `","message":{"role":"assistant","content":"work"}}`,
+	}
+	path := filepath.Join(dir, src+".jsonl")
+	read := func() string {
+		b, err := os.ReadFile(filepath.Join(dir, id+".jsonl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(string(b))
+	}
+	_ = os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+	if err := copyTranscript(path, src, id, "u2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := read(), strings.ReplaceAll(strings.Join(lines[:2], "\n"), src, id); got != want {
+		t.Fatalf("cut at u2:\n%s\nwant:\n%s", got, want)
+	}
+	// u3 not written yet; the last line has no newline (half written)
+	_ = os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"+`{"parentUuid":"a2","type":"assis`), 0o600)
+	if err := copyTranscript(path, src, id, "u3"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := read(), strings.ReplaceAll(strings.Join(lines, "\n"), src, id); got != want {
+		t.Fatalf("not written yet:\n%s\nwant:\n%s", got, want)
 	}
 }

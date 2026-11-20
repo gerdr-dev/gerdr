@@ -154,6 +154,10 @@ type TakeoverResponse struct {
 type ForkRequest struct {
 	SessionId acp.SessionId `json:"sessionId"`
 	Cwd       string        `json:"cwd,omitempty"`
+	// Before: fork a session whose turn is still running. The copy ends just before this user message (the one that
+	// started the running turn), leaving that turn out; empty = the whole history. An agent that can't cut its copy
+	// there must answer an error (the client then hands the settled history over as text), never copy it whole.
+	Before string `json:"before,omitempty"`
 }
 
 type ForkResponse struct {

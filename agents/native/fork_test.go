@@ -17,7 +17,7 @@ func TestStoreFork(t *testing.T) {
 	if err := st.rewrite("old", src); err != nil {
 		t.Fatal(err)
 	}
-	id, err := st.fork("old")
+	id, err := st.fork("old", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestStoreFork(t *testing.T) {
 	if old, _ := st.load("old"); lastMeta(old).Title != "原来的名字" {
 		t.Fatal("the original changed")
 	}
-	if _, err := st.fork("missing"); err == nil {
+	if _, err := st.fork("missing", ""); err == nil {
 		t.Fatal("forked a session that was never written")
 	}
 }

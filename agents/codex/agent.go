@@ -1095,6 +1095,11 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, acp.NewInvalidParams(err.Error())
 		}
+		if p.Before != "" {
+			// thread/fork copies the running turn too, and has nothing to cut it at: the hub hands the settled
+			// history over as text instead
+			return nil, acp.NewInvalidParams("codex can't fork a thread at a message while its turn runs")
+		}
 		rpc, err := a.client(ctx)
 		if err != nil {
 			return nil, err

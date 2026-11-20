@@ -22,12 +22,13 @@ type fakeAgent struct {
 	commands  bool
 	hold      bool // answer steers with hold (a turn that can't take one, like Codex's compact turn)
 
-	conn     *acp.AgentSideConnection
-	mu       sync.Mutex
-	prompts  []string
-	steers   []string
-	release  chan struct{}
-	finished chan string
+	conn       *acp.AgentSideConnection
+	mu         sync.Mutex
+	prompts    []string
+	steers     []string
+	release    chan struct{}
+	finished   chan string
+	forkBefore string // the last MethodFork's Before
 }
 
 func (f *fakeAgent) SetConn(c *acp.AgentSideConnection) { f.conn = c }
@@ -83,6 +84,9 @@ func (f *fakeAgent) HandleExtensionMethod(ctx context.Context, method string, pa
 	case acpx.MethodFork:
 		var p acpx.ForkRequest
 		_ = json.Unmarshal(params, &p)
+		f.mu.Lock()
+		f.forkBefore = p.Before
+		f.mu.Unlock()
 		return acpx.ForkResponse{SessionId: p.SessionId + "-fork"}, nil
 	}
 	return nil, acp.NewMethodNotFound(method)

@@ -218,7 +218,7 @@ func TestForkSameEngine(t *testing.T) {
 	evs := src.Events()
 	rec := src.rec
 	rec.Title = forkTitle(rec.Title)
-	s, err := h.forkSame(context.Background(), CreateOptions{Agent: "fake", Project: "p1", Tags: map[string]string{"k": "v"}}, rec, evs)
+	s, err := h.forkSame(context.Background(), CreateOptions{Agent: "fake", Project: "p1", Tags: map[string]string{"k": "v"}}, rec, evs, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,71 @@ func TestForkSameEngine(t *testing.T) {
 	if h.FindByAgent("fake", "a1-fork") != s || src.rec.AgentSessionID != "a1" {
 		t.Fatal("registration / source changed")
 	}
-	if _, err := h.forkSame(context.Background(), CreateOptions{Agent: "codex"}, rec, evs); !errors.Is(err, errOtherEngine) {
+	if _, err := h.forkSame(context.Background(), CreateOptions{Agent: "codex"}, rec, evs, ""); !errors.Is(err, errOtherEngine) {
 		t.Fatalf("another engine: %v", err)
+	}
+}
+
+// A fork while a turn runs takes the log up to the message that started it; a turn nobody sent, up to the last end.
+func TestForkCut(t *testing.T) {
+	evs := []*Event{
+		{Kind: EvUser, MessageID: "m1"},
+		{Kind: EvUpdate},
+		{Kind: EvTurnEnd},
+		{Kind: EvUser, MessageID: "m2"},
+		{Kind: EvUpdate},
+		{Kind: EvUser, MessageID: "m3", Steer: true},
+	}
+	if got := forkCut(evs, "m2"); got != 3 {
+		t.Fatalf("user turn: %d", got)
+	}
+	if got := forkCut(evs[:5], ""); got != 3 {
+		t.Fatalf("auto turn: %d", got)
+	}
+	if got := forkCut(evs[:2], "m1"); got != 0 {
+		t.Fatalf("first turn: %d", got)
+	}
+}
+
+// Forking a session whose turn is running: the fork gets what was settled before that turn, the agent is asked to cut
+// its copy there too, and switching agents (not a fork) still waits for the turn.
+func TestForkWhileRunning(t *testing.T) {
+	src, f := startFake(t, false)
+	h := src.h
+	src.emit(msg("u1", "登录页打不开"))
+	src.emit(agentText("路由表是空的。"))
+	src.emit(&Event{Kind: EvTurnEnd, MessageID: "u1"})
+	src.emit(msg("u2", "再看看样式"))
+	src.emit(agentText("正在看"))
+	src.mu.Lock()
+	src.running, src.turnMsg = true, "u2"
+	src.mu.Unlock()
+	defer func() {
+		src.mu.Lock()
+		src.running, src.turnMsg = false, ""
+		src.mu.Unlock()
+	}()
+
+	s, err := h.continueFrom(context.Background(), CreateOptions{Agent: "fake", ContinueFrom: src.ID(), Fork: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	before := f.forkBefore
+	f.mu.Unlock()
+	if before != "u2" || s.rec.AgentSessionID != "a1-fork" {
+		t.Fatalf("agent copy: before=%q sid=%q", before, s.rec.AgentSessionID)
+	}
+	got := s.Events()
+	if len(got) != 4 || got[len(got)-1].Level != forkLevel {
+		t.Fatalf("log: %d events", len(got))
+	}
+	for _, e := range got {
+		if e.MessageID == "u2" {
+			t.Fatal("the running turn came along")
+		}
+	}
+	if _, err := h.continueFrom(context.Background(), CreateOptions{Agent: "codex", ContinueFrom: src.ID()}); err == nil {
+		t.Fatal("switched agents mid-turn")
 	}
 }

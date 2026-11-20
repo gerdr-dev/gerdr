@@ -27,7 +27,7 @@ func (a *Agent) fork(p acpx.ForkRequest) (acpx.ForkResponse, error) {
 		return acpx.ForkResponse{}, err // nothing written yet (new, or rewound and not spoken since): the client copies the chat instead
 	}
 	id := uuid.NewString()
-	if err := copyTranscript(path, src, id); err != nil {
+	if err := copyTranscript(path, src, id, p.Before); err != nil {
 		return acpx.ForkResponse{}, err
 	}
 	return acpx.ForkResponse{SessionId: acp.SessionId(id)}, nil
@@ -40,7 +40,11 @@ var forkDropTypes = map[string]bool{"custom-title": true, "ai-title": true, "age
 // copyTranscript writes path's transcript as session id's, beside it: each line with the session id swapped (only
 // that field: the content stays byte for byte), the title lines left out, and the <src>/ folder next to it
 // (subagent transcripts, large tool results) copied as <id>/.
-func copyTranscript(path, src, id string) error {
+// before (a fork while a turn runs): stop at the line of that user message, which starts the running turn; claude
+// writes it before anything of the turn, so the lines above are settled. Not there yet: the message isn't written,
+// and everything read so far is settled. The last line may still be half written then, so one without its newline
+// is left out.
+func copyTranscript(path, src, id, before string) error {
 	in, err := os.Open(path)
 	if err != nil {
 		return err
@@ -59,11 +63,16 @@ func copyTranscript(path, src, id string) error {
 	r := bufio.NewReader(in)
 	for {
 		line, err := r.ReadBytes('\n')
+		if before != "" && err == io.EOF {
+			break // a line still being written
+		}
 		if len(line) > 0 {
-			var e struct {
-				Type string `json:"type"`
+			var e entry
+			ok := json.Unmarshal(line, &e) == nil
+			if ok && before != "" && (e.UUID == before || e.Type == "attachment" && e.Attachment != nil && e.Attachment.Type == "queued_command" && e.Attachment.SourceUUID == before) {
+				break
 			}
-			if json.Unmarshal(line, &e) != nil || !forkDropTypes[e.Type] {
+			if !ok || !forkDropTypes[e.Type] {
 				w.Write(bytes.ReplaceAll(line, from, to))
 			}
 		}

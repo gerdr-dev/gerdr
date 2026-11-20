@@ -640,7 +640,7 @@ func (a *Agent) HandleExtensionMethod(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, acp.NewInvalidParams(err.Error())
 		}
-		id, err := a.st.fork(string(p.SessionId))
+		id, err := a.st.fork(string(p.SessionId), p.Before)
 		if err != nil {
 			return nil, err
 		}

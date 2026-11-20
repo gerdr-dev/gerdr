@@ -714,7 +714,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	var fTimeout time.Duration
 	forkCmd := &cobra.Command{
 		Use:   i18n.S("fork <会话>", "fork <session>"),
-		Short: i18n.S("分叉一个会话：开一个新会话，带着它到现在为止的对话（同一个 agent 或 --agent 换一个），名字是「Fork: 原来的名字」；原来的不动。在跑的会话要先停下。输出新会话", "Fork a session: a new session carrying its conversation so far (the same agent, or another with --agent), named \"Fork: <original title>\"; the original is left as it is. Not while it is running. Prints the new session"),
+		Short: i18n.S("分叉一个会话：开一个新会话，带着它到现在为止的对话（同一个 agent 或 --agent 换一个），名字是「Fork: 原来的名字」；原来的不动。正在跑的会话也能 fork：带走跑着的这一轮之前的对话。输出新会话", "Fork a session: a new session carrying its conversation so far (the same agent, or another with --agent), named \"Fork: <original title>\"; the original is left as it is. A running session forks at the start of its turn in progress. Prints the new session"),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c := client()

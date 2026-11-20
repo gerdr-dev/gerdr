@@ -22,6 +22,7 @@ gerdr acp claude  # 把内置适配器当 stdio ACP agent 跑（给 Zed 等 ACP 
 旁边会开一个叫「Fork: 原来的名字」的新对话（在里面说了话之后，会按新话题改名成「Fork: 新话题」），带着到现在为止的对话，原来的对话不动。
 同一种引擎（Claude Code 到 Claude Code、Claude 的角色到 Claude Code……）会直接复制 agent 自己的会话，上下文和原来一模一样（提示词缓存也照样命中），除非在 Fork 窗口里勾上「文字转交」；
 换成另一种引擎时，总是把之前的对话整理成文字，在你发第一句话时一起交给它。
+正在跑的对话也能 Fork：新对话带走正在跑的这一轮之前的内容，这一轮在原来的对话里接着跑。
 agent 也能做：`gerdr session fork`。
 
 Claude Desktop 里 Code 标签页的对话可以拿到这里接着聊：设置 → 导入 →「从 Claude Desktop 导入」，勾上要的，历史全都带过来。

@@ -98,7 +98,7 @@ gerdr session new --agent codex --title reviewer \
   the original is left as it is. With the same engine (a claude role forked to claude…) the agent's session is
   copied, so it has the whole context exactly as it was (`--text` hands it over as text instead); another engine
   always gets the history as text with the first message, like switching agents, and so does a session that can't
-  be copied. Not while the source is running. Use it when the user wants to try another
+  be copied. A running source can be forked too (your own session included): the fork gets the conversation up to the turn in progress, which stays with the original. Use it when the user wants to try another
   direction, or another agent's take, without losing the conversation they have;
 - Import the Claude Desktop App's Code-tab conversations (Settings → Import does the same): `gerdr session import
   claude-desktop` lists them (JSON: `id`, `title`, `cwd`, `existing` = imported already, `skip` = why it can't be);

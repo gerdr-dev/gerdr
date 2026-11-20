@@ -29,7 +29,8 @@ To try another direction without losing the conversation, fork it: the session m
 in it) opens beside it with the conversation so far; the original stays as it was. With the same engine (Claude Code
 to Claude Code, a Claude role to Claude Code…) the agent's own session is copied, so it carries on with exactly the
 same context (and the prompt cache still hits), unless you tick *hand over as text* in the Fork dialog; to another
-engine the conversation is always handed over as text with your first message there. Agents can
+engine the conversation is always handed over as text with your first message there. A conversation still running
+can be forked too: the fork takes it up to the turn in progress, which carries on in the original. Agents can
 do the same with `gerdr session fork`.
 
 Conversations from the Claude Desktop App's Code tab can be carried on here: Settings → Import → *Import from Claude

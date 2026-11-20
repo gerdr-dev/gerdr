@@ -35,7 +35,8 @@ func (h *Hub) engine(agent string) string {
 // (continueFrom); evs are copies of src's log. errOtherEngine when it doesn't apply; any other error means the agent
 // couldn't copy it (nothing written yet, an engine without MethodFork, a variant with its own records folder), and
 // the caller hands the history over as text instead.
-func (h *Hub) forkSame(ctx context.Context, o CreateOptions, src Record, evs []*Event) (*Session, error) {
+// before: the running turn's first message, when src is mid-turn (acpx.ForkRequest.Before).
+func (h *Hub) forkSame(ctx context.Context, o CreateOptions, src Record, evs []*Event, before string) (*Session, error) {
 	if src.AgentSessionID == "" || h.engine(o.Agent) != h.engine(src.Agent) {
 		return nil, errOtherEngine
 	}
@@ -47,7 +48,7 @@ func (h *Hub) forkSame(ctx context.Context, o CreateOptions, src Record, evs []*
 	if err != nil {
 		return nil, err
 	}
-	res, err := agenthost.Call[acpx.ForkResponse](ctx, c, acpx.MethodFork, acpx.ForkRequest{SessionId: acp.SessionId(src.AgentSessionID), Cwd: src.Cwd})
+	res, err := agenthost.Call[acpx.ForkResponse](ctx, c, acpx.MethodFork, acpx.ForkRequest{SessionId: acp.SessionId(src.AgentSessionID), Cwd: src.Cwd, Before: before})
 	if err != nil {
 		return nil, err
 	}

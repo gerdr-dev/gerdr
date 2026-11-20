@@ -243,10 +243,20 @@ func userText(m llm.Message) string {
 // fork copies a session's record under a new id (acpx.MethodFork, a fork with the same engine): the same messages,
 // so the model sees the original's conversation word for word. The /rename title stays behind: it names the
 // original, and Gerdr names the fork. A session with nothing written yet is an error (the client copies the chat).
-func (st store) fork(src string) (string, error) {
+// before (acpx.ForkRequest.Before, a fork while a turn runs): the copy ends just before that user message; not
+// written yet, everything there is settled (a half-written last line doesn't parse and is skipped by load).
+func (st store) fork(src, before string) (string, error) {
 	es, err := st.load(src)
 	if err != nil {
 		return "", err
+	}
+	if before != "" {
+		for i, e := range es {
+			if e.T == "msg" && e.ID == before && e.Msg != nil && e.Msg.Role == "user" {
+				es = es[:i]
+				break
+			}
+		}
 	}
 	for i, e := range es {
 		if e.Meta != nil && e.Meta.Title != "" {
