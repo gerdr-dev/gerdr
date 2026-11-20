@@ -88,6 +88,30 @@ function RailProjects() {
   return <>{spaces.map(project)}</>;
 }
 
+/**
+ * The desktop App's rounded corner where the rail's right line meets the bottom line of the header beside it (asked
+ * for). Drawn over both from the layout (App.tsx): the rail clips what overflows it, and the header beside it changes
+ * (the list's, the tab bar, a panel's strip). Outside the arc it paints the headers' colour over the square corner,
+ * inside it is see-through, so it suits whatever is below. Every header there is bg-sidebar.
+ */
+export function RailCorner() {
+  if (!nativeTitleBar()) return null;
+  const r = 8;
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute z-20"
+      style={{
+        left: 47, // the rail's right line (w-12, its last pixel)
+        top: (nativeTitleBar()?.height ?? 40) - 1, // the headers' border-b, their last pixel
+        width: r,
+        height: r,
+        background: `radial-gradient(circle at 100% 100%, transparent ${r - 1.5}px, var(--border) ${r - 1}px, var(--border) ${r - 0.5}px, var(--sidebar) ${r}px)`,
+      }}
+    />
+  );
+}
+
 export function Rail() {
   const titleBar = nativeTitleBar();
   const mode = useStore((s) => s.mode);
@@ -144,7 +168,11 @@ export function Rail() {
       <div className="flex min-h-full flex-col items-center">
         {/* The desktop App's traffic lights start here (lib/native.ts nativeTitleBar): their row, which drags the window */}
         {titleBar && <div className="w-full shrink-0" style={{ height: titleBar.height, WebkitAppRegion: "drag" } as React.CSSProperties} />}
-        <div data-space-list="rail" className="relative flex w-full flex-col items-center gap-2 pt-2.5 pb-1 short:gap-1.5 short:pt-2">
+        {/* Under the App's title bar the first chip's top is level with the line beside it, the header's bottom border (asked for) */}
+        <div
+          data-space-list="rail"
+          className={cn("relative flex w-full flex-col items-center gap-2 pb-1 short:gap-1.5", titleBar ? "pt-0" : "pt-2.5 short:pt-2")}
+        >
           <RailProjects />
           <SpaceDropLine list="rail" axis="y" />
           {tip(

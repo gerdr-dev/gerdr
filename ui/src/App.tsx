@@ -12,7 +12,7 @@ import { TabActive, TabView as TabViewFn } from "./components/Panes";
 import { WorkView as WorkViewFn } from "./components/WorkView";
 import { OverviewView as OverviewViewFn } from "./components/Overview";
 import { UnifiedSidebar as UnifiedSidebarView } from "./components/UnifiedSidebar";
-import { Rail as RailView } from "./components/Rail";
+import { Rail as RailView, RailCorner } from "./components/Rail";
 import { tabName } from "./lib/actions";
 import { handleKeydown, handleKeyup, releaseHeld } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
@@ -313,6 +313,7 @@ export default function App() {
           {/* gerdr's strip on the left in every mode (projects, Code / Work, add-ons, inbox, settings); Code mode's list
               beside it. Work mode has no list: the rest is the Work site's, then its agent */}
           {!phone && <Rail />}
+          {!phone && <RailCorner />}
           {sidebar && !phone && mode !== "work" && <UnifiedSidebar />}
           {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
           {phone && drawer && (

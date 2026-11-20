@@ -106,8 +106,10 @@ function openWindow(url) {
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f0f" : "#ffffff",
     autoHideMenuBar: true,
     // Our own title bar (docs/dev/TITLEBAR.md): macOS draws only the traffic lights, at the window's top-left over the
-    // UI's rail, centred on its 40px headers; the UI makes room (window.gerdrNative.titleBar, ui/src/lib/native.ts)
-    ...(isMac ? { titleBarStyle: "hidden", trafficLightPosition: { x: 16, y: 14 } } : {}),
+    // UI's rail, centred on its 40px headers; the UI makes room (window.gerdrNative.titleBar, ui/src/lib/native.ts).
+    // The lights are 14pt; a header's last pixel is its border, so the space they centre in is 39pt: y 13 puts their
+    // centre at 20, the nearest whole point to 19.5 (y 14 measured 1.25pt low on a screenshot, which showed)
+    ...(isMac ? { titleBarStyle: "hidden", trafficLightPosition: { x: 16, y: 13 } } : {}),
     webPreferences: { preload: ctx.preload, contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
   });
   const id = winId(w);
