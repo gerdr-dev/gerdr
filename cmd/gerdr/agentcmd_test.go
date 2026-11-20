@@ -91,3 +91,28 @@ func TestConfigAdd(t *testing.T) {
 		t.Fatal("appending to a string setting accepted")
 	}
 }
+
+func TestConfigBuiltinAgentShowThinking(t *testing.T) {
+	agentEnv(t)
+	// Setting a field on a built-in agent before it has an override entry seeds the entry automatically.
+	if err := editConfig("agents.codex.showThinking", "latest", false, false); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := openConfig()
+	root := mustDecode(st.Get())
+	if v, ok := getPath(root, []string{"agents", "codex", "showThinking"}); !ok || v != "latest" {
+		t.Fatalf("got %v (%v), want latest", v, ok)
+	}
+	if v, ok := getPath(root, []string{"agents", "codex", "base"}); !ok || v != "codex" {
+		t.Fatalf("base = %v (%v), want codex", v, ok)
+	}
+	if err := editConfig("agents.codex.showThinking", "collapsed", false, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := editConfig("agents.codex.showThinking", "bogus", false, false); err == nil {
+		t.Fatal("invalid showThinking accepted")
+	}
+	if err := editConfig("agents.codex.showThinking", false, false, false); err == nil {
+		t.Fatal("bool showThinking accepted")
+	}
+}

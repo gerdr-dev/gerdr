@@ -78,13 +78,14 @@ func TestBuiltinOverride(t *testing.T) {
 	}
 }
 
-// A rename is display-only: it must not close the running host (that cuts off every turn on it).
+// A rename or UI display tweak is display-only: it must not close the running host (that cuts off every turn on it).
 func TestSameProcessIgnoresName(t *testing.T) {
 	a := AgentDef{ID: "r", Name: "Old", Base: "native", Prompt: "p"}
 	b := a
 	b.Name = "New"
+	b.ShowThinking = "latest"
 	if !sameProcess(a, b) {
-		t.Fatal("rename should keep the host")
+		t.Fatal("rename / showThinking change should keep the host")
 	}
 	b.Prompt = "q"
 	if sameProcess(a, b) {

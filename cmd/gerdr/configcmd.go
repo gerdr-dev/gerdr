@@ -40,7 +40,6 @@ var configKeys = map[string]configKey{
 	"keepTabs":        {kind: "number", desc: "how many tabs stay mounted after you switch away (keeps scroll and expanded state); 1 = none (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"gridTiles":       {kind: "number", desc: "how many agents the overview grid lays out at most, 4 to 8; the rest wait in its \"more\" row (a device that picked its own in Settings keeps that; this is the value for the others)"},
 	"expandEdits":     {kind: "bool", desc: "show file edits' diffs expanded by default"},
-	"showThinking":    {kind: "bool", desc: "show thinking on its own line, expanded (default on)"},
 	"confirmLinks":    {kind: "bool", desc: "ask before opening an external link from a chat (default on)"},
 	"skillUpdates":    {kind: "bool", desc: "when a session's skill files (a panel's, a project's) change, its next message starts with the files changed so the agent reads them again; a one-line notice in the chat (default on). One session: gerdr session set <session> --skill-updates on|off|default"},
 	"autoSendShell":   {kind: "bool", desc: "a `!` command run in a chat sends its output to the agent as soon as it finishes, starting a turn (default on); off = it goes with the next message"},
@@ -53,7 +52,7 @@ var configKeys = map[string]configKey{
 	"defaultModes":    {kind: "object", desc: `per agent id: the mode new sessions start in, e.g. {"claude": "acceptEdits"}`},
 	"defaultConfig":   {kind: "object", desc: `per agent id: option id → value for new sessions, e.g. {"claude": {"model": "opus", "effort": "high"}}`},
 	"pinnedCommands":  {kind: "array", desc: "slash commands (no /) pinned beside the input box"},
-	"agents":          {kind: "array", desc: "agents (roles) from Settings → Agent: {id, name, base: claude|codex|native, prompt, skills, mcp, providers, env…}; address one as agents.<id>; `gerdr config keys agents` for every field", more: agentsHelp},
+	"agents":          {kind: "array", desc: "agents (roles) from Settings → Agent: {id, name, base: claude|codex|native, prompt, skills, mcp, providers, showThinking, env…}; address one as agents.<id>; `gerdr config keys agents` for every field", more: agentsHelp},
 	"projects":        {kind: "object", desc: "per project id (default, or the id of a project you made): skills / MCP servers its sessions don't get, {\"default\": {\"disabledSkills\": [...], \"disabledMcp\": [...]}}; `gerdr config keys projects` for more", more: projectsHelp},
 	"agentBins":       {kind: "object", desc: "which claude / codex executable to run: {\"claude\": \"/path/to/claude\"}"},
 	"llm":             {kind: "object", desc: "Gerdr Agent's model providers: {providers: [{id, name, api (omit = OpenAI-compatible, \"anthropic\" = Anthropic Messages), baseUrl, apiKey, apiKeyEnv, models: [{id, window, compactAt, efforts, maxOutput, images, thinking}]}], defaultModel: \"provider/model\"}; a model needs only its id, the rest is guessed from it: window = context window in tokens, compactAt = token count at which the context is auto-compacted (default 90% of window); apiKey is stored in secrets.json and reads back as <hidden>"},
@@ -79,6 +78,8 @@ const agentsHelp = `Each element of agents is one agent (role) offered when star
   env        claude / codex / command: environment variables (e.g. {"CLAUDE_CONFIG_DIR": "~/.claude-work"} for a
              second account, {"OPENCODE_CONFIG": "~/oc-work.json"} for another opencode config)
   icon, color  the picture in the lists (Settings → Agent's picker draws the choices)
+  showThinking how thinking shows in chats for this agent: expanded (default, own rows, open) |
+               latest (own rows, last line only, click to open) | collapsed (folded with tool calls)
   hidden     built-in ones only: true = taken out of the agent lists (` + "`gerdr agent rm claude`" + ` /
              ` + "`gerdr agent restore claude`" + `); sessions on it and roles on its engine keep working
 
@@ -94,6 +95,7 @@ New sessions' defaults are stored per agent id, outside agents:
 
   gerdr config add agents '{"id":"reviewer","name":"Reviewer","base":"claude","prompt":"Review only, don't edit","skills":["code-review"],"mcp":[]}'
   gerdr config set agents.reviewer.mcp '["github"]'
+  gerdr config set agents.codex.showThinking latest
   gerdr config set defaultModes.reviewer plan
   gerdr config unset agents.reviewer`
 
@@ -251,6 +253,11 @@ func editConfig(path string, v any, del, force bool) error {
 	var root any
 	if err := json.Unmarshal(st.Get(), &root); err != nil {
 		return fmt.Errorf("config.json: %w", err)
+	}
+	// Setting a field on a built-in agent (claude / codex / native) before it has an override entry in config.agents:
+	// seed the entry so `gerdr config set agents.codex.showThinking latest` works in one command.
+	if !del && len(p) >= 3 && p[0] == "agents" && builtinID(p[1]) {
+		root = ensureBuiltinAgent(root, p[1])
 	}
 	root, err := setPath(root, p, v, del)
 	if err != nil {
@@ -458,7 +465,26 @@ func saveConfig(st *config.Store, sec *config.Secrets, root any, agents bool) er
 var agentFields = map[string]string{
 	"id": "string", "name": "string", "base": "string", "command": "array", "bin": "string", "args": "array",
 	"env": "object", "prompt": "string", "skills": "array", "mcp": "array", "providers": "array",
-	"icon": "string", "color": "string", "hidden": "bool",
+	"icon": "string", "color": "string", "showThinking": "string", "hidden": "bool",
+}
+
+func ensureBuiltinAgent(root any, id string) any {
+	m, ok := root.(map[string]any)
+	if !ok || m == nil {
+		m = map[string]any{}
+	}
+	var arr []any
+	if cur, ok := m["agents"]; ok && cur != nil {
+		if a, isArr := cur.([]any); isArr {
+			arr = a
+		} else {
+			return root
+		}
+	}
+	if index(arr, id) < 0 {
+		m["agents"] = append(arr, map[string]any{"id": id, "base": id})
+	}
+	return m
 }
 
 // checkAgents refuses an agents list the backend would quietly drop entries from (hub.ValidAgentDefs) or misread,
@@ -498,7 +524,12 @@ func checkAgents(root any) error {
 				continue
 			}
 			if kindOf(val) != want {
-				return fmt.Errorf("agents.%s.%s takes %s", id, k, map[string]string{"string": "a string", "array": "a list", "object": "an object"}[want])
+				return fmt.Errorf("agents.%s.%s takes %s", id, k, map[string]string{"string": "a string", "array": "a list", "object": "an object", "bool": "a boolean"}[want])
+			}
+			if k == "showThinking" {
+				if s := val.(string); s != "" && s != "expanded" && s != "latest" && s != "collapsed" {
+					return fmt.Errorf("agents.%s.showThinking is one of expanded, latest, collapsed", id)
+				}
 			}
 			if want == "array" {
 				for _, x := range val.([]any) {

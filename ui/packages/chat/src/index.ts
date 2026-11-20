@@ -7,11 +7,12 @@ export { Markdown } from "./components/Markdown";
 export { ChoiceCard, ChoiceKicker, ChoiceTitle, ChoiceList, ChoiceRow, ChoiceOther } from "./components/Choice";
 export { LightboxHost, openLightbox, lightboxOpen, type LightboxItem } from "./components/Lightbox";
 export { SessionContext, useSession } from "./components/sessionContext";
-export { ChatProvider, useChatHost, useChatSettings, chatHost, hostFor, SessionHost } from "./host";
+export { ChatProvider, useChatHost, useChatSettings, chatHost, hostFor, SessionHost, thinkingMode } from "./host";
 export type {
   ChatHost,
   ChatTranscript,
   ChatSettings,
+  ThinkingDisplay,
   ComposerHooks,
   ComposerContext,
   MessageInfo,

@@ -60,10 +60,10 @@ function textBlocks(parts: GPart[]): string[] {
   return out;
 }
 
-// 连续的工具调用 / 思考折成一组（照 Claude 桌面版）：一轮里常常是几十行 `cd … && grep …`，夹着几行「思考」，
-// 真正要读的那几段话被挤得找不到。改文件的不折（默认展开看 diff 是它的主要用途），带子 agent 的不折（有「查看对话」）。
-// 开着「显示思考」时思考不折：它要直接摊开给人看，收进组里就看不到了
-function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean, own?: (p: ToolPart) => boolean): boolean {
+// Consecutive tool calls / thinking fold into one group (like Claude Desktop): a turn often has dozens of commands
+// and reads hiding the actual reply. File edits stay out when expandEdits is on (so their diffs show expanded) and
+// fold in when expandEdits is off; subagents stay out (they carry "View conversation"); thinking stays out when shown.
+function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean, expandEdits: boolean, own?: (p: ToolPart) => boolean): boolean {
   if (p.type === "reasoning") return !showThinking;
   // 已经答完的审批（拒绝 / 作废；批准的根本不成行）也收进组里；还在等人点的不折，要让人看见
   if (p.type === "data-permission") return !!(p.data.answer || p.data.cancelled);
@@ -79,6 +79,7 @@ function foldable(p: GPart, kids: ToolPart[] | undefined, showThinking: boolean,
   // （「转到后台」只在正在跑时出现，那时它是组里最底下那一块，收着也露在外面）
   if (tp.state === "output-error" && tp.toolMetadata?.autoDenied?.length) return false;
   if (tp.toolMetadata?.kind === "think") return false;
+  if (!expandEdits) return true;
   const c = tp.toolMetadata?.content ?? [];
   return !c.some((x: any) => x.type === "diff" || x._meta?.gerdr?.unifiedDiff || x.content?._meta?.gerdr?.unifiedDiff);
 }
@@ -131,6 +132,7 @@ const WORKING_KEY = "working";
 const KIND_TEXT: Record<string, MessageKey> = {
   execute: "group.ran",
   read: "group.read",
+  edit: "group.edited",
   search: "group.searched",
   fetch: "group.fetched",
 };
@@ -187,6 +189,7 @@ export function buildRows(
   out: { wake?: number } = {},
   showThinking = true,
   ownTool?: (p: ToolPart) => boolean,
+  expandEdits = true,
 ): Row[] {
   const rows: Row[] = [];
   const young = youngTest(now, out);
@@ -264,7 +267,7 @@ export function buildRows(
     };
     for (let a = 0; a < parts.length;) {
       let b = a;
-      while (b < parts.length && foldable(parts[b].part, parts[b].kids, showThinking, ownTool)) b++;
+      while (b < parts.length && foldable(parts[b].part, parts[b].kids, showThinking, expandEdits, ownTool)) b++;
       if (b - a < 2) {
         push(parts[a]);
         a = Math.max(b, a + 1);

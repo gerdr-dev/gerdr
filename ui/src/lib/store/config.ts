@@ -1,6 +1,8 @@
+import { thinkingMode, type ThinkingDisplay } from "@gerdr/chat";
 import { DEFAULT_KEYS, IS_MAC, type KeyAction } from "../keys";
 import type { ActiveConf } from "../overviewState";
 
+export type { ThinkingDisplay };
 export type Theme = "system" | "light" | "dark";
 
 /**
@@ -37,10 +39,10 @@ export type Config = {
   /** The overview grid lays out at most this many tiles (4–8); the rest wait in its "more" row (lib/overview gridMax). */
   gridTiles?: number;
   keepTabs: number; // 切走之后还留在页面里的 tab 数（展开状态、滚动位置都保住）；1 = 不留
-  /** 改文件 / 新建文件的工具调用默认展开 diff。关掉后只剩一行（文件名、+/- 行数），点开再看。 */
+  /** Expand file-edit diffs by default; when off, edits fold into tool call groups like other tool calls. */
   expandEdits?: boolean;
-  /** 显示思考：思考过程不收进工具调用那一组，单独成行、默认展开着。关掉就和工具调用折在一起，一行「思考」点开再看。没写 = 开。 */
-  showThinking?: boolean;
+  /** Legacy global thinking display setting; now configured per agent (AgentDef.showThinking). Used as a fallback when an agent hasn't set its own. */
+  showThinking?: boolean | ThinkingDisplay;
   /** 点对话里的外部链接先弹确认框（streamdown 的 linkSafety，它默认开着）。关掉就直接打开。没写 = 开（老行为）。 */
   confirmLinks?: boolean;
   /** A `!` command run in the chat (typed, or a reply's Run button) hands its output to the agent as soon as it
@@ -118,9 +120,20 @@ export type AgentDef = {
   icon?: string;
   /** a PALETTE key for the icon (components/AgentGlyph.tsx); not set = its own colours */
   color?: string;
+  /** How thinking blocks show in chats for this agent: "expanded" (default), "latest" (last line only), or "collapsed". */
+  showThinking?: ThinkingDisplay | boolean;
   /** built-in ones only (id claude / codex / native): taken out of the agent lists; sessions on it carry on */
   hidden?: boolean;
 };
+
+/** How thinking blocks show for an agent: its own showThinking, else the legacy top-level showThinking, else "expanded". */
+export function showThinkingFor(c: Config, agent?: string): ThinkingDisplay {
+  if (agent) {
+    const def = c.agents?.find((d) => d.id === agent);
+    if (def?.showThinking !== undefined) return thinkingMode(def.showThinking);
+  }
+  return thinkingMode(c.showThinking);
+}
 
 export const DEFAULT_CONFIG: Config = {
   prefix: "ctrl+b",
@@ -134,7 +147,6 @@ export const DEFAULT_CONFIG: Config = {
   keepTabs: 6,
   gridTiles: 4,
   expandEdits: true,
-  showThinking: true,
   virtualList: false,
   readFromTop: false,
   keepAwakeRemote: false,

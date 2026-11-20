@@ -47,9 +47,7 @@ const settingsZh = {
   "settings.defaultAgent": "默认 Agent",
   "settings.defaultAgent.hint": "新会话先选中它",
   "settings.expandEdits": "改文件时展开 diff",
-  "settings.expandEdits.hint": "新建 / 编辑文件的那一行默认展开改动；关掉只留一行（文件名和 +/- 行数），点开再看",
-  "settings.showThinking": "显示思考",
-  "settings.showThinking.hint": "Agent 的思考过程单独成行、直接展开。Claude 模型建议打开。",
+  "settings.expandEdits.hint": "新建 / 编辑文件的那一行默认展开改动；关掉后和工具调用折在一起，点开再看",
   "settings.autoSendShell": "命令跑完自动发给 Agent",
   "settings.skillUpdates": "Skill 改了，提醒 Agent 重读",
   "settings.skillUpdates.hint":
@@ -160,9 +158,7 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.defaultAgent": "Default agent",
   "settings.defaultAgent.hint": "Selected first for a new session",
   "settings.expandEdits": "Expand diffs of edits",
-  "settings.expandEdits.hint": "Creating or editing a file shows its changes; when off it's one line (file name and +/- counts), click to open",
-  "settings.showThinking": "Show thinking",
-  "settings.showThinking.hint": "The agent's thinking gets rows of its own, expanded. Recommended for Claude models.",
+  "settings.expandEdits.hint": "Creating or editing a file shows its changes; when off it folds into tool call groups, click to open",
   "settings.autoSendShell": "Send command output to the agent",
   "settings.skillUpdates": "Tell agents when their skills change",
   "settings.skillUpdates.hint":

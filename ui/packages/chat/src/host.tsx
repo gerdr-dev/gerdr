@@ -195,10 +195,21 @@ export type ChatTranscript = {
   loadOlder?(): void;
 };
 
+/** How reasoning blocks are displayed: full expanded rows, single-line latest preview, or folded with tool calls. */
+export type ThinkingDisplay = "expanded" | "latest" | "collapsed";
+
+/** Normalize ChatSettings.showThinking (boolean or ThinkingDisplay; missing = expanded). */
+export function thinkingMode(v?: boolean | ThinkingDisplay): ThinkingDisplay {
+  if (v === false || v === "collapsed") return "collapsed";
+  if (v === "latest") return "latest";
+  return "expanded";
+}
+
 export type ChatSettings = {
   /** enter = Enter sends (Shift+Enter breaks a line); mod+enter = ⌘/Ctrl+Enter sends. */
   sendKey?: "enter" | "mod+enter";
-  showThinking?: boolean;
+  /** How reasoning blocks show: "expanded" (or true, default) = own rows, open; "latest" = own rows, last line only; "collapsed" (or false) = folded with tool calls. */
+  showThinking?: boolean | ThinkingDisplay;
   /** Virtualize the message list (only render rows near the viewport). */
   virtualList?: boolean;
   /** While following the bottom, stop at the start of a reply text that grows taller than the screen (read it from its start). */

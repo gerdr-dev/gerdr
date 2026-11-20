@@ -57,6 +57,9 @@ type AgentDef struct {
 	// Icon: a built-in glyph picked in Settings → Agent (ui/src/components/AgentGlyph.tsx); only the UI reads it.
 	Icon  string `json:"icon,omitempty"`
 	Color string `json:"color,omitempty"` // a palette key recolouring the icon; same file
+	// ShowThinking: how the UI shows reasoning blocks for this agent ("expanded" | "latest" | "collapsed"; empty = expanded,
+	// or the legacy top-level showThinking). UI-only; changing it must not restart the agent process.
+	ShowThinking string `json:"showThinking,omitempty"`
 	// Hidden: built-in ones only (claude / codex / native). Taken out of the agent lists (Settings → Agent, the
 	// new-session picker, `gerdr session agents`) — "deleted" for the person. The engine itself stays: sessions
 	// already on it carry on, roles built on it keep working, and it comes back when this is cleared.
@@ -263,6 +266,7 @@ func (h *Hub) SetAgents(defs []AgentDef) {
 func sameProcess(a, b AgentDef) bool {
 	a.Name, b.Name = "", ""
 	a.Icon, b.Icon, a.Color, b.Color = "", "", "", "" // looks only: changing it mustn't cut off running turns
+	a.ShowThinking, b.ShowThinking = "", ""           // UI display only: must not restart the host
 	return reflect.DeepEqual(a, b)
 }
 

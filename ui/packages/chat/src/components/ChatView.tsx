@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { cn } from "../utils";
 import { buildRows, type Row, type RowEnv } from "./Rows";
 import { toast } from "sonner";
-import { hostFor, SessionHost, useChatHost, useChatSettings } from "../host";
+import { hostFor, SessionHost, thinkingMode, useChatHost } from "../host";
 import { t as tr } from "../i18n";
 import { useKept } from "../kept";
 import { Loader2 } from "lucide-react";
@@ -76,7 +76,8 @@ export function ChatView({
   focus?: { match: (part: GPart) => boolean; seq: number };
 }) {
   const host = hostFor(session.id, useChatHost());
-  const settings = useChatSettings();
+  // Read settings from the per-session host (forSession may override them per session / agent)
+  const settings = host.settings ?? {};
   const t = host.useTranscript(session.id, sub);
   const subTask = sub ? session.tasks?.find((x) => x.toolCallId === sub) : undefined;
   const running = sub ? subTask?.status === "running" : t.running;
@@ -193,7 +194,8 @@ export function ChatView({
     return p?.type === "data-shell" && !(p as any).data.running && !(p as any).data.replayed;
   }, [msgs]);
   const virtualList = !!settings.virtualList;
-  const showThinking = settings.showThinking !== false;
+  const showThinking = thinkingMode(settings.showThinking) !== "collapsed";
+  const expandEdits = settings.expandEdits !== false;
   const [openGroups, setOpenGroups] = useKept<Record<string, boolean>>(`groups:${session.id}:${sub ?? ""}`, {});
   // 还在跑的后台任务：拼成串当依赖，任务进度一直在推，不能每推一次就重排整份对话
   const liveTaskIds = (session.tasks ?? [])
@@ -206,8 +208,11 @@ export function ChatView({
     const out: { wake?: number } = {};
     // Tools the host renders its own way don't fold into "ran N commands" groups (they're cards meant to be seen)
     const own = host.renderTool ? (p: ToolPart) => host.renderTool!(p, { sessionId: session.id, running: false }) !== undefined : undefined;
-    return [buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking, own), out.wake] as const;
-  }, [msgs, running, openGroups, liveTaskIds, tick, showThinking, host]);
+    return [
+      buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking, own, expandEdits),
+      out.wake,
+    ] as const;
+  }, [msgs, running, openGroups, liveTaskIds, tick, showThinking, expandEdits, host]);
   // The host's focus: scroll there once the rows have it, then flash the row (data-chat-key) for a moment.
   // A long chat opens with only its latest part loaded (older parts come in on scrolling up), so the card asked for may
   // not be in the rows yet: a panel's "waiting to send" line pointing at a reply card from an hour ago did nothing until

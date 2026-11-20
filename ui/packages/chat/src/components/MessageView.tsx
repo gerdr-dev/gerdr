@@ -8,7 +8,7 @@ import { Shimmer } from "../ai/shimmer";
 import { LOCAL_FILE, type GMessage, type GPart, type ToolPart } from "../transcript";
 import { cn } from "../utils";
 import { useKept } from "../kept";
-import { useChatHost, useChatSettings } from "../host";
+import { thinkingMode, useChatHost, useChatSettings } from "../host";
 import { t, type MessageKey } from "../i18n";
 import { AskCard, PermissionCard, PlanCard, QuickReplies } from "./Cards";
 import { ToolCall } from "./ToolCall";
@@ -17,7 +17,7 @@ import { imageSize, rememberImageSize } from "./imageSize";
 import { openLightbox } from "./Lightbox";
 import { PlayBadge } from "./PlayBadge";
 import { VideoThumb } from "./VideoThumb";
-import { TaskDoneCard, WakeRow } from "./TasksBar";
+import { elapsed, TaskDoneCard, useTick, WakeRow } from "./TasksBar";
 import { ShellCard } from "./ShellCard";
 import { fmtElapsed, fmtTokens } from "./StatusLine";
 
@@ -350,23 +350,82 @@ export type PartCtx = {
   turnId?: string;
 };
 
+/** Extract the last non-empty line of a reasoning block, stripped of basic Markdown markers for one-line preview. */
+function latestThinkingLine(text: string): string {
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const raw = lines[i].trim();
+    if (!raw || /^(?:[-*_]{3,}|`{3,}\w*|~{3,}\w*)$/.test(raw)) continue;
+    const clean = raw
+      .replace(/^(?:>+\s*|#{1,6}\s+|(?:[-*+]|\d+\.)\s+)/, "")
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/__(.+?)__/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      // During streaming an opening bold/italic marker may not have its closing pair yet
+      .replace(/^\*{1,2}/, "")
+      .replace(/(^|\s)\*{1,2}$/, "$1")
+      .trim();
+    return clean || raw;
+  }
+  return "";
+}
+
 /** 思考过程：展开没展开记在组件外面（虚拟列表滚出去会卸载）。 */
-function KeptReasoning({ keep, streaming, text }: { keep: string; streaming: boolean; text: string }) {
+function KeptReasoning({
+  keep,
+  streaming,
+  text,
+  startedAt,
+  endedAt,
+}: {
+  keep: string;
+  streaming: boolean;
+  text: string;
+  startedAt?: number;
+  endedAt?: number;
+}) {
   const [kept, setOpen] = useKept<boolean | undefined>(keep, undefined);
-  // 开着「显示思考」默认展开。不用 Reasoning 的 defaultOpen：它为 true 时流完 1 秒会自己收起来
-  const show = useChatSettings().showThinking !== false;
-  const open = kept ?? show;
+  // Expanded mode starts open (not Reasoning's defaultOpen, which auto-closes 1s after streaming ends).
+  // Latest mode stays closed by default and shows the newest non-empty line in the trigger; clicking opens all.
+  const mode = thinkingMode(useChatSettings().showThinking);
+  const open = kept ?? mode === "expanded";
+  const latest = mode === "latest" && !open ? latestThinkingLine(text) : "";
+  // Count up live while streaming; show total once finished (only >= 1s, matching ToolCall).
+  useTick(streaming && !!startedAt);
+  const time = streaming
+    ? startedAt && Date.now() - startedAt >= 1000
+      ? elapsed(startedAt)
+      : ""
+    : startedAt && endedAt && endedAt - startedAt >= 1000
+      ? elapsed(startedAt, endedAt)
+      : "";
   // 和工具调用那一行一个样子（ToolCall）：一行小灰字，不抢正文的眼
   return (
-    <Reasoning isStreaming={streaming} defaultOpen={false} open={open} onOpenChange={setOpen} className="mb-0">
-      <ReasoningTrigger className="-ml-1.5 w-auto gap-2 rounded-md px-1.5 py-[3px] text-[13px] hover:bg-muted/60">
+    <Reasoning isStreaming={streaming} defaultOpen={false} open={open} onOpenChange={setOpen} className="mb-0 min-w-0">
+      <ReasoningTrigger className="-ml-1.5 w-auto max-w-[calc(100%+0.375rem)] min-w-0 gap-2 rounded-md px-1.5 py-[3px] text-left text-[13px] hover:bg-muted/60">
         <Brain className="size-3.5 shrink-0" />
-        {streaming ? <Shimmer duration={1}>{t("msg.thinking")}</Shimmer> : <span>{t("msg.thought")}</span>}
+        {latest ? (
+          streaming ? (
+            <Shimmer as="span" duration={1} className="block min-w-0 truncate">
+              {latest}
+            </Shimmer>
+          ) : (
+            <span className="min-w-0 truncate">{latest}</span>
+          )
+        ) : streaming ? (
+          <Shimmer duration={1}>{t("msg.thinking")}</Shimmer>
+        ) : (
+          <span>{t("msg.thought")}</span>
+        )}
+        {time && <span className="shrink-0 text-[11px] tabular-nums opacity-70">{time}</span>}
         <ChevronDown className={cn("size-3.5 shrink-0 opacity-60 transition-transform", open && "rotate-180")} />
       </ReasoningTrigger>
-      {/* 开着「显示思考」时字色和正文一样（用户要的）：思考默认摊开给人读，灰字读着费劲，和正文靠左边那条竖线、小一号的字分开。
-          关着时照旧是灰字 */}
-      <ReasoningContent className={cn("gerdr-md mt-1 mb-1 ml-[7px] border-l pl-4 text-[0.92em]", show && "text-foreground")}>{text}</ReasoningContent>
+      {/* Expanded / latest modes use foreground text when opened: muted text is hard to read over long thinking,
+          and the left rule + smaller size separate it from the reply. Collapsed keeps muted text. */}
+      <ReasoningContent className={cn("gerdr-md mt-1 mb-1 ml-[7px] border-l pl-4 text-[0.92em]", mode !== "collapsed" && "text-foreground")}>
+        {text}
+      </ReasoningContent>
     </Reasoning>
   );
 }
@@ -523,9 +582,20 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
           <Markdown>{p.text}</Markdown>
         </div>
       );
-    case "reasoning":
+    case "reasoning": {
       if (!p.text.trim()) return null;
-      return <KeptReasoning key={i} keep={ctx.keep || `${ctx.sessionId}:r:${ctx.msgId}:${i}`} streaming={ctx.streaming} text={p.text} />;
+      const rt = p.providerMetadata?.gerdr as { startedAt?: number; endedAt?: number } | undefined;
+      return (
+        <KeptReasoning
+          key={i}
+          keep={ctx.keep || `${ctx.sessionId}:r:${ctx.msgId}:${i}`}
+          streaming={ctx.streaming}
+          text={p.text}
+          startedAt={rt?.startedAt}
+          endedAt={rt?.endedAt}
+        />
+      );
+    }
     case "dynamic-tool": {
       const tp = p as ToolPart;
       if (tp.toolMetadata?.parent && ctx.children.size && [...ctx.children.values()].some((arr) => arr.includes(tp))) return null;

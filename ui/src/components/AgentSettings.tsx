@@ -14,7 +14,7 @@ import { LLMSettings } from "@/components/LLMSettings";
 import { api } from "@/lib/api";
 import { MODE, defaultsOf, flatOptions, setDefaults, withoutDefaults } from "@/lib/defaults";
 import { t } from "@/lib/i18n";
-import { get, setConfig, useStore, type AgentDef, type LLMProvider } from "@/lib/store";
+import { get, setConfig, showThinkingFor, useStore, type AgentDef, type LLMProvider, type ThinkingDisplay } from "@/lib/store";
 import type { AgentInfo, ExtView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useCopied } from "@/lib/useCopied";
@@ -51,6 +51,7 @@ type Draft = {
   providers: string[]; // 引擎是 native 时只用这几家服务商；空 = 全部
   icon: string; // a GLYPHS / LINES key, or "sprite:<key>" (an add-on's sprite); "" = default (vendor logo / automatic)
   color: string; // a PALETTE key; "" = the icon's own colours
+  showThinking: ThinkingDisplay;
 };
 
 const kindName = (k: Kind) => (k === "command" ? t("agentSettings.kind.command") : { claude: "Claude Code", codex: "Codex", native: "Native" }[k]);
@@ -78,6 +79,7 @@ const toDraft = (d: AgentDef): Draft => ({
   providers: d.providers?.length ? d.providers : d.base === "native" ? allProviders() : [],
   icon: d.icon ?? "",
   color: d.color ?? "",
+  showThinking: showThinkingFor(get().config, d.id),
 });
 
 function fromDraft(d: Draft): AgentDef {
@@ -91,9 +93,11 @@ function fromDraft(d: Draft): AgentDef {
   }
   const words = (s: string) => s.split(/\s+/).filter(Boolean);
   if (!d.name.trim()) throw new Error(t("agentSettings.err.nameRequired"));
+  const fallbackShow = showThinkingFor(get().config);
+  const showThinking = d.showThinking === fallbackShow ? undefined : d.showThinking;
   if (d.kind === "command") {
     if (!d.command.trim()) throw new Error(t("agentSettings.err.commandRequired"));
-    return { id: d.id, name: d.name.trim(), command: words(d.command), env: Object.keys(env).length ? env : undefined, ...looks(d) };
+    return { id: d.id, name: d.name.trim(), command: words(d.command), env: Object.keys(env).length ? env : undefined, showThinking, ...looks(d) };
   }
   const native = d.kind === "native"; // Native 引擎没有可执行文件，启动参数 / 环境变量用不上
   if (native && !d.providers.length) throw new Error(t("agentSettings.err.providerRequired"));
@@ -110,6 +114,7 @@ function fromDraft(d: Draft): AgentDef {
     skills: d.skills ?? undefined,
     mcp: d.mcp ?? undefined,
     providers: native && !all ? d.providers : undefined,
+    showThinking,
     ...looks(d),
   };
 }
@@ -123,9 +128,9 @@ const hasGlyph = (d: Draft) => (d.icon ? !d.icon.startsWith(SPRITE) : d.kind !==
 
 /**
  * The part of a draft the backend bakes into the agent's process (hub.sameProcess): changing it makes the backend
- * close that process on save, which cuts off every turn running on it. The name and the new-session defaults don't.
+ * close that process on save, which cuts off every turn running on it. The name, display options and the new-session defaults don't.
  */
-const processKey = ({ name: _n, defaults: _d, icon: _i, color: _c, ...rest }: Draft) => JSON.stringify(rest);
+const processKey = ({ name: _n, defaults: _d, icon: _i, color: _c, showThinking: _s, ...rest }: Draft) => JSON.stringify(rest);
 
 const allProviders = () => (get().config.llm?.providers ?? []).map((p) => p.id);
 
@@ -157,12 +162,9 @@ function defaultsSummary(agents: AgentInfo[], id: string, base: string, d: Recor
 
 export function AgentSettings() {
   const agents = useStore((s) => s.agents);
-  const defs = useStore((s) => s.config.agents ?? NONE);
-  const providers = useStore((s) => s.config.llm?.providers) ?? NO_PROVIDERS;
-  // 订阅默认值：在输入框下拉里「设为新会话的默认」之后，这一页的摘要跟着变
-  useStore((s) => s.config.defaultModes);
-  useStore((s) => s.config.defaultConfig);
-  useStore((s) => s.config.llm);
+  const cfg = useStore((s) => s.config);
+  const defs = cfg.agents ?? NONE;
+  const providers = cfg.llm?.providers ?? NO_PROVIDERS;
   const [edit, setEdit] = useState<Draft | null>(null);
   const [isNew, setIsNew] = useState(false);
 
@@ -182,6 +184,7 @@ export function AgentSettings() {
     providers: [],
     icon: "",
     color: "",
+    showThinking: showThinkingFor(get().config),
   });
   // 打开时的样子：改过了（和它不一样）就不许点弹窗外面关掉，免得误点把填了半天的丢了（用户要的）；关闭按钮、取消、Esc 照常
   const [orig, setOrig] = useState("");
@@ -230,7 +233,11 @@ export function AgentSettings() {
           const def = defs.find((d) => d.id === a.id);
           const base = def?.base ?? a.id;
           const summary = defaultsSummary(agents, a.id, base, defaultsOf(a.id));
-          const chips = def && def.base ? roleChips(def, providers) : [];
+          const thinking = showThinkingFor(cfg, a.id);
+          const chips = [
+            ...(def && def.base ? roleChips(def, providers) : []),
+            ...(thinking === "latest" ? [t("agentSettings.chip.thinkingLatest")] : thinking === "collapsed" ? [t("agentSettings.chip.thinkingCollapsed")] : []),
+          ];
           return (
             <div key={a.id} className="rounded-md border px-3 py-2">
               {/* 第一行只放短的（名字、引擎、可用没有），都不换行；不可用的原因放到下面一行 —— 原来原因塞在这一行里，
@@ -517,6 +524,23 @@ function Editor({
           value={d.defaults}
           onChange={(v) => set({ defaults: v })}
         />
+
+        <div className="space-y-1.5 rounded-md border bg-card p-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-medium">{t("agentSettings.showThinking")}</span>
+            <Select value={d.showThinking} onValueChange={(v) => set({ showThinking: v as ThinkingDisplay })}>
+              <SelectTrigger size="sm" className="w-56 max-w-full max-md:w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="expanded">{t("agentSettings.thinking.expanded")}</SelectItem>
+                <SelectItem value="latest">{t("agentSettings.thinking.latest")}</SelectItem>
+                <SelectItem value="collapsed">{t("agentSettings.thinking.collapsed")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-[11px] text-muted-foreground">{t("agentSettings.showThinkingHint")}</div>
+        </div>
 
         {d.kind !== "native" && (
           <div className="space-y-2.5">

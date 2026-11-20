@@ -317,6 +317,7 @@ export class Transcript {
   private subTools = new Set<string>(); // subagents' own tool calls, kept out of the main conversation
   private chunks = new Map<string, Loc>(); // "text:<msgId>" / "reasoning:<msgId>" → part
   private lastChunkKey = "";
+  private activeReasoning: Loc | null = null;
   private requests = new Map<string, Loc>();
   private lateAsks = new Set<string>(); // reqIds of data-ask parts with late set
   private shells = new Map<string, Loc>(); // `!命令` 的 id → 卡片
@@ -339,6 +340,7 @@ export class Transcript {
     this.planLoc = null;
     this.retryLoc = null;
     this.lastChunkKey = "";
+    this.activeReasoning = null;
     this.lastSeq = 0;
     // 同一份日志重放出来的消息 id 一样（见 uid），React 才不会把组件全部重建（展开状态、滚动位置都在组件里）。
     this.idBase = "";
@@ -607,6 +609,7 @@ export class Transcript {
       }
       case "turn_end": {
         this.messages = [...this.messages];
+        this.finishReasoning(e.ts);
         this.clearRetry();
         this.running = false;
         if (e.error || (e.stopReason && e.stopReason !== "end_turn")) {
@@ -787,12 +790,30 @@ export class Transcript {
         let loc = this.chunks.get(key);
         // 没有 messageId 的片段：只和紧挨着的上一段同类片段拼（中间夹了工具调用就另起一段）。
         if (!u.messageId && this.lastChunkKey !== key) loc = undefined;
+        if (!reasoning) this.finishReasoning(ts);
         if (loc && loc.msg === i) {
           const p = this.messages[i].parts[loc.part] as any;
-          this.setPart(loc, { ...p, text: p.text + text });
+          if (reasoning && ts) {
+            const prev = (p.providerMetadata?.gerdr as { startedAt?: number; endedAt?: number } | undefined) ?? {};
+            this.setPart(loc, {
+              ...p,
+              text: p.text + text,
+              providerMetadata: { ...p.providerMetadata, gerdr: { startedAt: prev.startedAt ?? ts, endedAt: ts } },
+            });
+            this.activeReasoning = loc;
+          } else {
+            this.setPart(loc, { ...p, text: p.text + text });
+          }
         } else if (text) {
-          loc = this.pushPart(i, reasoning ? { type: "reasoning", text, state: "streaming" } : { type: "text", text, state: "streaming" });
+          if (reasoning) this.finishReasoning(ts);
+          loc = this.pushPart(
+            i,
+            reasoning
+              ? { type: "reasoning", text, state: "streaming", ...(ts ? { providerMetadata: { gerdr: { startedAt: ts, endedAt: ts } } } : {}) }
+              : { type: "text", text, state: "streaming" },
+          );
           this.chunks.set(key, loc);
+          if (reasoning) this.activeReasoning = loc;
         }
         this.lastChunkKey = key;
         if (qr && qr.length) this.pushPart(i, { type: "data-quickReplies", data: { questions: qr } });
@@ -834,9 +855,11 @@ export class Transcript {
         }
         this.chunks.clear();
         this.lastChunkKey = "";
+        this.activeReasoning = null;
         break;
       }
       case "tool_call":
+        this.finishReasoning(ts);
         this.toolStart(u, ts);
         this.lastChunkKey = "";
         break;
@@ -852,6 +875,22 @@ export class Transcript {
         break;
       }
     }
+  }
+
+  /** Seal the currently streaming reasoning part's endedAt when the next non-reasoning event arrives. */
+  private finishReasoning(ts?: number) {
+    const loc = this.activeReasoning;
+    this.activeReasoning = null;
+    if (!loc) return;
+    const p = this.messages[loc.msg]?.parts[loc.part] as any;
+    if (!p || p.type !== "reasoning") return;
+    const prev = (p.providerMetadata?.gerdr as { startedAt?: number; endedAt?: number } | undefined) ?? {};
+    const endedAt = ts && (!prev.startedAt || ts >= prev.startedAt) ? ts : prev.endedAt;
+    this.setPart(loc, {
+      ...p,
+      state: "done",
+      ...(prev.startedAt || endedAt ? { providerMetadata: { ...p.providerMetadata, gerdr: { startedAt: prev.startedAt, endedAt } } } : {}),
+    });
   }
 
   private toolStart(u: any, ts: number): void {

@@ -2,7 +2,7 @@ import { useWaitGroups } from "./waits";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { feedOf, isFeed, subscribeFeed, type FeedFile } from "./feedChat";
 import { ToolCard, cardOf } from "@/components/chat/ToolCard";
-import { ChatProvider, type ChatHost, type ChatSession, type ComposerContext, type DraftImage, type DraftStore } from "@gerdr/chat";
+import { ChatProvider, type ChatHost, type ChatSession, type ChatSettings, type ComposerContext, type DraftImage, type DraftStore } from "@gerdr/chat";
 import { toast } from "sonner";
 import { api } from "./api";
 import { closeAgentInPane, focusSession, openPath, openSubagent, refocusAfterDialog, withdrawSteer } from "./actions";
@@ -16,6 +16,7 @@ import {
   sendShown,
   set,
   setConfig,
+  showThinkingFor,
   subTranscript,
   transcript,
   useStore,
@@ -202,8 +203,7 @@ const fileURL = (path: string, cwd?: string, host?: string) =>
  * chat's file functions go there (server/hosts.go proxies ?host= and /h/<host>/). A file picked here has no path there,
  * so attachments are uploaded to it instead (no localPath), and there is no "open with the system app" for it.
  */
-function hostSession(sessionId: string): Partial<ChatHost> | undefined {
-  if (isFeed(sessionId)) return feedHost;
+function remoteSession(sessionId: string): Partial<ChatHost> | undefined {
   const i = sessionId.indexOf(":");
   if (i <= 0) return undefined;
   const host = sessionId.slice(0, i);
@@ -322,88 +322,103 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
   const agents = useStore((s) => s.agents);
   const codeBlockVersion = useCodeBlockVersion();
   const host = useMemo<ChatHost>(
-    () => ({
-      useTranscript,
-      agentName: (id) => agents.find((a) => a.id === id)?.name ?? id,
-      useSessionTitle: (id) =>
-        useStore((st) => {
-          const s = st.sessions[id];
-          return s ? s.title || s.cwd.split("/").pop() || s.agent : undefined;
-        }),
-      // A tool result carrying a card (Work tools: a step put on the user's board) is drawn as that card
-      renderTool: (part, ctx) => {
-        const card = cardOf(part);
-        return card ? <ToolCard card={card} session={ctx.sessionId} /> : undefined;
-      },
-      send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now || sendsNow(id)).then(() => {}),
-      stop: (id) => timedEscape(id),
-      withdrawLast: (id) => api.withdrawLast(id),
-      withdraw: (id, msg, now) => withdrawSteer(id, msg, !!now),
-      rewind: (id, msg) => api.rewind(id, msg),
-      answer: (id, req, resp) => api.answer(id, req, resp).then(() => {}),
-      stopTask: (id, task) => api.stopTask(id, task).then(() => {}),
-      // What the session waits for (gerdr wait), with its background tasks (lib/waits.ts)
-      useTaskGroups: useWaitGroups,
-      backgroundTool: (id, tc) => api.backgroundTool(id, tc).then((r: any) => !!r?.backgrounded),
-      allowRules: (id, rules) => api.allowRules(id, rules).then(() => {}),
-      setMode: (id, mode) => api.setMode(id, mode).then(() => {}),
-      setConfig: (id, cid, v) => api.setConfig(id, cid, v).then(() => {}),
-      warm: (id) => api.warm(id).then(() => {}),
-      shell: { run: (id, cmd) => api.shell(id, cmd, get().config.autoSendShell !== false), stop: (id, run) => api.stopShell(id, run) },
-      fileURL,
-      upload: (f, onProgress) => api.upload(f, undefined, onProgress),
-      // Desktop App: attach files and folders by their path on this machine (the backend runs here too)
-      localPath: hasNativeFilePath() ? nativeFilePath : undefined,
-      fileStat: (p, cwd) => api.fileStat(p, cwd),
-      fileExists: (names, cwd) => api.fileExists(names, cwd),
-      searchFiles: (id, q) => api.searchFiles(id, q).then((r) => r.files),
-      openPath: (p, cwd, opts) => void openPath(p, cwd, opts),
-      forSession: hostSession,
-      openNative: isNative() ? (p, cwd, reveal) => nativeOpenPath(p, cwd, reveal) : undefined,
-      openSubagent,
-      focusSession,
-      refocus: refocusAfterDialog,
-      codeActions: (code, lang, session) => (lang === "bang" ? <RunButton cmd={code} session={session} /> : null),
-      // Diagrams and formulas in replies, each loaded the first time a reply has one (lib/mermaid.ts, lib/markdownPlugins.ts),
-      // and the languages add-ons draw
-      codeBlocks: codeBlocks(),
-      useMarkdownPlugins,
-      composerOverlay: (session) => <Overlay session={session} />,
-      composerTop: (session) => <LoginChip sessionId={session.id} />,
-      useTurnStat: useAddonTurnStat,
-      composerBar: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} />,
-      composerStart: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} start />,
-      composerInputOverlay: (session, { paneId, focus }) => <AddonComposerOverlay sessionId={session.id} paneId={paneId} focus={focus} />,
-      renderLoader: (p) => <AddonLoader {...p} />,
-      // Add-ons' buttons on a message (g.messageAction, lib/messageActions.ts)
-      messageActions: (m) => <MessageActions info={m} />,
-      composer: {
-        drafts,
-        useExtras: (ctx) => {
-          useComposerBox(ctx.paneId, ctx.textarea, ctx.send); // add-ons' words go in at its caret, and send it (lib/composerText)
-          return useSharedDraft(ctx);
-        },
-        localCommands,
-        onExit: closeAgentInPane,
-        useDefaults: (agent) => {
-          // subscribe to what defaultsOf reads, so "already the default" shows right after setting it
-          useStore((s) => s.config.defaultModes);
-          useStore((s) => s.config.defaultConfig);
-          useStore((s) => s.config.llm);
-          return { values: defaultsOf(agent), set: (id, v) => setDefault(agent, id, v), setAll: (vs) => setDefaults(agent, vs) };
-        },
-      },
-      settings: {
+    () => {
+      const baseSettings: ChatSettings = {
         sendKey: prefOf({ config, device }, "sendKey"),
-        showThinking: config.showThinking,
+        showThinking: showThinkingFor(config),
         virtualList: prefOf({ config, device }, "virtualList"),
         readFromTop: prefOf({ config, device }, "readFromTop"),
         expandEdits: config.expandEdits,
         confirmLinks: config.confirmLinks,
         pinnedCommands: config.pinnedCommands,
-      },
-      setPinnedCommands: (names) => setConfig({ pinnedCommands: names }),
-    }),
+      };
+      return {
+        useTranscript,
+        agentName: (id) => agents.find((a) => a.id === id)?.name ?? id,
+        useSessionTitle: (id) =>
+          useStore((st) => {
+            const s = st.sessions[id];
+            return s ? s.title || s.cwd.split("/").pop() || s.agent : undefined;
+          }),
+        // A tool result carrying a card (Work tools: a step put on the user's board) is drawn as that card
+        renderTool: (part, ctx) => {
+          const card = cardOf(part);
+          return card ? <ToolCard card={card} session={ctx.sessionId} /> : undefined;
+        },
+        send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now || sendsNow(id)).then(() => {}),
+        stop: (id) => timedEscape(id),
+        withdrawLast: (id) => api.withdrawLast(id),
+        withdraw: (id, msg, now) => withdrawSteer(id, msg, !!now),
+        rewind: (id, msg) => api.rewind(id, msg),
+        answer: (id, req, resp) => api.answer(id, req, resp).then(() => {}),
+        stopTask: (id, task) => api.stopTask(id, task).then(() => {}),
+        // What the session waits for (gerdr wait), with its background tasks (lib/waits.ts)
+        useTaskGroups: useWaitGroups,
+        backgroundTool: (id, tc) => api.backgroundTool(id, tc).then((r: any) => !!r?.backgrounded),
+        allowRules: (id, rules) => api.allowRules(id, rules).then(() => {}),
+        setMode: (id, mode) => api.setMode(id, mode).then(() => {}),
+        setConfig: (id, cid, v) => api.setConfig(id, cid, v).then(() => {}),
+        warm: (id) => api.warm(id).then(() => {}),
+        shell: { run: (id, cmd) => api.shell(id, cmd, get().config.autoSendShell !== false), stop: (id, run) => api.stopShell(id, run) },
+        fileURL,
+        upload: (f, onProgress) => api.upload(f, undefined, onProgress),
+        // Desktop App: attach files and folders by their path on this machine (the backend runs here too)
+        localPath: hasNativeFilePath() ? nativeFilePath : undefined,
+        fileStat: (p, cwd) => api.fileStat(p, cwd),
+        fileExists: (names, cwd) => api.fileExists(names, cwd),
+        searchFiles: (id, q) => api.searchFiles(id, q).then((r) => r.files),
+        openPath: (p, cwd, opts) => void openPath(p, cwd, opts),
+        forSession: (sessionId) => {
+          if (isFeed(sessionId)) return feedHost;
+          return {
+            ...remoteSession(sessionId),
+            settings: {
+              ...baseSettings,
+              // Read the session's agent at access time so a hostFor() call before sessions[id] lands still picks it up
+              get showThinking() {
+                return showThinkingFor(config, get().sessions[sessionId]?.agent);
+              },
+            },
+          };
+        },
+        openNative: isNative() ? (p, cwd, reveal) => nativeOpenPath(p, cwd, reveal) : undefined,
+        openSubagent,
+        focusSession,
+        refocus: refocusAfterDialog,
+        codeActions: (code, lang, session) => (lang === "bang" ? <RunButton cmd={code} session={session} /> : null),
+        // Diagrams and formulas in replies, each loaded the first time a reply has one (lib/mermaid.ts, lib/markdownPlugins.ts),
+        // and the languages add-ons draw
+        codeBlocks: codeBlocks(),
+        useMarkdownPlugins,
+        composerOverlay: (session) => <Overlay session={session} />,
+        composerTop: (session) => <LoginChip sessionId={session.id} />,
+        useTurnStat: useAddonTurnStat,
+        composerBar: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} />,
+        composerStart: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} start />,
+        composerInputOverlay: (session, { paneId, focus }) => <AddonComposerOverlay sessionId={session.id} paneId={paneId} focus={focus} />,
+        renderLoader: (p) => <AddonLoader {...p} />,
+        // Add-ons' buttons on a message (g.messageAction, lib/messageActions.ts)
+        messageActions: (m) => <MessageActions info={m} />,
+        composer: {
+          drafts,
+          useExtras: (ctx) => {
+            useComposerBox(ctx.paneId, ctx.textarea, ctx.send); // add-ons' words go in at its caret, and send it (lib/composerText)
+            return useSharedDraft(ctx);
+          },
+          localCommands,
+          onExit: closeAgentInPane,
+          useDefaults: (agent) => {
+            // subscribe to what defaultsOf reads, so "already the default" shows right after setting it
+            useStore((s) => s.config.defaultModes);
+            useStore((s) => s.config.defaultConfig);
+            useStore((s) => s.config.llm);
+            return { values: defaultsOf(agent), set: (id, v) => setDefault(agent, id, v), setAll: (vs) => setDefaults(agent, vs) };
+          },
+        },
+        settings: baseSettings,
+        setPinnedCommands: (names) => setConfig({ pinnedCommands: names }),
+      };
+    },
     // codeBlockVersion: an add-on's g.codeBlock coming or going. A new host redraws the code blocks already on screen
     // (they read it from context), which the memoized Markdown around them wouldn't
     [config, device, agents, codeBlockVersion],
