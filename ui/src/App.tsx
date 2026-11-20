@@ -14,7 +14,7 @@ import { OverviewView as OverviewViewFn } from "./components/Overview";
 import { UnifiedSidebar as UnifiedSidebarView } from "./components/UnifiedSidebar";
 import { Rail as RailView } from "./components/Rail";
 import { tabName } from "./lib/actions";
-import { handleKeydown } from "./lib/commands";
+import { handleKeydown, handleKeyup, releaseHeld } from "./lib/commands";
 import { ACTION_TITLES, setPrefixLabel, toAccelerator, type KeyAction } from "./lib/keys";
 import { activeTab, currentSpace, leaves, mutedSession, spaceList, type Tab } from "./lib/layout";
 import { HOLD_MS, useCaughtUp } from "./lib/catchup";
@@ -151,6 +151,9 @@ export default function App() {
     // would close / split / switch panes the person can't see: none, only its own ⌘W (BrowserWindow)
     const onKey = (e: KeyboardEvent) => !browserOnly && handleKeydown(e);
     window.addEventListener("keydown", onKey, true);
+    // Held add-on commands end on their key's keyup; switching away (⌘Tab) eats that keyup, so blur ends them too
+    window.addEventListener("keyup", handleKeyup, true);
+    window.addEventListener("blur", releaseHeld);
     const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
     const unwatchInbox = watchInbox(); // errors, questions / approvals, low battery → the inbox
     const unwatchBadges = watchBadges(); // panels' dots / numbers on their rail buttons
@@ -167,6 +170,8 @@ export default function App() {
     nativeAskUpdate();
     return () => {
       window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keyup", handleKeyup, true);
+      window.removeEventListener("blur", releaseHeld);
       unwatchCopy();
       unwatchInbox();
       unwatchBadges();

@@ -1,9 +1,9 @@
 // Commands in the palette = built-in actions (the shortcut table) + those add-ons register.
 // Key dispatch lives here too: the prefix state machine, add-on commands' keys, direct combos.
 import { runAction } from "./actions";
-import { ACTION_TITLES, DEFAULT_KEYS, isModifierOnly, matches, parseCombo, type KeyAction } from "./keys";
-import { addonCommands, runCommand } from "./addons";
-import { get, keyFor, set } from "./store";
+import { ACTION_TITLES, DEFAULT_KEYS, isLone, isModifierOnly, matches, parseCombo, type KeyAction } from "./keys";
+import { addonCommands, releaseCommand, runCommand, type AddonCommand } from "./addons";
+import { addonKeyFor, get, keyFor, set } from "./store";
 import { t } from "./i18n";
 
 export type CommandItem = { id: string; title: string; keys: string[]; source: "builtin" | string };
@@ -13,7 +13,8 @@ export function allCommands(): CommandItem[] {
   const out: CommandItem[] = (Object.keys(ACTION_TITLES) as KeyAction[])
     .filter((a) => !/^tab\d$/.test(a))
     .map((a) => ({ id: a, title: ACTION_TITLES[a], keys: keyFor(cfg, a), source: "builtin" }));
-  for (const c of addonCommands) out.push({ id: c.id, title: c.title, keys: c.key ? [c.key] : [], source: c.addon });
+  // Not the held ones: run from the palette, nothing would ever release them
+  for (const c of addonCommands) if (!c.release) out.push({ id: c.id, title: c.title, keys: addonKeyFor(cfg, c.addon, c.id, c.key), source: c.addon });
   // Labs → remote screen: only listed once switched on (no default key, it is a rare thing to open)
   if (cfg.remoteScreen) out.push({ id: "remoteScreen", title: t("remoteScreen.command"), keys: [], source: "builtin" });
   return out;
@@ -35,7 +36,8 @@ export { runCommand };
 
 // ---- 按键分发 ----
 
-type Binding = { combo: ReturnType<typeof parseCombo>; run: () => void };
+// hold: an add-on command with release — run on the press, released when the key comes up
+type Binding = { combo: ReturnType<typeof parseCombo>; run: () => void; hold?: AddonCommand };
 
 function bindings(): Binding[] {
   const cfg = get().config;
@@ -48,11 +50,87 @@ function bindings(): Binding[] {
   }
   // Add-on keys come after: on a clash the built-in wins (to take it over, change the built-in one in Settings).
   for (const c of addonCommands) {
-    if (!c.key) continue;
-    const combo = parseCombo(c.key);
-    if (combo) out.push({ combo, run: () => void runCommand(c.id) });
+    for (const k of addonKeyFor(cfg, c.addon, c.id, c.key)) {
+      const combo = parseCombo(k);
+      // A modifier alone only means something held (keys.ts LONE_KEYS)
+      if (combo && (!isLone(combo) || c.release)) out.push({ combo, run: () => void runCommand(c.id), hold: c.release ? c : undefined });
+    }
   }
   return out;
+}
+
+// ---- held keys (add-on commands with release) ----
+
+/**
+ * A modifier alone starts its command only once held by itself this long: it is also half of every combination
+ * (⌥← moves a word), and another key pressed before then means it was one of those.
+ */
+export const LONE_HOLD_MS = 200;
+/** The command being held, and the key (event code) whose keyup releases it. */
+let held: { code: string; cmd: AddonCommand } | null = null;
+/** A lone modifier pressed, waiting LONE_HOLD_MS to see whether it stays alone. */
+let pending: { code: string; cmd: AddonCommand; timer: ReturnType<typeof setTimeout> } | null = null;
+
+function startHold(code: string, cmd: AddonCommand) {
+  held = { code, cmd };
+  void runCommand(cmd.id);
+}
+
+/** Let go of what is held (its keyup, or the window losing focus: a keyup then never reaches the page). */
+export function releaseHeld() {
+  if (pending) clearTimeout(pending.timer);
+  pending = null;
+  const h = held;
+  held = null;
+  if (h) releaseCommand(h.cmd);
+}
+
+export function handleKeyup(e: KeyboardEvent) {
+  if (pending && e.code === pending.code) {
+    clearTimeout(pending.timer); // let go before it counted as held: a tap, nothing
+    pending = null;
+  }
+  if (held && e.code === held.code) {
+    e.preventDefault(); // Alt let go alone: no browser menu
+    releaseHeld();
+  }
+}
+
+/** Modifiers down besides the lone one's own side: a combination. AltGr (right Alt off the mac) comes with Ctrl. */
+function aloneMods(e: KeyboardEvent) {
+  const own = e.code.toLowerCase().replace(/(left|right)$/, "");
+  const altGr = own === "alt" && e.code === "AltRight" && !/Mac/.test(navigator.platform);
+  return (own === "control" || altGr || !e.ctrlKey) && (own === "alt" || !e.altKey) && (own === "shift" || !e.shiftKey) && (own === "meta" || !e.metaKey);
+}
+
+/** What a keydown means for held keys; true = it was theirs, stop here. */
+function holdKeydown(e: KeyboardEvent): boolean {
+  if (held) {
+    if (e.code === held.code) {
+      e.preventDefault(); // its auto-repeat
+      return true;
+    }
+    return false; // other keys while holding work as usual (the holder may listen for Esc itself)
+  }
+  if (pending && e.code !== pending.code && !(e.code === "ControlLeft" && pending.code === "AltRight")) {
+    clearTimeout(pending.timer); // another key: a combination, not a hold
+    pending = null;
+  }
+  if (!isModifierOnly(e) || e.repeat || pending || capture || e.isComposing) return false;
+  if (!aloneMods(e)) return false;
+  const b = bindings().find((x) => x.hold && isLone(x.combo) && matches(x.combo!, e));
+  if (!b) return false;
+  const cmd = b.hold!;
+  const code = e.code;
+  pending = {
+    code,
+    cmd,
+    timer: setTimeout(() => {
+      pending = null;
+      startHold(code, cmd);
+    }, LONE_HOLD_MS),
+  };
+  return false; // the modifier still goes on to whatever it modifies
 }
 
 let prefixTimer: ReturnType<typeof setTimeout> | undefined;
@@ -84,6 +162,7 @@ export function captureKeys(f: (e: KeyboardEvent) => void) {
 export function handleKeydown(e: KeyboardEvent): boolean {
   // A synthetic keydown (autofill, a native picker) carries no key: nothing to match, and capture() can't record it.
   if (typeof e.key !== "string" || !e.key) return false;
+  if (holdKeydown(e)) return true;
   if (isModifierOnly(e)) return false;
   if (capture && !e.isComposing) {
     e.preventDefault();
@@ -107,7 +186,8 @@ export function handleKeydown(e: KeyboardEvent): boolean {
     }
     for (const b of bindings()) {
       if (b.combo?.prefix && matches(b.combo, e)) {
-        b.run();
+        if (b.hold) startHold(e.code, b.hold);
+        else b.run();
         return true;
       }
     }
@@ -135,10 +215,12 @@ export function handleKeydown(e: KeyboardEvent): boolean {
   )
     return false;
   for (const b of bindings()) {
-    if (b.combo && !b.combo.prefix && matches(b.combo, e)) {
+    if (b.combo && !b.combo.prefix && !isLone(b.combo) && matches(b.combo, e)) {
       e.preventDefault();
       e.stopPropagation();
-      b.run();
+      // Held: released by the keyup of this key (not of its modifiers)
+      if (b.hold) startHold(e.code, b.hold);
+      else b.run();
       return true;
     }
   }

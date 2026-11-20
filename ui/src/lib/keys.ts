@@ -350,8 +350,18 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
   [t("keys.group.other"), ["palette", "overview", "toggleSidebar", "settings", "help", "importHerdr"]],
 ];
 
-/** 按键事件 → 设置里存的写法（"meta+shift+d"）。前缀另算，这里不管。 */
+/**
+ * A modifier on its own, one side of the keyboard ("altright" = right Option / right Alt): the event's code,
+ * lowercased. Only commands that are held (an add-on's g.command with release) take one: pressing it alone is
+ * otherwise nothing, and as half of every combination it would fire all the time. lib/commands.ts starts such a
+ * command once the key has been held alone for a moment (LONE_HOLD_MS), so ⌥← and the rest still work.
+ */
+export const LONE_KEYS = ["altright", "altleft", "controlright", "controlleft", "shiftright", "shiftleft", "metaright", "metaleft"];
+export const isLone = (c: Combo | null) => !!c && !c.prefix && LONE_KEYS.includes(c.key);
+
+/** 按键事件 → 设置里存的写法（"meta+shift+d"）。前缀另算，这里不管。A modifier alone: its side ("altright"). */
 export function comboOf(e: KeyboardEvent): string {
+  if (isModifierOnly(e) && LONE_KEYS.includes(e.code?.toLowerCase())) return e.code.toLowerCase();
   const parts: string[] = [];
   if (e.ctrlKey) parts.push("ctrl");
   if (e.altKey) parts.push("alt");
@@ -479,6 +489,7 @@ export function eventKey(e: KeyboardEvent): { key: string; sym: string } {
 
 /** combo 匹配不匹配这个事件（不看 prefix 那一位）。符号键两种写法都认："prefix+?" 和 "prefix+shift+/"。 */
 export function matches(c: Combo, e: KeyboardEvent): boolean {
+  if (LONE_KEYS.includes(c.key)) return typeof e.code === "string" && e.code.toLowerCase() === c.key;
   const { key, sym } = eventKey(e);
   if (c.ctrl !== e.ctrlKey || c.alt !== e.altKey || c.meta !== e.metaKey) return false;
   if (c.key === key && c.shift === e.shiftKey) return true;
@@ -506,6 +517,7 @@ export function comboCaps(s: string, prefix: string): string[][] {
   if (!c) return [[s]];
   const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   const names: Record<string, string> = { left: "←", right: "→", up: "↑", down: "↓", tab: "Tab", enter: "↵", escape: "Esc", " ": "Space", backspace: "⌫" };
+  if (isLone(c)) return [[loneName(c.key, mac)]];
   const caps: string[] = [];
   if (c.ctrl) caps.push(mac ? "⌃" : "Ctrl");
   if (c.alt) caps.push(mac ? "⌥" : "Alt");
@@ -515,10 +527,19 @@ export function comboCaps(s: string, prefix: string): string[][] {
   return c.prefix ? [...comboCaps(prefix, prefix), caps] : [caps];
 }
 
+/** "altright" → "右 ⌥" on a mac, "Right Alt" elsewhere. */
+function loneName(key: string, mac: boolean): string {
+  const side = key.endsWith("right") ? "right" : "left";
+  const mod = key.slice(0, -side.length);
+  const names: Record<string, [string, string]> = { alt: ["⌥", "Alt"], control: ["⌃", "Ctrl"], shift: ["⇧", "Shift"], meta: ["⌘", "Win"] };
+  return t(side === "right" ? "keys.loneRight" : "keys.loneLeft", { key: (names[mod] ?? [mod, mod])[mac ? 0 : 1] });
+}
+
 export function formatCombo(s: string): string {
   const c = parseCombo(s);
   if (!c) return s;
   const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+  if (isLone(c)) return loneName(c.key, mac);
   const parts: string[] = [];
   if (c.prefix) parts.push(prefixLabel);
   const mods: string[] = [];

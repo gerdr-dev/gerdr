@@ -107,7 +107,17 @@ previous one gave).
 ### Commands and keys
 
 `g.command({ id, title, key?, run })` adds a command to the palette (prefix+:) and, with `key`, a shortcut
-(`"prefix+a"`, `"ctrl+alt+p"`). A built-in key wins over an add-on's on a clash.
+(`"prefix+a"`, `"ctrl+alt+p"`). A built-in key wins over an add-on's on a clash. `key` is only the default: every
+command is also a row of Settings → Shortcuts (group "Add-ons"), where the person rebinds it. To offer that in your own
+settings too, draw `<g.ui.Shortcut command="my.id" />` in the settings slot: the same row, the same stored keys.
+
+A command with `release` is held (push to talk): `run` when its key goes down, `release` when it comes up or the
+window loses focus. Its key may be one modifier alone, by side (`"altright"` = right Option / right Alt, `"controlright"`,
+`"shiftleft"`…): it starts after the key is held by itself for 200ms, so combinations with it still work.
+
+```ts
+g.command({ id: "voice.talk", title: "Hold to talk", key: "altright", run: start, release: stop });
+```
 
 ### Events and actions
 

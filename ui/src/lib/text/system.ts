@@ -145,6 +145,10 @@ export const zh = {
   "keySettings.noMatch": "没有匹配的快捷键",
   "keySettings.removeKey": "删掉这个键",
   "keySettings.escCancel": "Esc 取消",
+  "keySettings.recHold": "按下组合键，或单独按一下修饰键（如右 ⌥）…",
+  "keySettings.groupAddons": "扩展",
+  "keySettings.holdNote": "按住",
+  "keySettings.holdHint": "按住时生效，松开结束；单个修饰键要单独按住一小会儿才开始，跟别的键一起按不算",
 
   "resourceStats.total": "合计",
   "resourceStats.refreshNote": "（每 2 秒刷新）",
@@ -438,6 +442,10 @@ export const en: Record<keyof typeof zh, string> = {
   "keySettings.noMatch": "No matching shortcuts",
   "keySettings.removeKey": "Remove this key",
   "keySettings.escCancel": "Esc to cancel",
+  "keySettings.recHold": "Press a key combination, or tap a modifier alone (e.g. right ⌥)…",
+  "keySettings.groupAddons": "Add-ons",
+  "keySettings.holdNote": "hold",
+  "keySettings.holdHint": "Works while held, ends when let go; a modifier alone starts once held by itself for a moment, not as part of a combination",
 
   "resourceStats.total": "Total",
   "resourceStats.refreshNote": "(refreshes every 2 s)",

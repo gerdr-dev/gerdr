@@ -27,7 +27,15 @@ type TabLabelFn = (tab: any, ctx: any) => string | void;
 type PaneTitleFn = (pane: any, ctx: any) => string | void;
 type WsLabelFn = (ws: any, ctx: any) => string | void;
 type SessionTitleFn = (session: any, ctx: any) => string | void | Promise<string | void>;
-export type AddonCommand = { id: string; title: string; key?: string; run: (ctx: any) => void | Promise<void>; addon: string };
+// release: a held command (lib/commands.ts): run on the key's press, release on its keyup
+export type AddonCommand = {
+  id: string;
+  title: string;
+  key?: string;
+  run: (ctx: any) => void | Promise<void>;
+  release?: (ctx: any) => void | Promise<void>;
+  addon: string;
+};
 
 type Reg<T> = { addon: string; fn: T };
 
@@ -208,6 +216,15 @@ const paneTitles: Reg<PaneTitleFn>[] = [];
 const wsLabels: Reg<WsLabelFn>[] = [];
 const sessionTitles: Reg<SessionTitleFn>[] = [];
 export const addonCommands: AddonCommand[] = [];
+
+/** g.ui.Shortcut: the Settings → Shortcuts row of one of the add-on's commands (components/KeySettings.tsx). */
+function LazyShortcut(p: { addon: string; command: string; title?: string; description?: string }) {
+  const [C, setC] = React.useState<React.ComponentType<any> | null>(null);
+  React.useEffect(() => {
+    import("@/components/KeySettings").then((m) => setC(() => m.AddonShortcut));
+  }, []);
+  return C ? React.createElement(C, p) : null;
+}
 const listeners: { addon: string; event: string; fn: (e: any) => void }[] = [];
 // g.service.on: messages / status changes from an add-on's own backend process
 const serviceListeners: { addon: string; event: "message" | "status"; fn: (e: any) => void }[] = [];
@@ -477,6 +494,8 @@ function makeApi(id: string, hash: string) {
     // React and gerdr's own building blocks, so an add-on's UI looks like the rest without bundling its own copy
     React,
     ui: {
+      // Loaded on first draw: KeySettings imports lib/commands, which imports this file
+      Shortcut: (p: { command: string; title?: string; description?: string }) => React.createElement(LazyShortcut, { ...p, addon: id }),
       Button,
       Popover,
       PopoverTrigger,
@@ -686,6 +705,15 @@ function makeApi(id: string, hash: string) {
       },
     },
   };
+}
+
+/** A held command's key came up (or the window lost focus while it was down). */
+export async function releaseCommand(c: AddonCommand) {
+  try {
+    await c.release?.({ state: stateSnapshot() });
+  } catch (e) {
+    fail(c.addon, e);
+  }
 }
 
 export async function runCommand(id: string) {

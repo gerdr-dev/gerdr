@@ -14,7 +14,8 @@ export type SharedDraft = { text: string; sel?: [number, number]; imgs: DraftImg
 
 export type Config = {
   prefix: string;
-  keys: Partial<Record<KeyAction, string[]>>;
+  /** Changed keys, by built-in action, or by add-on command as addonKeyId() spells it; [] = deliberately unbound. */
+  keys: Partial<Record<string, string[]>>;
   theme: Theme;
   /** 旧版存这儿、所有设备共用；现在字号存各设备本机（State.localFont），这个只当没设过时的初值 */
   fontSize: number;
@@ -155,4 +156,22 @@ export function keyFor(c: Config, a: KeyAction): string[] {
   // the page (see PC_EXTRA in keys.ts), so skip them there, and fall back to this platform's defaults if nothing is left
   const usable = custom.filter((k) => !/(^|\+)meta\+/.test(k));
   return usable.length ? usable : DEFAULT_KEYS[a];
+}
+
+/**
+ * Where an add-on command's keys are kept in config.keys, beside the built-in actions': Settings → Shortcuts changes
+ * them like any other, and so does the add-on's own settings (g.ui.Shortcut), both writing this one entry. By the
+ * add-on's id as well as the command's, since two add-ons may use one command id.
+ */
+export const addonKeyId = (addon: string, id: string) => `addon:${addon}/${id}`;
+
+/** An add-on command's keys: changed in config.keys, else the key it registered with. */
+export function addonKeyFor(c: Config, addon: string, id: string, def?: string): string[] {
+  const defaults = def ? [def] : [];
+  const custom = c.keys[addonKeyId(addon, id)];
+  if (!custom) return defaults;
+  if (IS_MAC || !custom.length) return custom;
+  // As keyFor: a mac's ⌘ keys never reach the page elsewhere
+  const usable = custom.filter((k) => !/(^|\+)meta\+/.test(k));
+  return usable.length ? usable : defaults;
 }
