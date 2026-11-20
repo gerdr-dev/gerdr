@@ -229,7 +229,7 @@ jump up while the keyboard was still sliding in; native apps move along with it,
 (`ui/src/lib/imeLift.ts`) split it:
 
 - **The WebView resizes once per slide**: at the end when the keyboard comes up, at the start when it goes down (the
-  room under it is covered by the keyboard either way). In between the page lifts the focused chat (or terminal) by
+  room under it is covered by the keyboard either way). In between the page lifts the focused chat by
   a transform, `h - pad`. Resizing the WebView on every frame was tried first and dropped frames: each one relays the
   whole page out.
 - **The switch must land in one frame.** The page takes a new `pad` in the visual viewport's resize event, the same
@@ -241,6 +241,13 @@ jump up while the keyboard was still sliding in; native apps move along with it,
   composer without its box and buttons for one frame. Same cause as TAILWIND.md "one bad frame when an animation ends".
 - **A chat scrolled up lifts only its composer** (with the page's colour behind and below it, or the list shows
   through): a resize keeps such a list's top in place, so a list lifted with it fell back. A chat at its end goes up whole.
+- **A short chat goes up only past its empty space**: the list moves by `max(0, lift - slack)`, slack being the room
+  under its rows (measured from the rows' box `[data-chat-list]`: `scrollHeight` is never under `clientHeight`, so
+  measuring with it read every short chat as full), and the composer goes the rest. Lifted whole, a short chat's
+  messages went up under the bar and dropped back when the resize landed, on every keyboard move.
+- **Only the chat follows the keyboard.** The terminal did too, and flashed the same way when short; where xterm puts
+  its lines after the resize depends on the cursor row and whole cells, so it was taken out (one-step change, like a
+  dialog's input) instead of modelled.
 - **The resize frame has to be cheap**, or the composer stalls under the keyboard going down (that resize is at the
   start, while everything moves). In a long chat it was 140–220ms; two things restyled every element: the `short`
   variant's `max-height` media query flipping as the keyboard crossed 560px (now landscape only), and the page's height
