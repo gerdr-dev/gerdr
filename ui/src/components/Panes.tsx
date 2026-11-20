@@ -147,7 +147,9 @@ export function TabView({ tab }: { tab: Tab }) {
   // 分屏时和 herdr 一样：每个 pane 一圈边框、中间留缝，焦点那个边框高亮。只有一个 pane（或放大着）时不画框（省地方）。
   const anim = useZoomAnim(zoom, phone);
   // Frames stay on while a zoom animates (the growing pane looks like a window sliding over its neighbours) and drop at the end.
-  const framed = panes.length + floats.length > 1 && (!zoom || !!anim || floats.length > 0);
+  // Only the docked panes count: one docked pane under floating ones is drawn as a tab's only pane (asked for: framed,
+  // it looked split while nothing was beside it). A floating box draws its own frame (FloatPane).
+  const framed = panes.length > 1 && (!zoom || !!anim);
   // The animating pane's body (chat / terminal) is pinned to the full tab size (the size at the zoomed end) for the whole
   // transition, so only its clipping box moves: the chat list / xterm see one resize at the zoomed end instead of one per
   // frame (re-measuring every row or refitting the terminal each frame is what made a naive width/height transition stutter).
@@ -807,7 +809,7 @@ function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab;
       )}
       <FloatItem pane={pane} tab={tab} count={count} />
       <FitItems pane={pane} tab={tab} />
-      {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
+      {!zoomed && !count && !tab.float?.[pane.id] && leaves(dockedRoot(tab) ?? tab.root).length > 1 && (
         <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
           <Maximize2 /> {t("panes.zoom")}
           <ActionKeys action="zoom" />
@@ -945,7 +947,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
               <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
-            {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
+            {!zoomed && !count && !tab.float?.[pane.id] && leaves(dockedRoot(tab) ?? tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> {t("panes.zoom")}
                 <ActionKeys action="zoom" />
@@ -1126,7 +1128,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               <Plus /> {t("panes.newTab")}
               <ActionKeys action="newTab" />
             </DropdownMenuItem>
-            {!zoomed && !count && !tab.float?.[pane.id] && leaves(tab.root).length > 1 && (
+            {!zoomed && !count && !tab.float?.[pane.id] && leaves(dockedRoot(tab) ?? tab.root).length > 1 && (
               <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
                 <Maximize2 /> {t("panes.zoom")}
                 <ActionKeys action="zoom" />
