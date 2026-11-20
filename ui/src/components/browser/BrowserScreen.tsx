@@ -217,9 +217,23 @@ export function BrowserScreen({
       void queueFit(fitOn.current, null).then(() => sendWS({ t: "cfg", ...want() }));
       fitOn.current = null;
     }
-  }, [fit, size, tab, live, nativeView]);
+    // On the size it lays the page out at (fixed), not on fit and size apart: a floating pane's size is its box's, and
+    // the pane's own size changing under it (picked on the phone, which draws the same pane docked) made the desktop
+    // send its box's size again, over the one just picked there (user report)
+  }, [fixed, !!fit, tab, live, nativeView]);
   // a size picked or dropped: the real page placed again (narrower, centred)
   useEffect(() => placeNow.current?.(), [size]);
+  const fixedOnce = useRef(fixed);
+  useEffect(() => {
+    if (fixedOnce.current === fixed) return;
+    fixedOnce.current = fixed;
+    const cv = canvasRef.current;
+    if (nativeView || !cv || !hasPic) return;
+    resizeFrom.current = `${cv.width}x${cv.height}`;
+    setResizing(true);
+    const id = setTimeout(() => ((resizeFrom.current = null), setResizing(false)), 6000);
+    return () => clearTimeout(id);
+  }, [fixed]);
   // The page failed to load (the stream says so): Chrome's error page is blank here, so the pane draws its own with a
   // retry. The App's real page would cover it, so it's kept out of sight meanwhile (read by the placing below)
   const failedRef = useRef(false);
@@ -256,6 +270,12 @@ export function BrowserScreen({
   const [opening, setOpening] = useState(false);
   const [hasPic, setHasPic] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Another size picked, shown as pictures: the old picture stays until one at the new size is drawn, a second or two
+  // over the relay, and looked like the pick did nothing (user report). Meanwhile it is dimmed under a spinner.
+  // resizeFrom: the picture's size when the size was picked; a picture of another size ends it (or the timeout: a
+  // size that lays the page out the same never sends one)
+  const [resizing, setResizing] = useState(false);
+  const resizeFrom = useRef<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const keysRef = useRef<HTMLTextAreaElement>(null);
   const addrRef = useRef<HTMLInputElement>(null);
@@ -332,6 +352,10 @@ export function BrowserScreen({
     const cv = canvasRef.current;
     if (!cv) return;
     await paintFrame(cv, buf, h, body);
+    if (resizeFrom.current && resizeFrom.current !== `${h.w}x${h.h}`) {
+      resizeFrom.current = null;
+      setResizing(false);
+    }
     // A picture at the floating box's new shape: the box takes that shape now, in this same frame (flushSync), so the
     // new picture never shows in the old box nor the old one in the new box (a flash at each switch, user report)
     const f = fitRef.current;
@@ -925,7 +949,7 @@ export function BrowserScreen({
   const typed = pending && page?.url === pending.from ? pending.url : undefined;
   const shown = editing ? addr : (typed ?? page?.url ?? cur?.url ?? (gone ? (lastURL ?? "") : ""));
   const title = page?.title || (cur ? hostOf(cur.url) : "");
-  const busy = opening || (live && (navigating || !!page?.loading));
+  const busy = opening || (live && (navigating || !!page?.loading || resizing));
   // A picked size (docked): the picture no wider than the page (a phone's page on a desktop pane stays its size, not
   // blown up), centred; on a desktop also no taller than the box, so the whole page shows. A phone keeps width-fit
   // (the keyboard shortens the box, see the canvas) and pinch-zooms
@@ -1090,7 +1114,12 @@ export function BrowserScreen({
               ref={canvasRef}
               // Width-fit and top-aligned, not "contain": a phone's keyboard makes the pane shorter, and fitting the
               // whole picture into that shrank it (and the page under the finger) mid-tap
-              className={cn("absolute top-0 left-0 h-auto w-full touch-none", !hasPic && "invisible", viewOnly && "pointer-events-none")}
+              className={cn(
+                "absolute top-0 left-0 h-auto w-full touch-none transition-opacity",
+                !hasPic && "invisible",
+                resizing && "opacity-40",
+                viewOnly && "pointer-events-none",
+              )}
               style={{ ...picStyle, ...(zoom.s !== 1 ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.s})`, transformOrigin: "0 0" } : {}) }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
@@ -1136,6 +1165,13 @@ export function BrowserScreen({
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => nav(page.url ? { kind: "go", text: page.url } : { kind: "reload" })}>
                   <RotateCw className={cn(busy && "animate-spin")} /> {t(busy ? "browser.retrying" : "browser.retry")}
                 </Button>
+              </div>
+            </div>
+          )}
+          {live && !nativeView && hasPic && resizing && (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center">
+              <div className="flex items-center gap-2 rounded-md bg-popover/90 px-3 py-2 text-[13px] text-popover-foreground shadow-sm ring-1 ring-border">
+                <RotateCw className="size-3.5 animate-spin" /> {t("browser.resizing")}
               </div>
             </div>
           )}

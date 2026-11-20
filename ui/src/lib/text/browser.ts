@@ -18,6 +18,7 @@ export const zh = {
   "browser.fitAuto": "自动尺寸",
   "browser.closePage": "关掉这个页面",
   "browser.loading": "正在打开…",
+  "browser.resizing": "正在加载…",
   "browser.viewOnly": "放大后可操作",
   "browser.empty": "项目浏览器",
   "browser.emptyHint":
@@ -75,6 +76,7 @@ export const en: Record<keyof typeof zh, string> = {
   "browser.fitAuto": "Auto size",
   "browser.closePage": "Close this page",
   "browser.loading": "Opening…",
+  "browser.resizing": "Loading…",
   "browser.viewOnly": "Enlarge to use",
   "browser.empty": "Project browser",
   "browser.emptyHint":

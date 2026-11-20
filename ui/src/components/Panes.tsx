@@ -440,10 +440,20 @@ function floatGeom(x: number, y: number, w: number, ratio: number, room: { w: nu
 
 const FIT_ICONS: Record<FloatFit, typeof Monitor> = { pc: Monitor, pad: Tablet, mobile: Smartphone };
 
+/**
+ * The pane floats as it is drawn here. The layout's float entry is the desktop's: a phone shows one pane at a time and
+ * draws a floating one like any other (TabView), so there it gets a docked pane's menu and page size. Read from the
+ * layout alone, a floated Browser pane on the phone offered only the floating sizes, which a phone's own layout wins
+ * over (chromeext phone.go): picking one never showed, the page stayed at the phone's size (user report).
+ */
+function useFloats(tab: Tab, paneId: string) {
+  return !usePhone() && !!tab.float?.[paneId];
+}
+
 /** A floating Browser pane's page size: a desktop, a tablet or a phone (layout.FLOAT_FITS). */
 function FitItems({ pane, tab }: { pane: PaneLeaf; tab: Tab }) {
   const b = tab.float?.[pane.id];
-  if (!b || !pane.browser) return null;
+  if (!useFloats(tab, pane.id) || !b || !pane.browser) return null;
   const cur = fitOf(b);
   return (
     <>
@@ -690,6 +700,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const out = useBrowserWindows((w) => !!b.tab && w.tabs.includes(b.tab));
   const canPopOut = useBrowserWindows((w) => w.known);
   const url = useBrowserTabs((s) => s.tabs.find((x) => x.tab === b.tab)?.url) ?? b.url;
+  const floats = useFloats(tab, pane.id);
   const zoomBtn = zoomed && (
     <Button
       variant="ghost"
@@ -746,7 +757,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           lastURL={b.url}
           paneId={pane.id}
           focused={focused}
-          fit={tab.float?.[pane.id] ? fitOf(tab.float[pane.id]) : undefined}
+          fit={floats ? fitOf(tab.float![pane.id]) : undefined}
           size={b.fit}
           onSize={(f) => setBrowserFit(pane.id, f)}
           onFitDrawn={fitDrawn}
@@ -756,7 +767,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           extra={
             <>
               {/* to a window of its own (the App only: it tracks them; not while floating, already out of the way) */}
-              {b.tab && canPopOut && !tab.float?.[pane.id] && <PopOutButton project={b.project} tab={b.tab} />}
+              {b.tab && canPopOut && !floats && <PopOutButton project={b.project} tab={b.tab} />}
               {zoomBtn}
               <PaneCount count={count} />
             </>
@@ -788,6 +799,7 @@ function FloatItem({ pane, tab }: { pane: PaneLeaf; tab: Tab; count?: Count }) {
  */
 function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab; zoomed?: boolean; count?: Count }) {
   // A floating pane isn't in the split: splitting it or opening a tab from it means nothing there (asked to drop them)
+  // the layout's own: a floated pane isn't in the split on any device, a phone included
   const floating = !!tab.float?.[pane.id];
   return (
     <>

@@ -233,6 +233,24 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   wins over a remote viewer's phone layout, since the person on the phone picked it. The layout is shared, so every
   device shows the page at that size; a desktop draws it at most at its own size and within the box, a phone
   width-fit (its keyboard shortens the box) with pinch zoom.
+  A phone draws a floating pane like any other (one pane at a time), so there it is a docked pane: its menu has these
+  sizes, not the floating box's (Panes.tsx `useFloats`); read from the layout alone, the phone offered only the box's
+  sizes, which its own layout wins over, and no pick ever showed. The desktop's floating pane re-sends its box's size
+  only when that size changes (BrowserScreen: deps on `fixed`), not when the pane's picked size changes under it, or
+  it undid each pick made on the phone. Known gap: the backend keeps one size per page (`phoneLayout.fit`), so the
+  desktop's floating pane mounting again still puts its box's size over a pick; two slots (picked wins) would end it.
+  While the pictures catch up with a new size, the old one is dimmed under a spinner and "Loading…" (`resizing`).
+  Tried and dropped: drawing the App's page at the phone's pixel ratio for sharper pictures (Emulation's
+  `deviceScaleFactor` 1.5–3 while a phone looks; the App's page draws at the computer's ratio, 1 on a plain monitor,
+  so a phone's page at Auto is soft). With a ratio other than the window's, the App page's screencast fell to 1–4
+  frames a second (measured while a phone scrolled: 585x1266 at 1.5x 1–4 fps, the desktop size 12–27, the tablet
+  size at 1x 27–47), and scrolling on the phone froze. Also tried and dropped
+  (`View.sharpen`): the screencast as is while the page moves, and once it is still 300 ms a screenshot re-rendered
+  at the phone's ratio (`Page.captureScreenshot` with `clip.scale`) as the frame. Sharp at rest, but that screenshot
+  stops the App page's screencast for 2–3 s (measured: 0 fps scrolling right after it, 31 before and 3 s later), and
+  even with the cast restarted right after it (29 fps at once when measured here) the phone still stuttered after
+  each sharp still (user recording). Not measured on the phone's own path; a way to run a local viewer as a remote
+  one would let the next attempt be measured here first.
 - **A device's iframes play it too** (`frameDevice`, phone.go). Overrides are per DevTools target and a cross-site
   iframe is a target of its own: with the page playing an Android phone, an iframe's `navigator` still said MacIntel
   with no touch (measured), and Bing's Cloudflare Turnstile check failed on that (user report). While pad / mobile
