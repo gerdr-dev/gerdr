@@ -251,6 +251,13 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   even with the cast restarted right after it (29 fps at once when measured here) the phone still stuttered after
   each sharp still (user recording). Not measured on the phone's own path; a way to run a local viewer as a remote
   one would let the next attempt be measured here first.
+- **Picking pad / mobile in a docked pane narrows it** to that width, never widens it (widening squeezed the panes beside it; asked for: a phone page
+  centred in a wide pane wasted the chat's room; `fitPaneWidth` in lib/actions/browser.ts). Only from the ⋯ menu, on
+  the device that picked it and a wide screen: done on every device reading the synced layout, two screens of different
+  sizes would each set their own ratio. `gerdr pane fit` doesn't move the split.
+  A page in its own window (SessionBrowser `BrowserWindow`) sizes the window instead, for every size, pc too: the
+  window's width changes by what the page area is off (`nativeFitWindow` → shell/main.js `fitWindow`, out of zoom
+  first, kept on its screen; the usual 640 minimum width goes down for a phone's page).
 - **A device's iframes play it too** (`frameDevice`, phone.go). Overrides are per DevTools target and a cross-site
   iframe is a target of its own: with the page playing an Android phone, an iframe's `navigator` still said MacIntel
   with no touch (measured), and Bing's Cloudflare Turnstile check failed on that (user report). While pad / mobile
@@ -287,6 +294,25 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   trip to the core). Put up only as ours mounted, the page had to wait two frames for the still to be on screen
   and covered a dialog's fade-in for 4-6 frames (a shortcut-opened Settings, a recording). What is left is the
   window's views changing, a frame or two.
+- **A floating pane's page is parked at its emulated size** (Electron, 2026-11-20, user report): a page emulated at
+  1280x800 (`setDeviceMetricsOverride`) paints only what fits in its view, and parked at the docked column's size
+  (531 wide) its pictures were the page's left 531 px, a cut-off corner in the floating box. shell/main.js keeps the
+  last emulated size of each view (`emulated`, from the DevTools commands it passes on) and sizes the park window to
+  it (times `scale`), when it parks and when the size changes while parked.
+  And the floating pane's stream draws nothing for up to 1.5 s after it opens until a picture has the floating size
+  (BrowserScreen `shapeWait`): the first ones were still the docked layout, drawn blown up for ~0.6 s (recorded).
+- **The still is taken with the view's own rect** (`gerdr:shot` in shell/main.js). With no rect, Electron 45's
+  `capturePage` takes the widget's size, which under an emulated size with `scale` (a size picked for a narrow pane)
+  is the emulated one: 1280x1559 for a 531x647 view, the page in its top-left corner (measured in a bare Electron).
+- **A resize that doesn't show** (Electron, 2026-11-20, user report, not reproduced on demand): a page in its own
+  window, the window zoomed and unzoomed by double clicks on its title bar, sometimes kept showing a frame of another
+  size in a corner of the box, the still under it showing round it. The UI's report and the core's placing were right
+  (the core's log: no hide / show, the stream untouched); the screen wasn't. So after a view's size changes and stays
+  for 300 ms, shell/main.js `reshape` resizes it by one point and back and invalidates it: the new surface that a
+  manual resize gave. If the frame still sticks, this guess was wrong: look at the view's bounds against the box first.
+  And the still is taken down whenever the page's box changes size (BrowserScreen `report`), a fresh one put up 500 ms
+  after: stretched to the new box it showed round the page while the page caught up, a second copy at another scale
+  that read as the bug itself even when the page then drew right.
 - **Focus between the two windows** (Lightron's menu.m): a click in the page makes its window key; it shares the
   App window's key state (`_sharesParentKeyState`), so the App doesn't look inactive, and a press on the App's window
   takes the keys back. Two App windows at the same bounds: the host is told apart by a title of its own for a moment

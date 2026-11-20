@@ -5,11 +5,15 @@ import {
   activeWs,
   allLeaves,
   closePane,
+  dockedRoot,
+  FLOAT_FITS,
   floatable,
   leaves,
   locateSession,
+  rects,
   rid,
   setPane,
+  setRatio,
   spaceOf,
   split,
   toggleFloat,
@@ -17,6 +21,8 @@ import {
   type FloatFit,
   type Layout,
   type PaneLeaf,
+  type PaneNode,
+  type PaneSplit,
 } from "../layout";
 import { get, setLayout } from "../store";
 import { isNative, nativeAskBrowserWindows, nativeBrowserWindow, nativeNewPathWindow } from "../native";
@@ -208,6 +214,54 @@ export function setBrowserFit(paneId: string, fit: FloatFit | undefined) {
     const { fit: _, ...rest } = p.browser;
     return setPane(l, paneId, { browser: fit ? { ...rest, fit } : rest });
   });
+}
+
+/**
+ * A phone / tablet size just picked in a docked Browser pane's ⋯ menu: when the page area is wider than that, the split
+ * beside it moves so the page area is exactly that wide (asked for: a phone page centred in a wide pane wasted the room the chat could have). Only on the
+ * device that picked it (a layout change synced to another screen would size it for that screen) and only on a wide
+ * one; the nearest side-by-side split holding the pane moves, by what the page area is off from the size, so the
+ * gaps and borders count as they are. Clamped like a drag (setRatio).
+ */
+export function fitPaneWidth(paneId: string, fit: FloatFit | undefined) {
+  if (fit !== "mobile" && fit !== "pad") return;
+  if (window.innerWidth < 768) return;
+  const l = get().layout;
+  const at = allLeaves(l).find((x) => x.pane.id === paneId);
+  const root = at && !at.tab.float?.[paneId] ? dockedRoot(at.tab) : null;
+  const box = document.querySelector<HTMLElement>(`[data-pane-id="${paneId}"] [data-browser-box]`);
+  const paneEl = box?.closest<HTMLElement>("[data-pane-id]");
+  if (!at || !root || !box || !paneEl) return;
+  // the nearest row split above the pane, and which side of it the pane is on
+  let row: { split: PaneSplit; first: boolean } | undefined;
+  const walk = (n: PaneNode): boolean => {
+    if (n.type === "pane") return n.id === paneId;
+    const inA = walk(n.a);
+    const inB = !inA && walk(n.b);
+    if ((inA || inB) && n.dir === "row" && !row) row = { split: n, first: inA };
+    return inA || inB;
+  };
+  walk(root);
+  if (!row) return;
+  // only ever narrower: a pane smaller than the size keeps its width (the page is shrunk into it) rather than squeeze
+  // the panes beside it (user report: picking pad pushed the chat aside)
+  const dx = FLOAT_FITS[fit].w - box.clientWidth;
+  if (dx > -2) return;
+  const fr = rects(root);
+  const span = (n: PaneNode) => {
+    const rs = leaves(n).flatMap((p) => (fr.has(p.id) ? [fr.get(p.id)!] : []));
+    return Math.max(...rs.map((r) => r.x + r.w)) - Math.min(...rs.map((r) => r.x));
+  };
+  const me = fr.get(paneId);
+  if (!me) return;
+  const px = paneEl.getBoundingClientRect().width / me.w; // the tab's width
+  const { split, first } = row;
+  const splitPx = span(split) * px;
+  const side = first ? split.a : split.b;
+  const k = me.w / span(side); // the pane's share of its side's width
+  const sidePx = (first ? split.ratio : 1 - split.ratio) * splitPx + dx / k;
+  const ratio = first ? sidePx / splitPx : 1 - sidePx / splitPx;
+  setLayout((l) => updateTab(l, at.tab.id, (t) => setRatio(t, split.id, ratio)));
 }
 
 function leavesOf(l: Layout) {

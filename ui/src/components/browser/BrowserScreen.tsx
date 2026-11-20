@@ -291,6 +291,8 @@ export function BrowserScreen({
   // size that lays the page out the same never sends one)
   const [resizing, setResizing] = useState(false);
   const resizeFrom = useRef<string | null>(null);
+  // until when a floating pane's stream skips pictures not of its size (draw): set as the stream opens
+  const shapeWait = useRef(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const keysRef = useRef<HTMLTextAreaElement>(null);
   const addrRef = useRef<HTMLInputElement>(null);
@@ -366,6 +368,16 @@ export function BrowserScreen({
     }
     const cv = canvasRef.current;
     if (!cv) return;
+    const f = fitRef.current;
+    const fitShape = !!f && !!h.h && Math.abs(h.w / h.h / (FLOAT_FITS[f].w / FLOAT_FITS[f].h) - 1) < 0.03;
+    // Just floated: the first pictures are still the page as it was docked (laid out at the column's width), until the
+    // backend's new size lands; drawn width-fit into the box they showed the page blown up for half a second (user
+    // report). Not drawn (the box stays empty) until one has the floating size, or the wait gives up.
+    if (f && !fitShape && shapeWait.current > performance.now()) {
+      if (h.seq) sendWS({ t: "got", seq: h.seq });
+      return;
+    }
+    shapeWait.current = 0;
     await paintFrame(cv, buf, h, body);
     if (resizeFrom.current && resizeFrom.current !== `${h.w}x${h.h}`) {
       resizeFrom.current = null;
@@ -373,8 +385,7 @@ export function BrowserScreen({
     }
     // A picture at the floating box's new shape: the box takes that shape now, in this same frame (flushSync), so the
     // new picture never shows in the old box nor the old one in the new box (a flash at each switch, user report)
-    const f = fitRef.current;
-    if (f && h.h && Math.abs(h.w / h.h / (FLOAT_FITS[f].w / FLOAT_FITS[f].h) - 1) < 0.03) {
+    if (f && fitShape) {
       const cb = fitDrawn.current;
       if (cb) flushSync(() => cb(f));
     }
@@ -394,6 +405,10 @@ export function BrowserScreen({
     const connect = () => {
       if (!alive || document.visibilityState !== "visible") return;
       const { w, q } = want();
+      if (fitRef.current) {
+        shapeWait.current = performance.now() + 1500;
+        setHasPic(false);
+      }
       const ws = new WebSocket(wsURL(`/api/browser/view?tab=${tab}&w=${w}&q=${q}${nativeView ? "&pic=0" : ""}`));
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
@@ -631,7 +646,15 @@ export function BrowserScreen({
       const key = shown ? [spot.x, spot.y, spot.width, spot.height, window.devicePixelRatio, round].map((n) => Math.round(n * 10) / 10).join(",") : "hidden";
       if (key === last) return;
       last = key;
-      if (shown) place();
+      if (shown) {
+        const was = placed.current;
+        place();
+        // A new size (the window zoomed, a split dragged): the still under the page is the old size, stretched to the
+        // new box. Off until a fresh one (settle), or it showed round the page while the page caught up, and a second
+        // copy of the page at another scale read as a bug (user report, a window zoomed from its title bar).
+        if (upSince && (was.width !== placed.current.width || was.height !== placed.current.height)) drop();
+        settle();
+      }
       nativeBrowserView(tab, shown ? spot : null, round);
     };
     placeNow.current = report;
@@ -745,6 +768,12 @@ export function BrowserScreen({
     const p = at(e);
     if (!p) return;
     e.preventDefault();
+    // preventDefault on a pointerdown cancels the mousedown the pane's frame focuses itself on (Panes.tsx): the click
+    // in the page's pictures (a floating pane, another device) left another pane focused (user report)
+    if (!focused) {
+      if (onFocus) onFocus();
+      else focusPane(paneId);
+    }
     setEditing(false);
     // A touch doesn't take the keys: on a phone that opens the keyboard on every tap. The keyboard comes up when the
     // page's focus lands in a field (page.editable, below) or from the ⌨ button
@@ -1055,14 +1084,6 @@ export function BrowserScreen({
             className="h-6 w-full min-w-0 rounded-md border border-transparent bg-muted/60 px-2 font-mono text-[11px] outline-none focus:border-ring/60 focus:bg-background"
           />
         </form>
-        {extra}
-        {/* One ⋯ like every pane's: this pane's pages first, then the pane moves (split, new tab, close…). The other
-            pages' names come from the page list, which their navigations don't refresh: read again as it opens (a page
-            still listed as the site it had left showed another one when picked, user report) */}
-        <DropdownMenu onOpenChange={(o) => o && void loadBrowserTabs()}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.pages")}>
-              <MoreHorizontal className="size-3.5" />
         {/* The same address in the person's own browser (the App hands it to the system; a web page opens a tab). A compass, not
             an arrow out of a box: that is "open in new window" (PopOutButton), and the two read as one */}
         <Button
@@ -1075,6 +1096,14 @@ export function BrowserScreen({
         >
           <Compass className="size-3.5" />
         </Button>
+        {extra}
+        {/* One ⋯ like every pane's: this pane's pages first, then the pane moves (split, new tab, close…). The other
+            pages' names come from the page list, which their navigations don't refresh: read again as it opens (a page
+            still listed as the site it had left showed another one when picked, user report) */}
+        <DropdownMenu onOpenChange={(o) => o && void loadBrowserTabs()}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.pages")}>
+              <MoreHorizontal className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-w-80" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -1137,6 +1166,7 @@ export function BrowserScreen({
             anywhere on it moves the floating box, as its title bar does */}
         <div
           ref={boxRef}
+          data-browser-box
           onPointerDown={viewOnly ? onHeadPointerDown : undefined}
           className={cn(
             "group/view relative h-full w-full overflow-hidden",

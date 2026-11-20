@@ -57,6 +57,7 @@ import {
   toggleFloatPane,
   toggleZoom,
   setBrowserFit,
+  fitPaneWidth,
   useBrowserWindows,
   useBrowserTabs,
 } from "@/lib/actions";
@@ -759,7 +760,10 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           focused={focused}
           fit={floats ? fitOf(tab.float![pane.id]) : undefined}
           size={b.fit}
-          onSize={(f) => setBrowserFit(pane.id, f)}
+          onSize={(f) => {
+            setBrowserFit(pane.id, f);
+            fitPaneWidth(pane.id, f);
+          }}
           onFitDrawn={fitDrawn}
           viewOnly={viewOnly}
           headClassName={cn(headH, !focused && many && "opacity-70")}

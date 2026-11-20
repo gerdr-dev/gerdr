@@ -151,6 +151,35 @@ function openWindow(url) {
   return w;
 }
 
+// fitWindow: a page in its own window (the UI's ?browser=) just got a size picked: the window grows or shrinks by dw
+// (CSS px of its page) so the page area is that wide (asked for: a phone page centred in a wide window). Within the
+// screen it is on; out of full screen / zoom first, which own the size. The usual minimum width (640) would keep a
+// phone's page in a wider window, so it goes down to what is asked.
+function fitWindow(w, dw) {
+  if (!dw || w.isDestroyed() || w.isFullScreen()) return;
+  const z = w.webContents.getZoomFactor() || 1;
+  const [cw] = w.getContentSize();
+  const area = screen.getDisplayMatching(w.getBounds()).workArea;
+  const width = Math.max(200, Math.min(Math.round(cw + dw * z), area.width));
+  // zoomed: the target is from the zoomed size, set once the window is back from it (macOS animates that)
+  if (w.isMaximized()) {
+    w.once("unmaximize", () => setTimeout(() => !w.isDestroyed() && sizeWidth(w, width, area), 50));
+    w.unmaximize();
+    return;
+  }
+  sizeWidth(w, width, area);
+}
+
+function sizeWidth(w, width, area) {
+  const [, ch] = w.getContentSize();
+  const [, minH] = w.getMinimumSize();
+  w.setMinimumSize(Math.min(640, width), minH);
+  w.setContentSize(width, ch, true);
+  // grown past the screen's right edge: back inside it
+  const b = w.getBounds();
+  if (b.x + b.width > area.x + area.width) w.setPosition(Math.max(area.x, area.x + area.width - b.width), b.y, true);
+}
+
 function openExternal(url) {
   if (/^(https?|mailto):/i.test(url)) shell.openExternal(url);
 }
@@ -203,7 +232,10 @@ function parkView(v) {
   // at 400x300 when the view opens, before it has a size), every step aside for one of our menus resized the page
   // twice, and it came back drawn 400 wide in a corner of a black box until its layout caught up (a recording: 1-2
   // frames at each menu close; a page with breakpoints, YouTube, showed its narrow layout).
-  const had = v.view.getBounds();
+  // An emulated size (a floating pane's, or one picked: chromeext phone.go) wins: the page paints only what fits in
+  // the view, so parked at the docked column's size a page laid out at 1280 sent pictures of its left 531 px (user
+  // report: a floating pane showed a corner of the page, cut off).
+  const had = v.emu || v.view.getBounds();
   const width = had.width > 1 ? had.width : 400,
     height = had.height > 1 ? had.height : 300;
   if (!v.park || v.park.isDestroyed()) v.park = parkWindow(width, height);
@@ -262,6 +294,7 @@ function closeView(v, gone) {
   if (!views.has(v.id)) return;
   views.delete(v.id);
   clearTimeout(v.quiet);
+  clearTimeout(v.reshape);
   if (v.host && !v.host.isDestroyed()) v.host.contentView.removeChildView(v.view);
   if (v.park && !v.park.isDestroyed()) v.park.destroy();
   const wc = v.view.webContents; // gone already when the App quits
@@ -288,12 +321,48 @@ function placeView(v, w, rect, radius) {
     v.host = w;
     v.parked = false;
   }
-  v.view.setBounds({ x, y, width: Math.max(width, 1), height: Math.max(height, 1) });
+  const b = { x, y, width: Math.max(width, 1), height: Math.max(height, 1) };
+  const had = v.view.getBounds();
+  v.view.setBounds(b);
+  if (had.width !== b.width || had.height !== b.height) reshape(v, w, b);
   const r = Math.max(0, Math.round((radius || 0) * z));
   if (v.radius !== r) {
     v.radius = r;
     v.view.setBorderRadius(r);
   }
+}
+
+// emulated: the page's emulated size changed (a DevTools command from the backend, chromeext phone.go). Parked, the
+// view and its park window take that size, as drawn (scale), so the page paints all of it; placed, the pane sizes it.
+function emulated(v, method, p) {
+  if (method === "Emulation.clearDeviceMetricsOverride") v.emu = null;
+  if (method !== "Emulation.setDeviceMetricsOverride") return;
+  const k = p.scale > 0 && p.scale < 1 ? p.scale : 1;
+  v.emu = p.width > 0 && p.height > 0 ? { width: Math.ceil(p.width * k), height: Math.ceil(p.height * k) } : null;
+  if (!v.emu || !v.parked || !v.park || v.park.isDestroyed()) return;
+  v.park.setContentSize(v.emu.width, v.emu.height);
+  v.view.setBounds({ x: 0, y: 0, ...v.emu });
+}
+
+// reshape: once a view's size has stopped changing, make it draw that size again. A window zoomed by a double click on
+// its title bar (macOS animates it) sometimes left the page showing a frame of another size in a corner of its box, the
+// still under it showing round it, until something else resized it (user report, a page in its own window): the view had
+// the right bounds and capturePage had the right picture, the screen didn't. A one-point resize and back gives the page
+// a new surface, which is what a manual resize did; invalidate alone is the cheap half of that.
+function reshape(v, w, b) {
+  clearTimeout(v.reshape);
+  v.reshape = setTimeout(() => {
+    if (v.host !== w || w.isDestroyed() || v.view.webContents.isDestroyed()) return;
+    const now = v.view.getBounds();
+    if (now.x !== b.x || now.y !== b.y || now.width !== b.width || now.height !== b.height) return; // placed again since
+    v.view.setBounds({ ...b, width: Math.max(b.width - 1, 1) });
+    setTimeout(() => {
+      if (v.host !== w || w.isDestroyed() || v.view.webContents.isDestroyed()) return;
+      const cur = v.view.getBounds();
+      if (cur.width === Math.max(b.width - 1, 1) && cur.x === b.x && cur.y === b.y) v.view.setBounds(b);
+      v.view.webContents.invalidate();
+    }, 16);
+  }, 300);
 }
 
 // ---- menus ----
@@ -420,6 +489,9 @@ async function handle(m) {
       return openView(m.profile, m.url, m.tab);
     case "viewCdp": {
       const v = viewOf(m.view);
+      // sized first: sized after, the page laid out at the new size in the old view for a moment, and the pictures
+      // of that (its left part, cut off) showed in a floating box for half a second (user report)
+      emulated(v, m.method, m.params || {});
       return await v.view.webContents.debugger.sendCommand(m.method, m.params || {});
     }
     case "viewPlace":
@@ -504,7 +576,11 @@ function setUp() {
   ipcMain.handle("gerdr:shot", async (e, tab) => {
     const v = [...views.values()].find((x) => x.tab === tab);
     if (!v || v.view.webContents.isDestroyed()) return null;
-    const img = await v.view.webContents.capturePage();
+    // The view's own area, said explicitly: with no rect Electron takes the widget's size, which under an emulated
+    // size shrunk to fit (a size picked for a narrow pane: 1280 wide at scale 0.41) is the emulated one, and the page
+    // came out in the top-left corner of a big dark still (user report: the still under a menu, a small page in a corner)
+    const b = v.view.getBounds();
+    const img = await v.view.webContents.capturePage({ x: 0, y: 0, width: b.width, height: b.height });
     // PNG: a JPEG still read softer than the live page next to it
     return img.isEmpty() ? null : "data:image/png;base64," + img.toPNG().toString("base64");
   });
@@ -519,6 +595,7 @@ function setUp() {
       const v = [...views.values()].find((x) => x.tab === m.tab);
       if (v && v.host === w) parkView(v);
     }
+    if (m && m.type === "fitWindow") return fitWindow(w, Number(m.dw) || 0);
     send({ ev: "message", win: winId(w), data: m });
   });
 

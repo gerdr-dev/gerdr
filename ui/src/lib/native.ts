@@ -156,6 +156,10 @@ export function nativeBrowserWindowClose(tab: number) {
 export function nativeBrowserWindowTab(tab: number) {
   bridge()?.postMessage({ type: "browserWindowTab", tab });
 }
+/** A page in its own window: the window grows / shrinks by dw (CSS px) so its page area takes a picked size. */
+export function nativeFitWindow(dw: number) {
+  bridge()?.postMessage({ type: "fitWindow", dw });
+}
 export function nativeAskBrowserWindows() {
   bridge()?.postMessage({ type: "browserWindows" });
 }

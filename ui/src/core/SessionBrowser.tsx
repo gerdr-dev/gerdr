@@ -8,7 +8,7 @@ import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserW
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { FLOAT_FITS, type FloatFit } from "@/lib/layout";
-import { isNative, nativeBrowserWindowTab } from "@/lib/native";
+import { isNative, nativeBrowserWindowTab, nativeFitWindow } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 // Agents' pages outside Code's panes (docs/dev/BROWSER-PANE.md). In Code, a page an agent opens comes up as a Browser
@@ -48,6 +48,7 @@ function PageBrowser({
   extra,
   fit,
   onHeadPointerDown,
+  ownWindow,
 }: {
   project: string;
   tab?: number;
@@ -56,6 +57,8 @@ function PageBrowser({
   /** floating (PanelFloat): the page's pictures, laid out at this size */
   fit?: FloatFit;
   onHeadPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
+  /** the page alone in a window (BrowserWindow): a size picked sizes the window to it */
+  ownWindow?: boolean;
 }) {
   const id = useId();
   const tabRef = useRef(tab);
@@ -83,7 +86,12 @@ function PageBrowser({
       onShow={onTab}
       onURL={setURL}
       size={size}
-      onSize={setSize}
+      onSize={(f) => {
+        setSize(f);
+        // the window takes the page's width: the page area grows / shrinks by what it is off from the size
+        const box = ownWindow && f ? document.querySelector<HTMLElement>("[data-browser-box]") : null;
+        if (box && f) nativeFitWindow(FLOAT_FITS[f].w - box.clientWidth);
+      }}
       fit={fit}
       onFocus={() => {}}
       headClassName="h-10"
@@ -384,6 +392,7 @@ export function BrowserWindow({ tab: first }: { tab: number }) {
           project={project}
           tab={tab}
           onTab={setTab}
+          ownWindow
           extra={
             // back where it came from: closing the window puts it back (the column shows it again)
             <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.backToPanel")} onClick={() => window.close()}>
