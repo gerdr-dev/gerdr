@@ -60,7 +60,12 @@ func (a *Agent) Close() {
 	a.mcp.closeAll()
 }
 
-func (a *Agent) config() Config { return a.cfg() }
+func (a *Agent) config() Config {
+	if a.opt.ModelLists {
+		return a.cfg().WithListed()
+	}
+	return a.cfg()
+}
 
 func (a *Agent) send(sid string, u acp.SessionUpdate) {
 	if a.conn == nil {

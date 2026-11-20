@@ -26,7 +26,7 @@ Gerdr 自带一个 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼�
 ```
 
 写进 `apiKey` 的 key（设置里填的、`gerdr config set` 写的、手改的）会挪到 `~/.gerdr/secrets.json`（0600），`config.json` 里只留 `"<hidden>"`，这样 agent 读你的设置时不会把 key 带进对话记录。
-也可以用 `"apiKeyEnv": "环境变量名"` 从 Gerdr 的环境变量里取，这个变量不会传给 agent 和终端。模型只写 id 就行，协议、思考档位、上下文窗口按 id 猜；猜错了在模型上写
+也可以用 `"apiKeyEnv": "环境变量名"` 从 Gerdr 的环境变量里取，这个变量不会传给 agent 和终端。模型只写 id 就行，协议、思考档位、上下文窗口按 id 猜（服务商的模型列表里给了档位的，比如 subhub 每个模型带的 `"reasoning": {"efforts": […], "default": "…"}`，就用列表里的档位和默认档）；猜错了在模型上写
 `api`（chat / responses）、`efforts`、`window`、`compactAt`（上下文到多少 token 自动压缩，默认 `window` 的 90%）、`images`、`maxOutput`，Claude 还可以写 `thinking`（`updates`：只显示模型自己写的简短进度说明，Opus/Sonnet 5.5、Fable 5 及以后默认用它；`adaptive`：显示推理摘要）。也可以在设置 → Agent 最下面配（能从接口拉模型列表、单个试一下）。
 **生图**：`gemini-2.5-flash-image` / `gemini-3-pro-image-preview`（Nano Banana）、`gpt-image-1` 这类是生图模型：不出现在会话的模型列表里，专门用来出图。
 在设置 → Agent「引擎」下面的「生图模型」里添加（选一个已有的服务商，或当场新建一个），点星标设为默认，或在 `llm` 里写 `"imageModel": "provider/model"`；不设就自动用第一个（优先 Gemini）。

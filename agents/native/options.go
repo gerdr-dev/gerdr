@@ -14,6 +14,9 @@ type Options struct {
 	Dir string
 	// Config is the model configuration, read fresh before every model call (a change applies on the next turn).
 	Config func() Config
+	// ModelLists: read the providers' model lists (in the background, hourly) for what they say about each model —
+	// thinking levels, the default level, output modalities — and use it where the config doesn't say (modellist.go).
+	ModelLists bool
 	// Prompt is appended to the end of the system prompt (a role's extra instructions in gerdr).
 	Prompt string
 	// AppendPrompt adds per-session text after Prompt (gerdr: the session's project memory). Called before every

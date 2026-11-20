@@ -31,6 +31,9 @@ type Config struct {
 	// ImageModel: the model that generates images (provider/model; its Kind is image), for the native agent's
 	// generate_image tool and `gerdr image gen`. Empty = pick one (resolveImage).
 	ImageModel string `json:"imageModel,omitempty"`
+
+	// listed: what the providers' model lists say, by provider id and model id (WithListed, modellist.go).
+	listed map[string]map[string]ModelInfo
 }
 
 type Provider struct {
@@ -171,7 +174,7 @@ func (c Config) allModels() []resolved {
 			if m.ID == "" {
 				continue
 			}
-			out = append(out, resolved{Key: p.ID + "/" + m.ID, Provider: p, Model: p.withDefaults(m)})
+			out = append(out, resolved{Key: p.ID + "/" + m.ID, Provider: p, Model: p.withDefaults(c.fromList(p, m))})
 		}
 	}
 	return out

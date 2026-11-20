@@ -17,9 +17,55 @@ import (
 
 // 设置页用的两个探测：拉服务商的模型列表（顺便验证地址和 key 对不对）、拿一个模型真说一句话（验证协议猜对了没有）。
 
-// ListModels: GET <baseUrl>/models (every OpenAI-compatible API has it; Anthropic's is <base>/v1/models with other
-// auth headers and the same shape; Gemini's is listGeminiModels), the model ids in alphabetical order.
+// ModelInfo is one model from a provider's model list: its id, and what the list says about it beyond that. Plain
+// OpenAI / Gemini / Anthropic lists have only the id; a gateway may add (subhub does, 2026-11):
+//
+//	"reasoning": {"efforts": ["low", "medium", "high", "xhigh"], "default": "medium"}
+//	"architecture": {"output_modalities": ["text"]}   // or ["image"], ["text", "image"]
+//
+// Efforts are the values to send as they are, low to high; Default the one used when none is sent.
+type ModelInfo struct {
+	ID            string
+	Efforts       []string
+	DefaultEffort string
+	Output        []string // output modalities; empty = not said
+}
+
+// listModel is the fields both list shapes share per model.
+type listModel struct {
+	Reasoning *struct {
+		Efforts []string `json:"efforts"`
+		Default string   `json:"default"`
+	} `json:"reasoning"`
+	Architecture *struct {
+		Output []string `json:"output_modalities"`
+	} `json:"architecture"`
+}
+
+func (l listModel) info(id string) ModelInfo {
+	mi := ModelInfo{ID: id}
+	if l.Reasoning != nil {
+		mi.Efforts, mi.DefaultEffort = l.Reasoning.Efforts, l.Reasoning.Default
+	}
+	if l.Architecture != nil {
+		mi.Output = l.Architecture.Output
+	}
+	return mi
+}
+
+// ListModels: the provider's model ids in alphabetical order (the settings page's "fetch").
 func ListModels(ctx context.Context, p Provider) ([]string, error) {
+	ms, err := ListModelInfo(ctx, p)
+	var out []string
+	for _, m := range ms {
+		out = append(out, m.ID)
+	}
+	return out, err
+}
+
+// ListModelInfo: GET <baseUrl>/models (every OpenAI-compatible API has it; Anthropic's is <base>/v1/models with other
+// auth headers and the same shape; Gemini's is listGeminiModels), sorted by id.
+func ListModelInfo(ctx context.Context, p Provider) ([]ModelInfo, error) {
 	ep := resolved{Provider: p}.endpoint()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -54,25 +100,26 @@ func ListModels(ctx context.Context, p Provider) ([]string, error) {
 	var r struct {
 		Data []struct {
 			ID string `json:"id"`
+			listModel
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(b, &r); err != nil {
 		return nil, fmt.Errorf("unexpected /models response: %s", oneLine(string(b), 200))
 	}
-	var out []string
+	var out []ModelInfo
 	for _, m := range r.Data {
 		if m.ID != "" {
-			out = append(out, m.ID)
+			out = append(out, m.info(m.ID))
 		}
 	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
 
 // listGeminiModels: Gemini's models.list, paged ({models: [{name: "models/…", supportedGenerationMethods}],
 // nextPageToken}); only the ones that can generateContent (not embeddings…), without the "models/" prefix.
-func listGeminiModels(ctx context.Context, ep llm.Endpoint) ([]string, error) {
-	var out []string
+func listGeminiModels(ctx context.Context, ep llm.Endpoint) ([]ModelInfo, error) {
+	var out []ModelInfo
 	token := ""
 	for page := 0; page < 20; page++ {
 		u := llm.GeminiURL(ep.BaseURL, "/models?pageSize=1000")
@@ -100,6 +147,7 @@ func listGeminiModels(ctx context.Context, ep llm.Endpoint) ([]string, error) {
 			Models []struct {
 				Name    string   `json:"name"`
 				Methods []string `json:"supportedGenerationMethods"`
+				listModel
 			} `json:"models"`
 			Next string `json:"nextPageToken"`
 		}
@@ -108,14 +156,14 @@ func listGeminiModels(ctx context.Context, ep llm.Endpoint) ([]string, error) {
 		}
 		for _, m := range r.Models {
 			if m.Name != "" && (len(m.Methods) == 0 || slices.Contains(m.Methods, "generateContent")) {
-				out = append(out, llm.GeminiModel(m.Name))
+				out = append(out, m.info(llm.GeminiModel(m.Name)))
 			}
 		}
 		if token = r.Next; token == "" {
 			break
 		}
 	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }
 

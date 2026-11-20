@@ -283,6 +283,17 @@ config.json (example in the README), read fresh every turn.
 
 测试：`go test ./agents/native/...` 用假接口跑主循环；`NATIVE_LIVE_BASE / NATIVE_LIVE_KEY / NATIVE_LIVE_MODELS` 设了才跑真模型（花钱）。
 
+### What a provider's model list says (`native/modellist.go`)
+
+Thinking levels per model can't be read from OpenAI's or Gemini's model lists, so they are guessed from the id
+(`GeminiEfforts`…), and the guess goes wrong: gemini-4-neon was offered low / medium / high while subhub's upstream
+takes xhigh too. A gateway that knows can say so per model: `"reasoning": {"efforts": [...], "default": "..."}`
+(subhub, both `/v1/models` and `/v1beta/models`), and `architecture.output_modalities` (image → an image model).
+Order: the model's own config, then the list, then the id guess (`fromList` runs before `withDefaults`, which only
+fills what is empty). The lists are fetched in the background, hourly, keyed by provider + key; the first config
+read after start goes on without (the effort picker of the very first session may still show the guess). Only with
+`Options.ModelLists` (gerdr sets it): embedders and tests don't get GETs to `/models` they didn't ask for.
+
 ### Image generation (`native/image.go`, `llm/image.go`, `/api/image`, `gerdr image`)
 
 One model makes images for every agent: `llm.imageModel` (empty = the first image model, Gemini providers first).
