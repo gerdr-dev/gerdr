@@ -212,7 +212,7 @@ function hostSession(sessionId: string): Partial<ChatHost> | undefined {
     fileStat: (p, cwd) => api.fileStat(p, cwd, host),
     fileExists: (names, cwd) => api.fileExists(names, cwd, host),
     openPath: (p, cwd, opts) => void openPath(p, cwd, { ...opts, host }),
-    upload: (f) => api.upload(f, host),
+    upload: (f, onProgress) => api.upload(f, host, onProgress),
     localPath: undefined,
     openNative: undefined,
   };
@@ -343,7 +343,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
       warm: (id) => api.warm(id).then(() => {}),
       shell: { run: (id, cmd) => api.shell(id, cmd, get().config.autoSendShell !== false), stop: (id, run) => api.stopShell(id, run) },
       fileURL,
-      upload: (f) => api.upload(f),
+      upload: (f, onProgress) => api.upload(f, undefined, onProgress),
       // Desktop App: attach files and folders by their path on this machine (the backend runs here too)
       localPath: hasNativeFilePath() ? nativeFilePath : undefined,
       fileStat: (p, cwd) => api.fileStat(p, cwd),

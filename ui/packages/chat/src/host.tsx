@@ -77,8 +77,11 @@ export interface ChatHost {
 
   /** A URL the browser can load for a local path (images, videos, PDFs in the conversation); relative paths are under cwd. */
   fileURL(path: string, cwd?: string): string;
-  /** Upload a file the user attached that can't go inline (videos): its path on the agent's machine. */
-  upload?(file: File): Promise<{ path: string }>;
+  /**
+   * Upload a file the user attached that can't go inline (videos): its path on the agent's machine.
+   * onProgress (0..1), when the host can tell, turns the attachment's spinner into a percentage.
+   */
+  upload?(file: File, onProgress?: (fraction: number) => void): Promise<{ path: string }>;
   /**
    * Desktop apps where the agent runs on this machine: the path of a file the user picked / pasted / dropped
    * (Electron's webUtils.getPathForFile). With it any file can be attached (a PDF, a 100 MB zip, a folder): it goes to

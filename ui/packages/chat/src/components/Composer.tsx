@@ -205,6 +205,9 @@ const ComposerImpl = forwardRef<
   const gone = useRef(new Map<number, Img>());
   // The image whose placeholder or thumbnail the pointer is on: both light up together
   const [hot, setHot] = useState<number | null>(null);
+  // Upload progress of attachments still uploading, whole percents by object URL (not in the draft: it's only this
+  // mount's upload; after a remount the attachment falls back to a plain spinner)
+  const [upPct, setUpPct] = useState<Record<string, number>>({});
   const mirror = useRef<HTMLDivElement>(null);
   // The highest image number used so far: numbers go up through the whole conversation and are never reused (like
   // Claude Code's CLI), so "[Image #2]" in a later message still means that one image, and what the box shows is what
@@ -924,9 +927,23 @@ const ComposerImpl = forwardRef<
     }
     const url = URL.createObjectURL(f);
     setImgs((xs) => [...xs, { data: "", mimeType: f.type, url, name: f.name }]);
-    upload(f).then(
-      ({ path }) => setImgs((xs) => xs.map((x) => (x.url === url ? { ...x, path } : x))),
+    // Whole percents only, so a fast stream of progress events re-renders the composer at most 100 times
+    const onProgress = (fr: number) => {
+      const pct = Math.min(99, Math.floor(fr * 100));
+      setUpPct((m) => (m[url] === pct ? m : { ...m, [url]: pct }));
+    };
+    const dropPct = () =>
+      setUpPct((m) => {
+        const { [url]: _, ...rest } = m;
+        return rest;
+      });
+    upload(f, onProgress).then(
+      ({ path }) => {
+        dropPct();
+        setImgs((xs) => xs.map((x) => (x.url === url ? { ...x, path } : x)));
+      },
       (e) => {
+        dropPct();
         toast.error(tr("composer.uploadFailed", { name: f.name, error: e.message ?? String(e) }));
         setImgs((xs) => xs.filter((x) => x.url !== url));
         URL.revokeObjectURL(url);
@@ -1382,12 +1399,18 @@ const ComposerImpl = forwardRef<
                   >
                     {im.path ? (
                       <FileIcon className="size-5 shrink-0 text-muted-foreground" />
+                    ) : upPct[im.url] !== undefined ? (
+                      <UploadRing pct={upPct[im.url]} className="size-5 text-muted-foreground" />
                     ) : (
                       <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" />
                     )}
                     <div className="min-w-0 text-left leading-tight">
                       <div className="truncate text-[13px]">{im.name ?? (im.path ? baseName(im.path) : "")}</div>
-                      {im.path && <div className="truncate text-[11px] text-muted-foreground">{im.path.replace(/^\/Users\/[^/]+/, "~")}</div>}
+                      {im.path ? (
+                        <div className="truncate text-[11px] text-muted-foreground">{im.path.replace(/^\/Users\/[^/]+/, "~")}</div>
+                      ) : (
+                        upPct[im.url] !== undefined && <div className="text-[11px] tabular-nums text-muted-foreground">{upPct[im.url]}%</div>
+                      )}
                     </div>
                   </div>
                 ) : isVideo(im) ? (
@@ -1397,7 +1420,11 @@ const ComposerImpl = forwardRef<
                       <PlayBadge small />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center bg-background/40 text-foreground">
-                        <Loader2 className="size-5 animate-spin" />
+                        {upPct[im.url] !== undefined ? (
+                          <UploadRing pct={upPct[im.url]} label className="size-10" />
+                        ) : (
+                          <Loader2 className="size-5 animate-spin" />
+                        )}
                       </div>
                     )}
                   </div>
@@ -1620,5 +1647,31 @@ function ContextMeter({ c, short }: { c: { tokens: number; window: number }; sho
       </TooltipTrigger>
       <TooltipContent>{tr("composer.contextTitle", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** An upload's progress: a ring that fills clockwise, the percentage inside when label (room for it: a thumbnail). */
+function UploadRing({ pct, label, className }: { pct: number; label?: boolean; className?: string }) {
+  const r = 15.5;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className={cn("relative shrink-0", className)}>
+      <svg viewBox="0 0 36 36" className="size-full -rotate-90">
+        <circle cx="18" cy="18" r={r} fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth={label ? 3 : 4} />
+        <circle
+          cx="18"
+          cy="18"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={label ? 3 : 4}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct / 100)}
+          className="transition-[stroke-dashoffset] duration-200"
+        />
+      </svg>
+      {label && <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold tabular-nums">{pct}%</span>}
+    </div>
   );
 }
