@@ -47,7 +47,7 @@ gerdr browser screenshot                   # prints a PNG path; look at it with 
 gerdr browser scroll down --amount 10      # or scroll e40 (into view), --on e5 (a scrollable panel)
 gerdr browser network --filter api         # requests since open; `body <id>` reads a response
 gerdr browser console --errors
-gerdr browser close                        # --keep leaves the window to the user
+gerdr browser close                        # its Browser pane closes too; --keep leaves page and pane to the user
 ```
 
 - The user can also open pages in the Browser pane themselves; `status` lists every page with its project.

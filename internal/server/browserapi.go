@@ -142,14 +142,26 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		var in struct {
 			Tab  int  `json:"tab"`
 			Keep bool `json:"keep"`
+			Caller
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		id := in.Tab
+		if id == 0 { // the last page opened, as Close takes it (Tabs: oldest first)
+			if ts := b.Tabs(); len(ts) > 0 {
+				id = ts[len(ts)-1].ID
+			}
+		}
 		if err := b.Close(in.Tab, in.Keep); err != nil {
 			httpError(w, http.StatusBadGateway, err.Error())
 			return
+		}
+		// An agent done with its page (from: its session; not --keep): the UI closes the panes showing it
+		// (ui/src/lib/actions/browser.ts browserClosed). The user's own "close page" sends no session and keeps its pane.
+		if !in.Keep && in.Caller.Session != "" && id != 0 {
+			s.Hub.Broadcast("browser_close", map[string]any{"tab": id, "session": in.Caller.Session})
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})

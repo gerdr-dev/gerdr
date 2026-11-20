@@ -398,6 +398,9 @@ function handle(m: any) {
     case "browser_open":
       if (m.data?.tab) import("./actions").then((a) => a.browserOpened(m.data));
       break;
+    case "browser_close":
+      if (m.data?.tab) import("./actions").then((a) => a.browserClosed(m.data));
+      break;
     case "close":
       import("./actions").then((a) => a.closeSessionPanes(m.data?.id));
       break;

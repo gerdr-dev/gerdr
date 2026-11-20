@@ -4,6 +4,7 @@ import {
   activeTab,
   activeWs,
   allLeaves,
+  closePane,
   leaves,
   locateSession,
   rid,
@@ -232,6 +233,24 @@ export function browserOpened(m: { tab: number; project: string; session?: strin
     if (old) return setPane(l, old.id, { browser: { project: m.project, tab: m.tab } });
     const fresh: PaneLeaf = { type: "pane", id: rid("p"), browser: { project: m.project, tab: m.tab } };
     return updateTab(l, loc.tab.id, (tab) => ({ ...split(tab, loc.pane.id, "row", fresh), focus: tab.focus }));
+  });
+}
+
+/**
+ * An agent closed a page it was done with (`gerdr browser close`, not --keep): the panes showing it go too (asked for:
+ * each left an empty "this page is closed" pane behind). Not a pane alone in its tab, which would take the tab with it.
+ * The user's own "close page" in the pane's menu keeps the pane: it moves to another page (BrowserScreen).
+ */
+export function browserClosed(m: { tab: number }) {
+  setLayout((l) => {
+    let out = l;
+    for (const { tab, pane } of allLeaves(l)) {
+      if (pane.browser?.tab !== m.tab) continue;
+      const cur = out.workspaces.flatMap((w) => w.tabs).find((t) => t.id === tab.id);
+      const next = cur && closePane(cur, pane.id);
+      if (next) out = updateTab(out, tab.id, () => next);
+    }
+    return out;
   });
 }
 

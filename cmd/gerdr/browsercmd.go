@@ -145,7 +145,8 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 		Short: i18n.S("关掉窗口（--keep：留给用户，不再操作）", "Close the window (--keep: leave it to the user, no longer driven)"),
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return artifactsClient().do("POST", "/api/browser/close", map[string]any{"tab": tab, "keep": keep}, nil)
+			c := artifactsClient()
+			return c.do("POST", "/api/browser/close", map[string]any{"tab": tab, "keep": keep, "from": c.caller().Session}, nil)
 		},
 	}
 	closeCmd.Flags().BoolVar(&keep, "keep", false, i18n.S("窗口留给用户", "leave the window to the user"))

@@ -193,7 +193,7 @@ func callBrowserTool(byName map[string]mcpTool, name string, raw json.RawMessage
 		if err != nil {
 			return fail(err)
 		}
-		if err := c.do("POST", "/api/browser/close", map[string]any{"tab": common.Tab, "keep": common.Keep}, nil); err != nil {
+		if err := c.do("POST", "/api/browser/close", map[string]any{"tab": common.Tab, "keep": common.Keep, "from": c.caller().Session}, nil); err != nil {
 			return fail(err)
 		}
 		return text("closed")
