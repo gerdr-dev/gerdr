@@ -106,7 +106,9 @@ function useStickyProject(tab: number | undefined, pages: BrowserTab[]): string 
 // ---- a panel's browser column ----
 
 /** Per panel (its key): the page its column shows and whether the user closed the column; lives while the UI does. */
-type Column = { tab?: number; closed: boolean; seen: number };
+// out: the page moved to a window of its own from here, the column folded meanwhile; outSeen: its window came up (the
+// core listed it), so the window going away means it is back (the column opens on it again)
+type Column = { tab?: number; closed: boolean; seen: number; out?: number; outSeen?: boolean };
 const useColumns = create<Record<string, Column>>(() => ({}));
 
 /** A panel's column: its state, the pages its conversations opened, the last one opened, the page and project shown. */
@@ -164,6 +166,14 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
   const { st, save, last, tab, project, has } = usePanelColumn(panel, sessions);
   const inWindow = useBrowserWindows((w) => !!tab && w.tabs.includes(tab));
   const cur = useBrowserTabs((s) => s.tabs.find((x) => x.tab === tab));
+  // A page moved out folds the column (asked for: the card in its place took the room for nothing); its window
+  // closing (⌘W, put back) brings the column back on it
+  const outIn = useBrowserWindows((w) => !!st.out && w.tabs.includes(st.out));
+  useEffect(() => {
+    if (!st.out) return;
+    if (outIn && !st.outSeen) save({ ...st, outSeen: true });
+    else if (!outIn && st.outSeen) save({ ...st, tab: st.out, closed: false, out: undefined, outSeen: false });
+  }, [outIn]); // eslint-disable-line react-hooks/exhaustive-deps
   // one of its agents opened a page: show it, the column coming back if it was closed
   useEffect(() => {
     if (last && last.at > st.seen) save({ tab: last.tab, closed: false, seen: last.at });
@@ -222,8 +232,8 @@ export function PanelBrowser({ panel, sessions, width, edge }: { panel: string; 
                 title={t("browser.newWindow")}
                 onClick={() => {
                   openBrowserWindow(project, tab);
-                  // an older core can't say the page is out (no card): the column steps aside as it used to
-                  if (!useBrowserWindows.getState().known) save({ ...st, closed: true });
+                  // folded while the page is out (an older core can't say when it's back: then just folded)
+                  save({ ...st, closed: true, ...(useBrowserWindows.getState().known ? { out: tab, outSeen: false } : {}) });
                 }}
               >
                 <SquareArrowOutUpRight className="size-3.5" />
