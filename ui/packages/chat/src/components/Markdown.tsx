@@ -5,6 +5,7 @@ import { hostFor, useChatHost } from "../host";
 import { bareFileName, fileExists, localHref, onFileExists, rehypePaths } from "../paths";
 import { ChatMedia, imageGroup, localPath, MediaGrid, nonMediaPath, rehypeImageGroups } from "./ChatMedia";
 import { SessionContext } from "./sessionContext";
+import type { ChatSession } from "../types";
 
 /**
  * 对话里的 Markdown：在 streamdown 默认那套之外，把本地路径变成可点的（点了原地打开，见 FileViewer）。
@@ -151,6 +152,13 @@ function bangCommand(text: string): string | null {
 
 // 行内代码：`! 命令` 旁边画「运行」。字从 hast 节点里取：路径插件可能把里面改成了链接
 // A bare file name (`README.md:45`) becomes a link once the server confirms it's in the session directory.
+//
+// A `! command` is drawn from its text, never the path plugin's links: a path in a command is part of what runs, and
+// clicking it opened the file instead. One longer than a short line becomes the same card as a block of `! ` lines
+// (CommandRows): left in the sentence it wrapped into a paragraph of code with links in it, breaking `--body-file`
+// across two lines, and the Run button ended up after the last fragment (user report).
+const LONG_COMMAND = 60;
+
 function InlineCode(props: any) {
   const session = useContext(SessionContext);
   const text = hastText(props.node);
@@ -166,9 +174,10 @@ function InlineCode(props: any) {
     );
   const actions = cmd && session ? hostFor(session.id).codeActions?.(cmd, "bang", session) : undefined;
   if (!actions) return code;
+  if (cmd!.length > LONG_COMMAND || cmd!.includes("\n")) return <CommandRows cmds={[cmd!]} session={session!} />;
   return (
     <>
-      {code}
+      <DefaultCode {...props}>{text}</DefaultCode>
       <span className="ml-1 inline-flex align-middle">{actions}</span>
     </>
   );
@@ -194,23 +203,32 @@ function CodeBlock(props: any) {
     .filter(Boolean);
   const cmds = lines.map(bangCommand);
   if (!session || !host.codeActions || !cmds.length || cmds.some((c) => !c)) return <DefaultCode {...props} />;
+  return <CommandRows cmds={cmds as string[]} session={session} />;
+}
+
+/**
+ * Commands to run, one a row, Run on its right (faint until pointed at; always on a phone, which has no hover): a code
+ * block of `! ` lines, or one long inline `! command`. Spans only, styled as blocks: the inline one sits inside a <p>.
+ */
+function CommandRows({ cmds, session }: { cmds: string[]; session: ChatSession }) {
+  const host = useChatHost();
   return (
     // 外框、字号、行距都和普通代码块一家：挂上同样的 data-streamdown，index.css 里 .gerdr-md 那几条（字号 0.86em、行距 1.5、
     // 淡底、单层框）一并套上；原来自己写 text-sm + 24px 行高，比旁边的代码块大一号、行距也松（用户报的）
-    <div data-streamdown="code-block" className="my-4 flex flex-col rounded-xl border border-border">
-      <div data-streamdown="code-block-body" className="font-mono">
+    <span data-streamdown="code-block" className="my-4 flex flex-col rounded-xl border border-border">
+      <span data-streamdown="code-block-body" className="block font-mono">
         {cmds.map((c, i) => (
-          <div key={i} className="group/cmd -mx-1.5 flex min-w-0 items-start gap-2 rounded-md px-1.5 hover:bg-muted/60">
+          <span key={i} className="group/cmd -mx-1.5 flex min-w-0 items-start gap-2 rounded-md px-1.5 hover:bg-muted/60">
             <span className="shrink-0 font-semibold text-brand">!</span>
             {/* 长命令折行显示全：要跑的东西得让人看全了再点，截成一行加省略号的话后半截看不到 */}
             <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{c}</span>
             <span className="shrink-0 font-sans opacity-40 transition-opacity group-hover/cmd:opacity-100 [@media(hover:none)]:opacity-100">
-              {host.codeActions!(c!, "bang", session)}
+              {host.codeActions?.(c, "bang", session)}
             </span>
-          </div>
+          </span>
         ))}
-      </div>
-    </div>
+      </span>
+    </span>
   );
 }
 
