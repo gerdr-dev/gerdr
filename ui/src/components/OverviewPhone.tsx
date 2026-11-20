@@ -116,6 +116,21 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
     const chip = strip?.querySelector<HTMLElement>("[data-current]");
     if (strip && chip && !moving.current) strip.scrollLeft = inView(strip, chip, strip.scrollLeft);
   }, [focus, idsKey, shown]);
+  // And when a chip changes width (an agent renames its session, a status dot comes or goes): the current chip at the
+  // strip's right end grew past it and was left half cut off (user report). Any chip counts, as one to its left
+  // pushes it along too. Only while the chip still shows at least in part: one scrolled away from by hand stays away.
+  useEffect(() => {
+    const strip = chips.current;
+    if (!strip || !shown) return;
+    const ro = new ResizeObserver(() => {
+      const chip = strip.querySelector<HTMLElement>("[data-current]");
+      if (!chip || moving.current) return;
+      const s = strip.scrollLeft;
+      if (chip.offsetLeft < s + strip.clientWidth && chip.offsetLeft + chip.offsetWidth > s) strip.scrollLeft = inView(strip, chip, s);
+    });
+    for (const el of strip.querySelectorAll<HTMLElement>(":scope > button")) ro.observe(el);
+    return () => ro.disconnect();
+  }, [idsKey, shown]);
 
   // The pages either side of the drawn tile, in the strip's order (finger left → the next chip)
   // Two steps away too: mounted ahead of need, when the phone is idle (below), so the page a turn brings next to the
