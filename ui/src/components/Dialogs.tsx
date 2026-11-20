@@ -5,6 +5,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { FilePicker, FileViewer } from "./FileViewer";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { ImportAgentDialog } from "./ImportAgentDialog";
+import { ImportClaudeDesktop } from "./ImportClaudeDesktop";
 import { ImportHerdr } from "./ImportHerdr";
 import { KeyHelp } from "./KeyHelp";
 import { MoveSessionDialog } from "./MoveSessionDialog";
@@ -39,6 +40,7 @@ export function Dialogs() {
       <Rename />
       <NewWorkspace open={d?.kind === "newWorkspace" || d?.kind === "editWorkspace"} editId={d?.kind === "editWorkspace" ? d.id : undefined} />
       <ImportHerdr open={d?.kind === "importHerdr"} />
+      <ImportClaudeDesktop open={d?.kind === "importClaudeDesktop"} />
       <ResumeDialog />
       <ImportAgentDialog />
       <FileViewer />

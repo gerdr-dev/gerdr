@@ -32,6 +32,13 @@ same context (and the prompt cache still hits), unless you tick *hand over as te
 engine the conversation is always handed over as text with your first message there. Agents can
 do the same with `gerdr session fork`.
 
+Conversations from the Claude Desktop App's Code tab can be carried on here: Settings → Import → *Import from Claude
+Desktop*, tick the ones you want, and each comes in with its whole history. One that ran in a project folder goes into
+that folder's workspace; the ones in the Desktop App's own scratch folders go together into a "Claude Desktop"
+workspace. Don't keep talking in the Desktop App as well, or the conversation forks. The Desktop App's chat
+conversations (the claude.ai kind) are kept on Anthropic's servers, not on your computer, so they can't be imported.
+Agents: `gerdr session import claude-desktop`.
+
 ## keys
 
 Like herdr / tmux: press the prefix `ctrl+b`, release, then:

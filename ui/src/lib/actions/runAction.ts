@@ -56,6 +56,7 @@ const APP = {
   help: () => set({ dialog: { kind: "help" } }),
   settings: () => set({ dialog: { kind: "settings" } }),
   importHerdr: () => set({ dialog: { kind: "importHerdr" } }),
+  importClaudeDesktop: () => set({ dialog: { kind: "importClaudeDesktop" } }),
   palette: () => set({ dialog: { kind: "palette" } }),
   // Going to a session: focusSession knows the views (a tile in the overview, the Work chat, else its pane in Code)
   nextAttention: () => stepAttention(1),

@@ -733,6 +733,13 @@ func (s *Server) workSession(project string) string {
 // where the user is looking: the active tab doesn't change. real is cwd with symlinks resolved (what the hub keeps:
 // /tmp/x is /private/tmp/x on macOS); a workspace's directory is matched against both, as typed in the UI either way.
 func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
+	return s.placeSessionWith(project, id, func(c *layoutCall, space string) (node, error) {
+		return pickWorkspace(c, space, cwd, real, wsID)
+	})
+}
+
+// placeSessionWith puts session id as a new tab in the workspace pick chooses (it may add one) in project's Code layout.
+func (s *Server) placeSessionWith(project, id string, pick func(c *layoutCall, space string) (node, error)) error {
 	layoutMu.Lock()
 	defer layoutMu.Unlock()
 	raw := s.Layout.Get()
@@ -742,6 +749,30 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 	}
 	space := spaceOr(project)
 	c := &layoutCall{l: l, space: space}
+	w, err := pick(c, space)
+	if err != nil {
+		return err
+	}
+	p := node{"type": "pane", "id": rid("p"), "sessionId": id}
+	t := node{"id": rid("t"), "root": p, "focus": p["id"]}
+	c.insertTab(w, t, 0)
+	c.normalize()
+	b, err := json.Marshal(c.l)
+	if err != nil {
+		return err
+	}
+	out := json.RawMessage(b) // not []byte: that would go out to the windows as a base64 string, which they drop
+	if err := s.Layout.Set(out); err != nil {
+		return err
+	}
+	if s.Hub != nil {
+		s.Hub.Broadcast("layout", map[string]any{"data": out, "client": "gerdr-work"})
+	}
+	return nil
+}
+
+// pickWorkspace: placeSession's choice of workspace (see there).
+func pickWorkspace(c *layoutCall, space, cwd, real, wsID string) (node, error) {
 	var w node
 	best := -1
 	for _, x := range c.wss() {
@@ -766,28 +797,13 @@ func (s *Server) placeSession(project, id, cwd, real, wsID string) error {
 	if wsID != "" && wsID != "new" {
 		var err error
 		if w, err = c.workspace(wsID); err != nil {
-			return fmt.Errorf("%w (project %q)", err, space)
+			return nil, fmt.Errorf("%w (project %q)", err, space)
 		}
 	}
 	if w == nil {
 		w, _ = c.newWorkspace(filepath.Base(cwd), cwd, space)
 	}
-	p := node{"type": "pane", "id": rid("p"), "sessionId": id}
-	t := node{"id": rid("t"), "root": p, "focus": p["id"]}
-	c.insertTab(w, t, 0)
-	c.normalize()
-	b, err := json.Marshal(c.l)
-	if err != nil {
-		return err
-	}
-	out := json.RawMessage(b) // not []byte: that would go out to the windows as a base64 string, which they drop
-	if err := s.Layout.Set(out); err != nil {
-		return err
-	}
-	if s.Hub != nil {
-		s.Hub.Broadcast("layout", map[string]any{"data": out, "client": "gerdr-work"})
-	}
-	return nil
+	return w, nil
 }
 
 // maxInlineImage: a bigger image goes as a file link instead (the agent reads it with its tools), as from the composer.

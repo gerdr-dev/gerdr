@@ -178,6 +178,17 @@ async function sendWithRetry(id: string, content: ContentBlock[], onRetry?: (att
 }
 
 export type HerdrPane = { id: string; agent?: string; sessionId?: string; cwd: string; title?: string; existing?: string; skip?: string };
+export type DesktopSession = {
+  id: string;
+  title: string;
+  cwd: string;
+  scratch: boolean;
+  archived: boolean;
+  model?: string;
+  updatedAt: string;
+  existing?: string;
+  skip?: string;
+};
 export type HerdrWorkspace = { id: string; label: string; tabs: { label: string; panes: HerdrPane[] }[] };
 
 /** 不让电脑睡的状态（internal/awake.Status）。时间是 unix 毫秒，0 = 没有，-1 = 无限期。 */
@@ -236,6 +247,12 @@ export const api = {
       reused: number;
       errors?: string[];
     }>("POST", "/api/import/herdr", { workspaces }),
+  desktopScan: () => req<{ dir: string; sessions: DesktopSession[] }>("GET", "/api/import/claude-desktop"),
+  desktopImport: (ids: string[], project?: string) =>
+    req<{
+      results: { id: string; title?: string; session?: string; reused?: boolean; error?: string }[];
+      placeError?: string;
+    }>("POST", "/api/import/claude-desktop", { ids, project }),
   hello: () => req<Hello>("GET", "/api/hello"),
   /** A key for Work local functions' ctx.secrets.get ("" deletes it); the value is never served back. */
   setWorkSecret: (name: string, value: string) => req("POST", "/api/work/secrets", { name, value }),
@@ -357,17 +374,24 @@ export const api = {
   send: sendWithRetry,
   /** Stores a composer attachment the agent can't take inline (a video) on the gerdr machine; returns its absolute path. */
   /** host: onto another computer, for its agent (the answer is a path there) */
-  upload: async (f: File, host?: string) => {
-    const res = await fetch(`/api/fs/upload?name=${encodeURIComponent(f.name)}${hostQ(host, "&")}`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "X-Gerdr": "1" },
-      body: f,
-    });
-    const data = await res.json().catch(() => undefined);
-    if (!res.ok) throw new ApiError(res.status, data?.error || res.statusText, data);
-    return data as { path: string };
-  },
+  /** onProgress (0..1): XHR rather than fetch, as fetch reports no upload progress (a phone's video takes a while). */
+  upload: (f: File, host?: string, onProgress?: (fraction: number) => void) =>
+    new Promise<{ path: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/fs/upload?name=${encodeURIComponent(f.name)}${hostQ(host, "&")}`);
+      xhr.setRequestHeader("X-Gerdr", "1");
+      if (onProgress) xhr.upload.onprogress = (e) => e.lengthComputable && e.total > 0 && onProgress(e.loaded / e.total);
+      xhr.onload = () => {
+        let data: any;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch {}
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data as { path: string });
+        else reject(new ApiError(xhr.status, data?.error || xhr.statusText, data));
+      };
+      xhr.onerror = () => reject(new TypeError("Failed to fetch"));
+      xhr.send(f);
+    }),
   // ---- Artifacts folders (docs/dev/ARTIFACTS.md, server/artifactsapi.go). host: the folder is on another computer ----
   /** Where a session's artifacts go (it may not exist yet) and its records; or a folder given by path. */
   artifacts: (by: { session: string } | { dir: string }, host?: string) =>

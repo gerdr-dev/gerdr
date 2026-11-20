@@ -764,6 +764,65 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 	forkCmd.Flags().BoolVar(&fFocus, "focus", false, i18n.S("打开后把焦点切过去（默认不切，别打断人）", "switch focus to it once opened (off by default, so as not to interrupt the user)"))
 	cmd.AddCommand(forkCmd)
 
+	// import: take over conversations another app on this computer had (hub CreateOptions.Import), as Settings →
+	// Import does. Only claude-desktop for now (server/importapi.go).
+	var iAll, iArchived bool
+	importCmd := &cobra.Command{
+		Use: i18n.S("import claude-desktop [会话 id…]", "import claude-desktop [session id…]"),
+		Short: i18n.S(
+			"导入 Claude Desktop 里 Code 标签页的对话（历史全在，接着聊）。不给 id 也不给 --all = 列出来（JSON：id、title、cwd、existing 已导入过、skip 导不了的原因）。导入的放进当前项目：在项目文件夹里的进那个文件夹的工作空间，在 Desktop 临时文件夹里的进「Claude Desktop」工作空间。Desktop 的普通聊天在 Anthropic 服务器上，导不了",
+			"Import the Claude Desktop App's Code-tab conversations (history and all, to carry on). No ids and no --all = list them (JSON: id, title, cwd, existing = imported already, skip = why it can't be). Imported ones go in the current project: one in a project folder into that folder's workspace, ones in the Desktop App's scratch folders into a \"Claude Desktop\" workspace. The Desktop App's chat conversations live on Anthropic's servers and can't be imported"),
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if args[0] != "claude-desktop" {
+				return fmt.Errorf(i18n.S("不认识的来源 %q（现在只有 claude-desktop）", "unknown source %q (only claude-desktop for now)"), args[0])
+			}
+			c := client()
+			var scan struct {
+				Sessions []struct {
+					ID       string `json:"id"`
+					Archived bool   `json:"archived"`
+					Existing string `json:"existing"`
+					Skip     string `json:"skip"`
+				} `json:"sessions"`
+			}
+			if len(args) == 1 && !iAll {
+				var raw json.RawMessage
+				if err := c.do("GET", "/api/import/claude-desktop", nil, &raw); err != nil {
+					return err
+				}
+				printJSON(raw)
+				return nil
+			}
+			ids := args[1:]
+			if iAll {
+				if err := c.do("GET", "/api/import/claude-desktop", nil, &scan); err != nil {
+					return err
+				}
+				for _, x := range scan.Sessions {
+					if x.Existing == "" && x.Skip == "" && (iArchived || !x.Archived) {
+						ids = append(ids, x.ID)
+					}
+				}
+				if len(ids) == 0 {
+					return errors.New(i18n.S("没有可以导入的（都导入过了，或者导不了）", "nothing to import (all imported already, or can't be)"))
+				}
+			}
+			body := map[string]any{"ids": ids}
+			who := c.caller()
+			body["project"], body["from"], body["term"] = who.Project, who.Session, who.Term
+			var raw json.RawMessage
+			if err := c.do("POST", "/api/import/claude-desktop", body, &raw); err != nil {
+				return err
+			}
+			printJSON(raw)
+			return nil
+		},
+	}
+	importCmd.Flags().BoolVar(&iAll, "all", false, i18n.S("导入所有还没导入、能导入的（默认不含 Desktop 里归档了的）", "import every one not imported yet that can be (archived ones in the Desktop App left out by default)"))
+	importCmd.Flags().BoolVar(&iArchived, "archived", false, i18n.S("和 --all 一起用：归档了的也导入", "with --all: archived ones too"))
+	cmd.AddCommand(importCmd)
+
 	cmd.AddCommand(&cobra.Command{
 		Use:   i18n.S("tag <会话> <k=v>...", "tag <session> <k=v>..."),
 		Short: i18n.S("改会话的标签：k=v 设置，k= 删掉；没提到的不动。输出改完的会话", "Change a session's tags: k=v sets, k= removes; others stay. Prints the session"),

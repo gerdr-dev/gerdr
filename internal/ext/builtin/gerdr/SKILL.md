@@ -1,6 +1,6 @@
 ---
 name: gerdr
-description: "Work with other coding-agent sessions inside Gerdr (the GUI you run in; Claude Code / Codex / Gerdr Agent): list sessions, start one next to you and hand it a task, wait for it, read its reply, message an existing one, fork a conversation (same agent or another), run several in parallel, sign a session's agent in again. Use when the user asks you to delegate to / start / ask / check on another agent or session. Also another computer paired with this one: run commands there (`gerdr host exec`), copy files / folders (`gerdr host cp`), sync a folder, start a session there; and typing into / reading a terminal pane (`gerdr pane send / read`). Requires GERDR_ENV=1."
+description: "Work with other coding-agent sessions inside Gerdr (the GUI you run in; Claude Code / Codex / Gerdr Agent): list sessions, start one next to you and hand it a task, wait for it, read its reply, message an existing one, fork a conversation (same agent or another), import the Claude Desktop App's Code-tab conversations (`gerdr session import claude-desktop`), run several in parallel, sign a session's agent in again. Use when the user asks you to delegate to / start / ask / check on another agent or session. Also another computer paired with this one: run commands there (`gerdr host exec`), copy files / folders (`gerdr host cp`), sync a folder, start a session there; and typing into / reading a terminal pane (`gerdr pane send / read`). Requires GERDR_ENV=1."
 ---
 
 # Gerdr：和其他会话协作
@@ -100,6 +100,12 @@ gerdr session new --agent codex --title reviewer \
   always gets the history as text with the first message, like switching agents, and so does a session that can't
   be copied. Not while the source is running. Use it when the user wants to try another
   direction, or another agent's take, without losing the conversation they have;
+- Import the Claude Desktop App's Code-tab conversations (Settings → Import does the same): `gerdr session import
+  claude-desktop` lists them (JSON: `id`, `title`, `cwd`, `existing` = imported already, `skip` = why it can't be);
+  `gerdr session import claude-desktop <id…>` or `--all` (`--archived` to include archived ones) takes them over with
+  their whole history, into the current project: one in a project folder into that folder's workspace, the ones in
+  the Desktop App's scratch folders into a "Claude Desktop" workspace. The Desktop App's chat conversations (the
+  claude.ai kind) live on Anthropic's servers and can't be imported; say so instead of looking for them on disk;
 - A project folder was moved or renamed: `gerdr session cwd <session> <new folder>` moves each of its conversations
   there (the conversation and Claude's transcript come along; not while it runs), and `gerdr workspace cwd <ws> <folder>`
   changes where a workspace's new tabs start;

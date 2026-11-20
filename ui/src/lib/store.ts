@@ -34,6 +34,7 @@ type Dialog =
   /** a project's skills / MCP (ProjectExtDialog); project = its space id */
   | { kind: "projectExt"; project: string; name: string; tab?: "skills" | "memory" | "off" }
   | { kind: "importHerdr" }
+  | { kind: "importClaudeDesktop" }
   /** host: the agent's records on another computer (docs/dev/MULTIHOST.md) */
   | { kind: "importAgent"; agent: string; cwd: string; paneId: string; host?: string }
   | { kind: "resume"; sessionId: string; paneId: string }

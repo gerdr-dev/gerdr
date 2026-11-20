@@ -402,6 +402,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
                       {t("settings.import.button")}
                     </Button>
                   </Row>
+                  <Row label={t("settings.import.claudeDesktop")} hint={t("settings.import.claudeDesktop.hint")}>
+                    <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "importClaudeDesktop" } })}>
+                      {t("settings.import.button")}
+                    </Button>
+                  </Row>
                 </Section>
               </Page>
               <Page value="panels" className="pt-2">

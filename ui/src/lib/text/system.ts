@@ -289,6 +289,22 @@ export const zh = {
   "addons.slotTaken": "插槽 {slot} 里已经有 id 为 {id} 的组件了",
   "addons.failed": "扩展 {addon} 出错：{error}",
   "addons.noSetup": "扩展要 export default defineAddon({ setup(g) { … } })",
+  "importDesktop.title": "从 Claude Desktop 导入",
+  "importDesktop.desc": "Claude Desktop 里 Code 标签页的对话，历史全在，导进来接着聊。Desktop 的普通聊天存在 Anthropic 的服务器上，导不了。",
+  "importDesktop.reading": "读 Claude Desktop…",
+  "importDesktop.none": "这台电脑上没找到 Claude Desktop 的 Code 对话。",
+  "importDesktop.scratch": "Desktop 临时文件夹",
+  "importDesktop.archived": "已归档",
+  "importDesktop.existing": "已导入",
+  "importDesktop.where":
+    "在项目文件夹里的对话放进那个文件夹的工作空间，在 Desktop 临时文件夹里的放进「Claude Desktop」工作空间。Desktop 里开着的对话先别在那边接着聊 —— 两边同时写一个会话，对话会分叉。",
+  "importDesktop.import.one": "导入 {n} 个对话",
+  "importDesktop.import.other": "导入 {n} 个对话",
+  "importDesktop.done.one": "导入了 {n} 个对话",
+  "importDesktop.done.other": "导入了 {n} 个对话",
+  "importDesktop.errors.one": "{n} 个没导进来：{error}",
+  "importDesktop.errors.other": "{n} 个没导进来：{error}",
+  "importDesktop.placeError": "对话导进来了（在会话列表里），但没能放进工作空间：{error}",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -593,4 +609,21 @@ export const en: Record<keyof typeof zh, string> = {
   "addons.slotTaken": "Slot {slot} already has a component with id {id}",
   "addons.failed": "Add-on {addon} failed: {error}",
   "addons.noSetup": "An add-on must export default defineAddon({ setup(g) { … } })",
+  "importDesktop.title": "Import from Claude Desktop",
+  "importDesktop.desc":
+    "The Claude Desktop App's Code-tab conversations, history and all, to carry on here. The Desktop App's chat conversations are kept on Anthropic's servers and can't be imported.",
+  "importDesktop.reading": "Reading Claude Desktop…",
+  "importDesktop.none": "No Claude Desktop Code conversations on this computer.",
+  "importDesktop.scratch": "Desktop scratch folder",
+  "importDesktop.archived": "Archived",
+  "importDesktop.existing": "Imported",
+  "importDesktop.where":
+    "A conversation in a project folder goes into that folder's workspace; ones in the Desktop App's scratch folders go into a \"Claude Desktop\" workspace. Don't carry on in the Desktop App as well: two apps writing to one conversation fork it.",
+  "importDesktop.import.one": "Import {n} conversation",
+  "importDesktop.import.other": "Import {n} conversations",
+  "importDesktop.done.one": "Imported {n} conversation",
+  "importDesktop.done.other": "Imported {n} conversations",
+  "importDesktop.errors.one": "{n} wasn't imported: {error}",
+  "importDesktop.errors.other": "{n} weren't imported: {error}",
+  "importDesktop.placeError": "The conversations were imported (they're in the sessions list) but couldn't be put in a workspace: {error}",
 };

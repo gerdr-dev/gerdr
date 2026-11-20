@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gerdr-dev/gerdr/internal/desktopimport"
 	"github.com/gerdr-dev/gerdr/internal/herdrimport"
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
@@ -61,6 +62,7 @@ func (s *Server) herdrScan(ctx context.Context) (*herdrimport.Snapshot, map[stri
 }
 
 func (s *Server) importRoutes(mux *http.ServeMux) {
+	s.desktopImportRoutes(mux)
 	mux.HandleFunc("GET /api/import/herdr", func(w http.ResponseWriter, r *http.Request) {
 		snap, info, err := s.herdrScan(r.Context())
 		if err != nil {
@@ -203,5 +205,159 @@ func (s *Server) importRoutes(mux *http.ServeMux) {
 			}
 		}
 		writeJSON(w, map[string]any{"workspaces": out, "imported": imported, "reused": reused, "errors": errs})
+	})
+}
+
+// "Import from Claude Desktop": the Desktop App's Code-tab conversations are plain Claude Code sessions
+// (internal/desktopimport), so each is taken over with a resume, like the resume list's. They go into the caller's
+// project: one in a real project folder into that folder's workspace (as `gerdr session new` places), the ones in the
+// Desktop App's scratch folders together into a workspace named "Claude Desktop" (one workspace per scratch folder
+// would be a row of meaningless names).
+
+type desktopSession struct {
+	desktopimport.Session
+	Existing string `json:"existing,omitempty"` // already a Gerdr session (imported before)
+	Skip     string `json:"skip,omitempty"`     // why it can't be imported
+}
+
+// DesktopWorkspace is the workspace the Desktop App's scratch-folder conversations are put in.
+const DesktopWorkspace = "Claude Desktop"
+
+func (s *Server) desktopScan() ([]desktopSession, error) {
+	list, err := desktopimport.Scan(desktopimport.Dir(), "")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]desktopSession, 0, len(list))
+	for _, x := range list {
+		d := desktopSession{Session: x}
+		switch x.Missing {
+		case "transcript":
+			d.Skip = i18n.S("找不到它的会话记录（~/.claude/projects 里没有）", "Its transcript isn't there (not in ~/.claude/projects)")
+		case "cwd":
+			d.Skip = i18n.S("它的文件夹已经不在了：", "Its folder is gone: ") + x.Cwd
+		}
+		if sess := s.Hub.FindByAgent("claude", x.ID); sess != nil {
+			d.Existing = sess.Summary().ID
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+func (s *Server) desktopImportRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/import/claude-desktop", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.desktopScan()
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"dir": desktopimport.Dir(), "sessions": list})
+	})
+
+	mux.HandleFunc("POST /api/import/claude-desktop", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			IDs []string `json:"ids"` // Claude Code session ids (the scan's id)
+			Caller
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		list, err := s.desktopScan()
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		byID := map[string]desktopSession{}
+		for _, x := range list {
+			byID[x.ID] = x
+		}
+		c := b.Caller
+		if c.Session != "" {
+			if self, err := s.Hub.Session(c.Session); err == nil {
+				c.SessionCwd = self.Summary().Cwd
+			}
+		}
+		project := ResolveSpace(s.Layout.Get(), c, s.workProject())
+
+		type result struct {
+			ID      string `json:"id"`                // the Claude Code session id asked for
+			Title   string `json:"title,omitempty"`   // its title
+			Session string `json:"session,omitempty"` // the Gerdr session it is now
+			Reused  bool   `json:"reused,omitempty"`  // was a Gerdr session already
+			Error   string `json:"error,omitempty"`
+		}
+		results := make([]result, len(b.IDs))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		// Taking one over replays its transcript: a few at a time
+		sem := make(chan struct{}, 4)
+		var wg sync.WaitGroup
+		for i, id := range b.IDs {
+			x, ok := byID[id]
+			res := &results[i]
+			res.ID, res.Title = id, x.Title
+			switch {
+			case !ok:
+				res.Error = i18n.S("Claude Desktop 里没有这个会话", "No such conversation in Claude Desktop")
+				continue
+			case x.Existing != "":
+				res.Session, res.Reused = x.Existing, true
+				continue
+			case x.Skip != "":
+				res.Error = x.Skip
+				continue
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				sess, err := s.Hub.Create(ctx, hub.CreateOptions{Agent: "claude", Cwd: x.Cwd, Import: x.ID, Title: x.Title, Project: project})
+				if err != nil {
+					res.Error = err.Error()
+					return
+				}
+				res.Session = sess.Summary().ID
+			}()
+		}
+		wg.Wait()
+
+		// On screen, in the order asked (the scan's: newest first, each new tab goes first, so put the oldest in first)
+		var placeErr string
+		for i := len(results) - 1; i >= 0; i-- {
+			res := results[i]
+			if res.Session == "" || res.Reused {
+				continue
+			}
+			x := byID[res.ID]
+			sum, err := s.Hub.Session(res.Session)
+			if err != nil {
+				continue
+			}
+			real := sum.Summary().Cwd
+			err = s.placeSessionWith(project, res.Session, func(c *layoutCall, space string) (node, error) {
+				if !x.Scratch {
+					return pickWorkspace(c, space, x.Cwd, real, "")
+				}
+				for _, w := range c.visibleWs() {
+					if str(w, "name") == DesktopWorkspace {
+						return w, nil
+					}
+				}
+				w, _ := c.newWorkspace(DesktopWorkspace, "", space)
+				return w, nil
+			})
+			if err != nil {
+				placeErr = err.Error()
+			}
+		}
+		out := map[string]any{"results": results}
+		if placeErr != "" {
+			// The conversations are in Gerdr either way (the sessions list); only putting them in a tab failed
+			out["placeError"] = placeErr
+		}
+		writeJSON(w, out)
 	})
 }

@@ -24,6 +24,11 @@ gerdr acp claude  # 把内置适配器当 stdio ACP agent 跑（给 Zed 等 ACP 
 换成另一种引擎时，总是把之前的对话整理成文字，在你发第一句话时一起交给它。
 agent 也能做：`gerdr session fork`。
 
+Claude Desktop 里 Code 标签页的对话可以拿到这里接着聊：设置 → 导入 →「从 Claude Desktop 导入」，勾上要的，历史全都带过来。
+在项目文件夹里跑的对话放进那个文件夹的工作空间，在 Desktop 自己的临时文件夹里跑的一起放进「Claude Desktop」工作空间。
+导进来之后别再在 Desktop 里接着聊，不然对话会分叉。Desktop 的普通聊天（claude.ai 那种）存在 Anthropic 的服务器上、不在你电脑里，导不了。
+agent 也能做：`gerdr session import claude-desktop`。
+
 ## 快捷键
 
 和 herdr / tmux 一样：先按前缀 `ctrl+b`，松开，再按：

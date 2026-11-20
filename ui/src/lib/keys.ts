@@ -78,6 +78,7 @@ export type KeyAction =
   | "help"
   | "settings"
   | "importHerdr"
+  | "importClaudeDesktop"
   | "palette"
   | "nextAttention"
   | "prevAttention"
@@ -160,6 +161,7 @@ export const ACTION_TITLES: Record<KeyAction, string> = {
   help: t("keys.help"),
   settings: t("keys.settings"),
   importHerdr: t("keys.importHerdr"),
+  importClaudeDesktop: t("keys.importClaudeDesktop"),
   palette: t("keys.palette"),
   nextAttention: t("keys.nextAttention"),
   prevAttention: t("keys.prevAttention"),
@@ -262,6 +264,7 @@ const MAC_KEYS: Record<KeyAction, string[]> = {
   help: ["prefix+?", "meta+/"],
   settings: ["prefix+s", "meta+,"],
   importHerdr: [],
+  importClaudeDesktop: [],
   palette: ["prefix+:", "meta+k", "ctrl+shift+p"],
   nextAttention: ["prefix+d"],
   prevAttention: ["prefix+u"],
@@ -347,7 +350,7 @@ export const KEY_GROUPS: [string, KeyAction[]][] = [
   [t("keys.group.workspace"), ["newWorkspace", "workspaces", "nextWorkspace", "prevWorkspace", "ws1", "renameWorkspace", "closeWorkspace"]],
   [t("keys.group.project"), ["newSpace", "nextSpace", "prevSpace"]],
   [t("keys.group.session"), ["active1", "sessions", "nextAttention", "prevAttention", "focusAttention", "renamePane", "stop", "stash"]],
-  [t("keys.group.other"), ["palette", "overview", "toggleSidebar", "settings", "help", "importHerdr"]],
+  [t("keys.group.other"), ["palette", "overview", "toggleSidebar", "settings", "help", "importHerdr", "importClaudeDesktop"]],
 ];
 
 /**
