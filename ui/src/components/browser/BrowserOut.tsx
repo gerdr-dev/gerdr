@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AppWindow, Globe, SquareArrowOutUpRight, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { openBrowserWindow } from "@/lib/actions";
 import { t } from "@/lib/i18n";
 import { nativeBrowserWindow, nativeBrowserWindowClose } from "@/lib/native";
@@ -25,6 +26,15 @@ export function PopOutButton({ project, tab, onOut }: { project: string; tab: nu
     >
       <SquareArrowOutUpRight className="size-3.5" />
     </Button>
+  );
+}
+
+/** The same as a ⋯ menu item: a Code Browser pane keeps its bar to the page's own buttons and puts this with the pane moves. */
+export function PopOutItem({ project, tab }: { project: string; tab: number }) {
+  return (
+    <DropdownMenuItem onClick={() => openBrowserWindow(project, tab)}>
+      <SquareArrowOutUpRight /> {t("browser.newWindow")}
+    </DropdownMenuItem>
   );
 }
 

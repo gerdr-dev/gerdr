@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Check, Globe, Keyboard, Maximize, Monitor, MoreHorizontal, Plus, RotateCw, Smartphone, Tablet, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Compass,
+  Globe,
+  Keyboard,
+  Maximize,
+  Monitor,
+  MoreHorizontal,
+  Plus,
+  RotateCw,
+  Smartphone,
+  Tablet,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { api, type BrowserInput } from "@/lib/api";
@@ -19,7 +34,7 @@ import {
 } from "@/lib/actions";
 import { t } from "@/lib/i18n";
 import { paintFrame, parseFrame, wsURL, type StreamPage } from "@/lib/screenStream";
-import { canNativeBrowser, nativeBrowserView } from "@/lib/native";
+import { canNativeBrowser, nativeBrowserView, nativeOpenURL } from "@/lib/native";
 import { FLOAT_FITS, leaves, type FloatFit } from "@/lib/layout";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -962,13 +977,18 @@ export function BrowserScreen({
 
   return (
     <>
-      <div onPointerDown={onHeadPointerDown} className={cn("relative flex shrink-0 items-center gap-1 border-b px-3 text-[12px] max-md:pl-4", headClassName)}>
+      {/* A container: the pane can be narrow on a wide screen (floating, a split), so the bar sheds by its own width,
+          not the window's — back / forward first, then the globe, so the address keeps room to read */}
+      <div
+        onPointerDown={onHeadPointerDown}
+        className={cn("@container/bar relative flex shrink-0 items-center gap-1 border-b px-3 text-[12px] max-md:pl-4", headClassName)}
+      >
         {busy && <div className="page-loading pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden" />}
-        <Globe className="mr-1 size-4 shrink-0 text-muted-foreground" />
+        <Globe className="mr-1 size-4 shrink-0 text-muted-foreground @max-[20rem]/bar:hidden" />
         <Button
           variant="ghost"
           size="icon"
-          className="size-6 shrink-0"
+          className="size-6 shrink-0 @max-[26rem]/bar:hidden"
           disabled={!live || !page?.back}
           title={t("browser.back")}
           onClick={() => nav({ kind: "back" })}
@@ -978,7 +998,7 @@ export function BrowserScreen({
         <Button
           variant="ghost"
           size="icon"
-          className="size-6 shrink-0 max-md:hidden"
+          className="size-6 shrink-0 max-md:hidden @max-[26rem]/bar:hidden"
           disabled={!live || !page?.forward}
           title={t("browser.forward")}
           onClick={() => nav({ kind: "forward" })}
@@ -1043,6 +1063,18 @@ export function BrowserScreen({
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.pages")}>
               <MoreHorizontal className="size-3.5" />
+        {/* The same address in the person's own browser (the App hands it to the system; a web page opens a tab). A compass, not
+            an arrow out of a box: that is "open in new window" (PopOutButton), and the two read as one */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 shrink-0"
+          disabled={!live || !page?.url}
+          title={t("browser.openSystem")}
+          onClick={() => page?.url && nativeOpenURL(page.url)}
+        >
+          <Compass className="size-3.5" />
+        </Button>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-w-80" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -1101,7 +1133,17 @@ export function BrowserScreen({
       </div>
       <Body>
         {/* a device's page narrower than the box sits on a muted ground, as in Chrome's device toolbar */}
-        <div ref={boxRef} className={cn("group/view relative h-full w-full overflow-hidden", nativeView && size ? "bg-muted" : "bg-background")}>
+        {/* View only (only ever a floating pane, which has no App page over it): the page takes nothing, so a press
+            anywhere on it moves the floating box, as its title bar does */}
+        <div
+          ref={boxRef}
+          onPointerDown={viewOnly ? onHeadPointerDown : undefined}
+          className={cn(
+            "group/view relative h-full w-full overflow-hidden",
+            nativeView && size ? "bg-muted" : "bg-background",
+            viewOnly && "cursor-grab touch-none",
+          )}
+        >
           {/* View only (the pane's border goes dashed, Panes.tsx): what that means, said where the pointer is */}
           {viewOnly && (
             <div className="pointer-events-none absolute right-2 bottom-2 z-10 rounded-md whitespace-nowrap bg-popover/90 px-2 py-1 text-[11px] text-popover-foreground opacity-0 shadow-sm ring-1 ring-border transition-opacity group-hover/view:opacity-100">

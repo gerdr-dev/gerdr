@@ -38,7 +38,7 @@ import { api, type FileStat } from "@/lib/api";
 import { FileActions, FileContent } from "./FileViewer";
 import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
-import { BrowserOutCard, PopOutButton } from "./browser/BrowserOut";
+import { BrowserOutCard, PopOutItem } from "./browser/BrowserOut";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -766,13 +766,20 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           onHeadPointerDown={drag.onPointerDown}
           extra={
             <>
-              {/* to a window of its own (the App only: it tracks them; not while floating, already out of the way) */}
-              {b.tab && canPopOut && !floats && <PopOutButton project={b.project} tab={b.tab} />}
+              <FloatButton pane={pane} tab={tab} />
               {zoomBtn}
               <PaneCount count={count} />
             </>
           }
-          paneItems={<PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} />}
+          paneItems={
+            <>
+              {/* to a window of its own (the App only: it tracks them; not while floating, already out of the way).
+                  In the menu with the pane moves, not on the bar: the bar's ↗ read as the same thing as "open in your
+                  browser" beside it (user report) */}
+              {b.tab && canPopOut && !floats && <PopOutItem project={b.project} tab={b.tab} />}
+              <PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} noFloat />
+            </>
+          }
           Body={PaneBody}
         />
       )}
@@ -793,11 +800,43 @@ function FloatItem({ pane, tab }: { pane: PaneLeaf; tab: Tab; count?: Count }) {
   );
 }
 
+/** The same as a button on the pane's bar (the Browser pane's, asked for there instead of in its ⋯). */
+function FloatButton({ pane, tab }: { pane: PaneLeaf; tab: Tab }) {
+  if (usePhone()) return null;
+  const on = !!tab.float?.[pane.id];
+  if (!on && !floatable(tab, pane.id)) return null;
+  const label = t(on ? "panes.dock" : "panes.float");
+  const key = keyText("float");
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn("size-6 shrink-0", on && "text-brand")}
+      title={key ? `${label} (${key})` : label}
+      onClick={() => toggleFloatPane(pane.id)}
+    >
+      <PictureInPicture2 className="size-3.5" />
+    </Button>
+  );
+}
+
 /**
  * The ⋯ menu's part every pane has, in the session pane's order and words: split, new tab, zoom, to its own tab, close.
  * A pane's own items go above it (the Browser pane's pages).
  */
-function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab; zoomed?: boolean; count?: Count }) {
+function PaneMoveItems({
+  pane,
+  tab,
+  zoomed,
+  count,
+  noFloat,
+}: {
+  pane: PaneLeaf;
+  tab: Tab;
+  zoomed?: boolean;
+  count?: Count;
+  noFloat?: boolean; // the pane's bar has it as a button (FloatButton)
+}) {
   // A floating pane isn't in the split: splitting it or opening a tab from it means nothing there (asked to drop them)
   // the layout's own: a floated pane isn't in the split on any device, a phone included
   const floating = !!tab.float?.[pane.id];
@@ -819,7 +858,7 @@ function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab;
           </DropdownMenuItem>
         </>
       )}
-      <FloatItem pane={pane} tab={tab} count={count} />
+      {!noFloat && <FloatItem pane={pane} tab={tab} count={count} />}
       <FitItems pane={pane} tab={tab} />
       {!zoomed && !count && !tab.float?.[pane.id] && leaves(dockedRoot(tab) ?? tab.root).length > 1 && (
         <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>
