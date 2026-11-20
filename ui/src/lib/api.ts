@@ -312,6 +312,16 @@ export const api = {
   /** Image generation with a configured image model ("" = the default), as `gerdr image gen` does; images come back base64. */
   imageGen: (b: { prompt: string; model?: string; aspect?: string; images?: { mime: string; data: string }[] }) =>
     req<{ model: string; text: string; images: { mime: string; data: string }[] }>("POST", "/api/image", b),
+  /** The thinking levels a model gets and where from: its config, the provider's model list, the id guess. */
+  llmEfforts: (provider: LLMProvider, model: LLMModel) =>
+    req<{ efforts: string[] | null; default: string; source: "config" | "list" | "guess" | ""; listed?: string[]; guessed?: string[] }>(
+      "POST",
+      "/api/llm/efforts",
+      {
+        provider,
+        model,
+      },
+    ),
   llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
   doctor: () => req<DoctorReport | null>("GET", "/api/doctor"),
   /** deep = also run every claude / codex install found (can pop macOS's "malware blocked" dialog for a blocked one) */

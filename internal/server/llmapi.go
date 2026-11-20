@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
+	"time"
 
 	"github.com/gerdr-dev/gerdr/agents/native"
 	"github.com/gerdr-dev/gerdr/agents/native/llm"
@@ -41,6 +43,21 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{"reply": reply, "api": api})
+	})
+	// The thinking levels a model gets and where they come from (its config, the provider's model list, the id
+	// guess): the settings page's level editor. Provider and model as on the page (an unsaved draft works too).
+	mux.HandleFunc("POST /api/llm/efforts", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Provider native.Provider `json:"provider"`
+			Model    native.Model    `json:"model"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+		writeJSON(w, native.ModelEfforts(ctx, agentwire.WithKey(b.Provider, s.Secrets), b.Model))
 	})
 	mux.HandleFunc("POST /api/image", s.generateImage)
 	mux.HandleFunc("GET /api/image/models", func(w http.ResponseWriter, r *http.Request) {

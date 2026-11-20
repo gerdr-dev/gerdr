@@ -98,7 +98,15 @@ export type LoaderChoice = "dots" | `builtin:${string}` | `loader:${string}` | `
 
 /** config.json 的 llm：Gerdr Agent 直接调的模型接口（OpenAI 兼容或 Anthropic）。模型只写 id 时协议、思考档位按 id 猜（后端 native/config.go）。 */
 /** kind: "image" = an image generation model (never a session's model; used by generate_image / `gerdr image gen`). Unset = guessed from the id (isImageModel). */
-export type LLMModel = { id: string; name?: string; kind?: "chat" | "image"; api?: "chat" | "responses"; efforts?: string[]; window?: number };
+export type LLMModel = {
+  id: string;
+  name?: string;
+  kind?: "chat" | "image";
+  api?: "chat" | "responses";
+  efforts?: string[];
+  defaultEffort?: string;
+  window?: number;
+};
 /** api: the provider's protocol. Unset = OpenAI-compatible (each model picks Chat Completions / Responses); "anthropic" = Anthropic Messages; "gemini" = Google's native Gemini API. */
 export type LLMProvider = { id: string; name?: string; api?: "anthropic" | "gemini"; baseUrl: string; apiKey?: string; apiKeyEnv?: string; models: LLMModel[] };
 /** imageModel: provider/model for image generation; unset = the first image model, Gemini providers first (backend native/image.go resolveImage). */

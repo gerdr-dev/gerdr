@@ -1,5 +1,5 @@
-import { Check, Download, Image as ImageIcon, Loader2, Pencil, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { Brain, Check, Download, Image as ImageIcon, Loader2, Pencil, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
@@ -219,6 +219,7 @@ function Editor({
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState("");
   const [testing, setTesting] = useState<string | null>(null);
+  const [levels, setLevels] = useState<string | null>(null); // the model whose thinking levels are open
   const has = (id: string) => d.models.some((m) => m.id === id);
   const addModel = (id: string) => {
     id = id.trim();
@@ -347,6 +348,18 @@ function Editor({
                   <ImageIcon className="size-3" />
                   {isImageModel(m) && <span className="font-sans">{t("llmSettings.imageTag")}</span>}
                 </button>
+                {!isImageModel(m) && (
+                  <button
+                    className="flex items-center gap-0.5 rounded-sm px-1 text-muted-foreground hover:bg-muted hover:text-foreground data-[on=true]:bg-muted data-[on=true]:text-foreground data-[own=true]:text-brand"
+                    data-on={levels === m.id}
+                    data-own={!!m.efforts?.length}
+                    title={t("llmSettings.levelsTitle")}
+                    onClick={() => setLevels(levels === m.id ? null : m.id)}
+                  >
+                    <Brain className="size-3" />
+                    {m.efforts?.length ? <span className="font-sans">{m.efforts.length}</span> : null}
+                  </button>
+                )}
                 <button
                   className="rounded-sm px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                   title={t("llmSettings.testTitle")}
@@ -365,6 +378,19 @@ function Editor({
             ))}
             {!d.models.length && <span className="text-[12px] text-muted-foreground">{t("llmSettings.modelsEmpty")}</span>}
           </div>
+          {(() => {
+            const m = d.models.find((x) => x.id === levels);
+            const p = m && draftProvider();
+            return m && p ? (
+              <LevelEditor
+                key={m.id}
+                provider={p}
+                model={m}
+                onChange={(next) => set({ models: d.models.map((x) => (x.id === m.id ? next : x)) })}
+                onClose={() => setLevels(null)}
+              />
+            ) : null;
+          })()}
           <div className="flex items-center gap-2">
             <Input
               value={adding}
@@ -544,6 +570,129 @@ export function ImageModels() {
           <Plus className="size-3.5" /> {t("llmSettings.imageAdd")}
         </Button>
       )}
+    </div>
+  );
+}
+
+// The levels people pick from, low to high; a value not here (a number for a thinking budget, a gateway's own
+// name) keeps its place after them
+const LEVELS = ["off", "none", "minimal", "low", "medium", "high", "xhigh", "max"];
+const byLevel = (a: string, b: string) => {
+  const i = LEVELS.indexOf(a),
+    j = LEVELS.indexOf(b);
+  return (i < 0 ? 99 : i) - (j < 0 ? 99 : j);
+};
+type LevelInfo = { efforts: string[] | null; default: string; source: "config" | "list" | "guess" | ""; listed?: string[]; guessed?: string[] };
+
+/**
+ * A model's thinking levels: what it gets now and from where (its own config, the provider's model list, the guess
+ * from its id — /api/llm/efforts), and editing them. Any edit makes them the model's own (efforts / defaultEffort in
+ * config.json, saved with the provider); "Back to automatic" drops them again. Values go to the API as written.
+ */
+function LevelEditor({ provider, model, onChange, onClose }: { provider: LLMProvider; model: LLMModel; onChange: (m: LLMModel) => void; onClose: () => void }) {
+  const [info, setInfo] = useState<LevelInfo | null>(null);
+  const [err, setErr] = useState("");
+  const [custom, setCustom] = useState("");
+  useEffect(() => {
+    // Asked without the model's own levels: the page shows what automatic would be next to them
+    const { efforts: _e, defaultEffort: _d, ...bare } = model;
+    api
+      .llmEfforts(provider, bare)
+      .then(setInfo)
+      .catch((e) => setErr(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const own = !!model.efforts?.length;
+  const list = own ? model.efforts! : (info?.efforts ?? []);
+  const def = (own ? model.defaultEffort : info?.default) ?? "";
+  const write = (efforts: string[], d: string) => {
+    const next: LLMModel = { ...model, efforts: [...efforts].sort(byLevel), defaultEffort: efforts.includes(d) ? d : undefined };
+    if (!next.defaultEffort) delete next.defaultEffort;
+    onChange(next);
+  };
+  const auto = () => {
+    const next = { ...model };
+    delete next.efforts;
+    delete next.defaultEffort;
+    onChange(next);
+  };
+  const add = (v: string) => {
+    v = v.trim();
+    if (v && !list.includes(v)) write([...list, v], def);
+  };
+  const source = own ? "config" : (info?.source ?? "");
+  const suggestions = [...new Set([...LEVELS, ...(info?.listed ?? []), ...(info?.guessed ?? [])])].filter((v) => !list.includes(v)).sort(byLevel);
+  return (
+    <div className="space-y-2 rounded-md border bg-card p-2.5 text-[12px]">
+      <div className="flex items-center gap-2">
+        <Brain className="size-3.5 text-muted-foreground" />
+        <span className="font-medium">{t("llmSettings.levels", { id: model.id })}</span>
+        {info || own ? (
+          <span className="rounded-sm bg-muted px-1 text-[11px] text-muted-foreground">{t(`llmSettings.levelsFrom.${source || "none"}`)}</span>
+        ) : (
+          !err && <Loader2 className="size-3 animate-spin text-muted-foreground" />
+        )}
+        <span className="flex-1" />
+        {own && (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" onClick={auto} title={t("llmSettings.levelsAutoTitle")}>
+            {t("llmSettings.levelsAuto")}
+          </Button>
+        )}
+        <Button size="icon" variant="ghost" className="size-6" onClick={onClose} title={t("common.close")}>
+          <X className="size-3.5" />
+        </Button>
+      </div>
+      {err && <div className="text-bad">{err}</div>}
+      <div className="flex flex-wrap items-center gap-1">
+        {list.map((v) => (
+          <span
+            key={v}
+            className="flex items-center gap-1 rounded-sm py-0.5 pr-0.5 pl-1.5 font-mono ring-1 ring-border data-[on=true]:bg-brand/10 data-[on=true]:text-brand data-[on=true]:ring-brand/40"
+            data-on={v === def}
+          >
+            <button title={t("llmSettings.levelsMakeDefault")} onClick={() => write(list, v)}>
+              {v}
+              {v === def && <span className="ml-1 font-sans text-[11px]">{t("llmSettings.imageDefault")}</span>}
+            </button>
+            <button
+              className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              title={t("common.delete")}
+              onClick={() =>
+                write(
+                  list.filter((x) => x !== v),
+                  def,
+                )
+              }
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+        ))}
+        {!list.length && (info || own) && <span className="text-muted-foreground">{t("llmSettings.levelsNone")}</span>}
+      </div>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          {suggestions.map((v) => (
+            <button key={v} className="rounded-sm px-1.5 py-0.5 font-mono text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => add(v)}>
+              + {v}
+            </button>
+          ))}
+          <Input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            onKeyDown={(e) => {
+              stop(e);
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                add(custom);
+                setCustom("");
+              }
+            }}
+            className="h-6 w-36 font-mono text-[12px]"
+            placeholder={t("llmSettings.levelsCustom")}
+          />
+        </div>
+      )}
+      <div className="text-muted-foreground">{t("llmSettings.levelsHint")}</div>
     </div>
   );
 }

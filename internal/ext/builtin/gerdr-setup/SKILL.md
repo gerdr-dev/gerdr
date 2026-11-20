@@ -88,6 +88,11 @@ against the whole window). To compact earlier or later, set `compactAt` on that 
 on the same model fixes a wrong guess of the window size. Claude Code and Codex compact on their own; this doesn't
 touch them.
 
+A model's thinking levels (the effort picker) come from its own `efforts` / `defaultEffort` when set, else from
+the provider's model list when it gives them, else a guess from the id. To set them:
+`gerdr config set llm.providers.<provider>.models.<model>.efforts '["low","medium","high","xhigh"]'` and
+`… .defaultEffort medium`; values go to the API as written. `gerdr config unset` on both goes back to automatic.
+
 The image model (for `gerdr image gen` and Gerdr Agent's `generate_image`) is `llm.imageModel`, picked from the
 providers' image models (`gerdr image models`); setting one up is in the gerdr-image skill.
 

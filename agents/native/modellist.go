@@ -122,3 +122,46 @@ func (c Config) fromList(p Provider, m Model) Model {
 	}
 	return m
 }
+
+// Efforts is what a model's effort picker offers and where that comes from, for the settings page.
+type Efforts struct {
+	Efforts []string `json:"efforts"`
+	Default string   `json:"default"`
+	// Source: "config" (the model's own efforts in config.json), "list" (the provider's model list), "guess"
+	// (from the id), "" (none: no thinking parameter is sent, the API's own default applies).
+	Source string `json:"source"`
+	// Listed / Guessed: what the list and the id guess would give, so the page can show them as starting points
+	// when the person writes their own.
+	Listed  []string `json:"listed,omitempty"`
+	Guessed []string `json:"guessed,omitempty"`
+}
+
+// ModelEfforts reports the levels m on p gets. Waits for the provider's model list (up to the context) when it
+// isn't known yet: the page asked about this model now, unlike a turn, which never waits for it.
+func ModelEfforts(ctx context.Context, p Provider, m Model) Efforts {
+	var mi ModelInfo
+	if ms := listedNow(p); ms != nil {
+		mi = ms[m.ID]
+	} else if ms, err := listFetch(ctx, p); err == nil {
+		for _, x := range ms {
+			if x.ID == m.ID {
+				mi = x
+			}
+		}
+	}
+	bare := m
+	bare.Efforts, bare.DefaultEffort = nil, ""
+	guess := p.withDefaults(bare)
+	out := Efforts{Listed: mi.Efforts, Guessed: guess.Efforts}
+	full := p.withDefaults(Config{listed: map[string]map[string]ModelInfo{p.ID: {m.ID: mi}}}.fromList(p, m))
+	out.Efforts, out.Default = full.Efforts, full.DefaultEffort
+	switch {
+	case len(m.Efforts) > 0:
+		out.Source = "config"
+	case len(mi.Efforts) > 0:
+		out.Source = "list"
+	case len(guess.Efforts) > 0:
+		out.Source = "guess"
+	}
+	return out
+}

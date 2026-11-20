@@ -95,3 +95,26 @@ func TestWithListedFetchesInBackground(t *testing.T) {
 	}
 	t.Fatal("the fetched list never showed up")
 }
+
+func TestModelEfforts(t *testing.T) {
+	old := listFetch
+	listFetch = func(ctx context.Context, p Provider) ([]ModelInfo, error) {
+		return []ModelInfo{{ID: "gemini-4-neon", Efforts: []string{"low", "medium", "high", "xhigh"}, DefaultEffort: "medium"}}, nil
+	}
+	defer func() { listFetch = old }()
+	p := Provider{ID: "eff-test", API: "gemini", BaseURL: "https://eff.example"}
+	if e := ModelEfforts(context.Background(), p, Model{ID: "gemini-4-neon"}); e.Source != "list" || fmt.Sprint(e.Efforts) != "[low medium high xhigh]" ||
+		e.Default != "medium" || fmt.Sprint(e.Guessed) != "[low medium high]" {
+		t.Errorf("listed: %+v", e)
+	}
+	if e := ModelEfforts(context.Background(), p, Model{ID: "gemini-4-neon", Efforts: []string{"high", "max"}, DefaultEffort: "max"}); e.Source != "config" ||
+		fmt.Sprint(e.Efforts) != "[high max]" || e.Default != "max" || len(e.Listed) != 4 {
+		t.Errorf("config: %+v", e)
+	}
+	if e := ModelEfforts(context.Background(), p, Model{ID: "gemini-3-pro"}); e.Source != "guess" || fmt.Sprint(e.Efforts) != "[low high]" {
+		t.Errorf("guess: %+v", e)
+	}
+	if e := ModelEfforts(context.Background(), Provider{ID: "o", BaseURL: "https://o.example"}, Model{ID: "some-llama"}); e.Source != "" || len(e.Efforts) != 0 {
+		t.Errorf("none: %+v", e)
+	}
+}

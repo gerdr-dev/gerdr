@@ -156,6 +156,19 @@ export const zh = {
   "llmSettings.imageFrom": "来自 {provider}",
   "llmSettings.imageDefault": "默认",
   "llmSettings.imageDefaultAuto": "默认（自动）",
+  "llmSettings.levelsTitle": "思考档位：看它现在用哪几档、从哪来，自己改",
+  "llmSettings.levels": "{id} 的思考档位",
+  "llmSettings.levelsFrom.config": "自己配的",
+  "llmSettings.levelsFrom.list": "来自服务商的模型列表",
+  "llmSettings.levelsFrom.guess": "按模型 ID 猜的",
+  "llmSettings.levelsFrom.none": "不发思考参数（用接口默认）",
+  "llmSettings.levelsAuto": "改回自动",
+  "llmSettings.levelsAutoTitle": "去掉自己配的档位：有模型列表就用列表的，没有就按 ID 猜",
+  "llmSettings.levelsMakeDefault": "点一下设为默认档",
+  "llmSettings.levelsNone": "没有档位",
+  "llmSettings.levelsCustom": "其他值，回车加上",
+  "llmSettings.levelsHint":
+    "点档位设为默认，× 去掉，下面点 + 加上。值原样发给接口（Gemini 2.5 这类可以写数字当思考 token 数）。一改就存成这个模型自己的配置，点「保存」生效。",
   "llmSettings.imageTry": "试一下",
   "llmSettings.imageTryPrompt": "一只橘猫趴在洒满阳光的窗台上，水彩风格，暖色调",
   "llmSettings.imageTryPlaceholder": "描述想要的图",
@@ -213,11 +226,11 @@ export const zh = {
   "llmSettings.fetch": "从接口拉",
   "llmSettings.filter": "在 {n} 个里找",
   "llmSettings.anthropicHint":
-    "每个模型都走 Anthropic Messages（/v1/messages，地址带不带 /v1 都行）。Claude 4.6 及以后自动开 adaptive 思考，档位 low → max；别的模型不发思考参数。猜错了在 config.json 的模型上写 {efforts}、{window}、{maxOutput}。",
+    "每个模型都走 Anthropic Messages（/v1/messages，地址带不带 /v1 都行）。Claude 4.6 及以后自动开 adaptive 思考，档位 low → max；别的模型不发思考参数。思考档位点模型上的 🧠 看来源、自己改（服务商的模型列表给了档位就用它的）；窗口猜错了在 config.json 的模型上写 {window}、{maxOutput}。",
   "llmSettings.geminiHint":
-    "每个模型都走 Gemini 原生接口（/v1beta/models/…:streamGenerateContent，地址带不带 /v1beta 都行，key 是 Google AI Studio 的）。Gemini 2.5 及以后自动开思考：3 Pro 是 low / high，Flash 是 minimal → high，别的 low → high（2.5 换成思考预算）；窗口 1M。猜错了在 config.json 的模型上写 {efforts}、{window}、{maxOutput}。",
+    "每个模型都走 Gemini 原生接口（/v1beta/models/…:streamGenerateContent，地址带不带 /v1beta 都行，key 是 Google AI Studio 的）。Gemini 2.5 及以后自动开思考：3 Pro 是 low / high，Flash 是 minimal → high，别的 low → high（2.5 换成思考预算）；窗口 1M。思考档位点模型上的 🧠 看来源、自己改（服务商的模型列表给了档位就用它的）；窗口猜错了在 config.json 的模型上写 {window}、{maxOutput}。",
   "llmSettings.openaiHint":
-    "协议、思考档位、上下文窗口按模型 ID 猜：gpt / o 系列走 Responses，别的走 Chat Completions；DeepSeek 是纯文本模型、思考档位 关 / 高 / 最高。 猜错了在 config.json 的模型上写 {api}、{efforts}、{window}。",
+    "协议、思考档位、上下文窗口按模型 ID 猜：gpt / o 系列走 Responses，别的走 Chat Completions；DeepSeek 是纯文本模型、思考档位 关 / 高 / 最高。 思考档位点模型上的 🧠 看来源、自己改（服务商的模型列表给了档位就用它的）；协议、窗口猜错了在 config.json 的模型上写 {api}、{window}。",
 
   // RemoteCert
   "remoteCert.title": "证书",
@@ -515,6 +528,19 @@ export const en: Record<keyof typeof zh, string> = {
   "llmSettings.imageFrom": "from {provider}",
   "llmSettings.imageDefault": "Default",
   "llmSettings.imageDefaultAuto": "Default (automatic)",
+  "llmSettings.levelsTitle": "Thinking levels: which ones it gets now, where from, and your own",
+  "llmSettings.levels": "Thinking levels of {id}",
+  "llmSettings.levelsFrom.config": "your own",
+  "llmSettings.levelsFrom.list": "from the provider's model list",
+  "llmSettings.levelsFrom.guess": "guessed from the model ID",
+  "llmSettings.levelsFrom.none": "no thinking parameter (the API's default)",
+  "llmSettings.levelsAuto": "Back to automatic",
+  "llmSettings.levelsAutoTitle": "Drop your own levels: the model list's when it has them, else the guess from the ID",
+  "llmSettings.levelsMakeDefault": "Click to make it the default level",
+  "llmSettings.levelsNone": "No levels",
+  "llmSettings.levelsCustom": "Other value, Enter",
+  "llmSettings.levelsHint":
+    "Click a level to make it the default, × to drop it, + below to add one. Values go to the API as written (on Gemini 2.5 and such, a number is a thinking budget in tokens). Any change makes them this model's own; Save applies it.",
   "llmSettings.imageTry": "Try it",
   "llmSettings.imageTryPrompt": "An orange cat lying on a sunlit windowsill, watercolor, warm tones",
   "llmSettings.imageTryPlaceholder": "Describe the image",
@@ -574,11 +600,11 @@ export const en: Record<keyof typeof zh, string> = {
   "llmSettings.fetch": "Fetch from API",
   "llmSettings.filter": "Search {n} models",
   "llmSettings.anthropicHint":
-    "Every model goes through Anthropic Messages (/v1/messages; the URL works with or without /v1). Claude 4.6 and later get adaptive thinking automatically, levels low → max; other models get no thinking parameters. If a guess is wrong, set {efforts}, {window} or {maxOutput} on the model in config.json.",
+    "Every model goes through Anthropic Messages (/v1/messages; the URL works with or without /v1). Claude 4.6 and later get adaptive thinking automatically, levels low → max; other models get no thinking parameters. Thinking levels: the 🧠 on a model shows where they come from and lets you set your own (the provider's model list wins over the guess when it gives them); a wrong window guess is fixed with {window} or {maxOutput} on the model in config.json.",
   "llmSettings.geminiHint":
-    "Every model goes through Gemini's native API (/v1beta/models/…:streamGenerateContent; the URL works with or without /v1beta; the key is a Google AI Studio one). Gemini 2.5 and later think automatically: 3 Pro takes low / high, Flash minimal → high, others low → high (a thinking budget on 2.5); 1M window. If a guess is wrong, set {efforts}, {window} or {maxOutput} on the model in config.json.",
+    "Every model goes through Gemini's native API (/v1beta/models/…:streamGenerateContent; the URL works with or without /v1beta; the key is a Google AI Studio one). Gemini 2.5 and later think automatically: 3 Pro takes low / high, Flash minimal → high, others low → high (a thinking budget on 2.5); 1M window. Thinking levels: the 🧠 on a model shows where they come from and lets you set your own (the provider's model list wins over the guess when it gives them); a wrong window guess is fixed with {window} or {maxOutput} on the model in config.json.",
   "llmSettings.openaiHint":
-    "Protocol, thinking levels and context window are guessed from the model ID: gpt / o models use Responses, others Chat Completions; DeepSeek is text-only, with thinking off / high / max. If a guess is wrong, set {api}, {efforts} or {window} on the model in config.json.",
+    "Protocol, thinking levels and context window are guessed from the model ID: gpt / o models use Responses, others Chat Completions; DeepSeek is text-only, with thinking off / high / max. Thinking levels: the 🧠 on a model shows where they come from and lets you set your own (the provider's model list wins over the guess when it gives them); a wrong protocol or window guess is fixed with {api} or {window} on the model in config.json.",
 
   // RemoteCert
   "remoteCert.title": "Certificate",

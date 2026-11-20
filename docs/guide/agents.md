@@ -35,7 +35,7 @@ terminals. A model id is usually enough; protocol, reasoning
 levels and context window are guessed from it (the levels and the default one are taken from the provider's model list
 instead when it gives them, as `"reasoning": {"efforts": […], "default": "…"}` per model — subhub does), and you can override with `api` (chat / responses), `efforts`,
 `window`, `compactAt` (tokens at which the context is auto-compacted; default 90% of `window`), `images`,
-`maxOutput`, and on Claude `thinking` (`updates`: the model's short progress notes, the default on Opus/Sonnet 5.5 and Fable 5+; `adaptive`: a summary of its reasoning). The bottom of Settings → Agents can do this too (fetch the model list, test a model).
+`maxOutput`, and on Claude `thinking` (`updates`: the model's short progress notes, the default on Opus/Sonnet 5.5 and Fable 5+; `adaptive`: a summary of its reasoning). The bottom of Settings → Agents can do this too (fetch the model list, test a model, and the brain button on a model shows its thinking levels, where they come from, and sets your own).
 
 **Images**: models such as `gemini-2.5-flash-image` / `gemini-3-pro-image-preview` (Nano Banana) or `gpt-image-1`
 are image models: they don't show up as a session's model; they make images. Add one in the *Image models* section of
