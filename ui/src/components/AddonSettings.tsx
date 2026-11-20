@@ -1,7 +1,7 @@
 import { Markdown } from "@gerdr/chat";
 import { openLightbox } from "@/components/Lightbox";
 import { Check, ChevronRight, CircleAlert, ExternalLink, Eye, EyeOff, FolderOpen, Loader2, Play, Puzzle, RefreshCw, Square, Trash2, X } from "lucide-react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -27,20 +27,29 @@ import { cn } from "@/lib/utils";
 // (internal/addons; the API is internal/server/addonapi.go).
 export function AddonSettings({ open }: { open: boolean }) {
   const [tab, setTab] = useState("installed");
+  // An installed add-on's "Settings" button in the store: switch to Installed with that add-on's settings open.
+  // n changes on every press, so pressing it again for the same add-on scrolls back to it.
+  const [focus, setFocus] = useState<{ id: string; n: number }>();
   const stores = useStores(open);
+  const showSettings = (id: string) => {
+    setFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
+    setTab("installed");
+  };
   return (
-    <Tabs value={tab} onValueChange={setTab} className="gap-3">
-      <TabsList>
-        <TabsTrigger value="installed">{t("addonSettings.tab.installed")}</TabsTrigger>
-        <TabsTrigger value="store">{t("addonSettings.tab.store")}</TabsTrigger>
-      </TabsList>
-      <TabsContent value="installed">
-        <Installed stores={stores} />
-      </TabsContent>
-      <TabsContent value="store">
-        <Stores stores={stores} />
-      </TabsContent>
-    </Tabs>
+    <ShowSettings.Provider value={{ focus, show: showSettings }}>
+      <Tabs value={tab} onValueChange={setTab} className="gap-3">
+        <TabsList>
+          <TabsTrigger value="installed">{t("addonSettings.tab.installed")}</TabsTrigger>
+          <TabsTrigger value="store">{t("addonSettings.tab.store")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="installed">
+          <Installed stores={stores} />
+        </TabsContent>
+        <TabsContent value="store">
+          <Stores stores={stores} />
+        </TabsContent>
+      </Tabs>
+    </ShowSettings.Provider>
   );
 }
 
@@ -99,6 +108,8 @@ async function install(source: string, a: StoreAddon, force = false): Promise<vo
     toast.error(t("addonSettings.installFailed", { name: a.name, error: (e as Error).message }));
   }
 }
+
+const ShowSettings = createContext<{ focus?: { id: string; n: number }; show: (id: string) => void }>({ show: () => {} });
 
 function storeAddon(stores: AddonStore[], a: AddonStatus) {
   if (!a.source) return undefined;
@@ -161,6 +172,20 @@ function cmpVersion(x: string, y: string) {
 
 function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
   const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { focus } = useContext(ShowSettings);
+  const focused = focus?.id === a.id ? focus.n : 0;
+  useEffect(() => {
+    if (!focused) return;
+    setSettingsOpen(true);
+    setFlash(true);
+    // After the tab's content is laid out and the settings have opened, or the scroll lands short of the row
+    const raf = requestAnimationFrame(() => ref.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    const timer = setTimeout(() => setFlash(false), 1500);
+    return () => (cancelAnimationFrame(raf), clearTimeout(timer));
+  }, [focused]);
   const run = async (f: () => Promise<unknown>) => {
     setBusy(true);
     try {
@@ -187,7 +212,7 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
   );
   return (
     // Same shape as a store row (StoreRow): the controls sit on the name's line, the rest goes under it, full width on a phone
-    <div className={rowGrid}>
+    <div ref={ref} className={cn(rowGrid, "scroll-mt-2 transition-colors duration-700", flash && "bg-brand/10")}>
       <div className="md:row-span-2">
         <AddonIcon src={a.icon ? assetURL(a.id, a.icon, a.hash) : undefined} />
       </div>
@@ -218,7 +243,7 @@ function InstalledRow({ a, newer }: { a: AddonStatus; newer?: StoreAddon }) {
         {a.service && <ServiceLine s={a.service} />}
         {a.error && <pre className="mt-1.5 whitespace-pre-wrap rounded-sm bg-bad/10 p-2 font-mono text-[11px] text-bad">{a.error}</pre>}
         {!!a.settings?.length && (
-          <Collapsible className="mt-1">
+          <Collapsible className="mt-1" open={settingsOpen} onOpenChange={setSettingsOpen}>
             <CollapsibleTrigger className="group flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground">
               <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90" /> {t("addonSettings.settings")}
             </CollapsibleTrigger>
@@ -670,6 +695,7 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
   const fromHere = mine?.source?.store === source;
   const action = !mine ? "install" : !fromHere ? "replace" : mine.source!.hash !== a.hash ? "update" : "";
   const label = { install: t("common.install"), replace: t("addonSettings.replaceLocal"), update: t("common.update"), "": "" }[action];
+  const { show } = useContext(ShowSettings);
   const go = async () => {
     setBusy(true);
     await install(source, a, false);
@@ -690,7 +716,13 @@ function StoreRow({ source, a }: { source: string; a: StoreAddon }) {
         {a.name !== a.id && <span className="font-mono text-[11px] text-muted-foreground">{a.id}</span>}
         {a.hasService && <Tag>{t("addonSettings.tag.service")}</Tag>}
       </div>
-      <div className="flex min-h-9 shrink-0 items-center md:-my-1 md:min-h-0">
+      <div className="flex min-h-9 shrink-0 items-center gap-1.5 md:-my-1 md:min-h-0">
+        {/* Installed and has settings: jump to its row in Installed with them open, rather than leaving the person to find it */}
+        {mine && !!mine.settings?.length && (
+          <Button size="sm" variant="outline" onClick={() => show(a.id)}>
+            {t("addonSettings.settings")}
+          </Button>
+        )}
         {label ? (
           <Button size="sm" variant={action === "install" ? "default" : "outline"} disabled={busy} onClick={go}>
             {busy ? t("addonSettings.installing") : label}
