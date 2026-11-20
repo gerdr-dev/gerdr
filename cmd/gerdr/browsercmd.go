@@ -100,7 +100,7 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 	})
 
 	var why, profile, size string
-	var focus, chrome bool
+	var focus, chrome, dock bool
 	open := &cobra.Command{
 		Use:   "open <url>",
 		Short: i18n.S("开一个页面（默认在项目浏览器里，显示在浏览器面板），等它加载完，打印页面号", "Open a page (in the project's browser by default, shown in the Browser pane), wait for it to load, print its number"),
@@ -113,7 +113,7 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 					return err
 				}
 			}
-			t, err := browserOpen(args[0], why, profile, chrome, focus, w, h)
+			t, err := browserOpen(args[0], why, profile, chrome, focus, dock, w, h)
 			if err != nil {
 				return err
 			}
@@ -126,11 +126,16 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 				fmt.Printf("cdp %s\n", t.WS)
 			}
 			if t.Project != "" {
-				fmt.Printf(i18n.S("在项目 %s 的浏览器里，用户在浏览器面板里看得到\n", "in project %s's browser, shown to the user in the Browser pane\n"), t.Project)
+				if dock {
+					fmt.Printf(i18n.S("在项目 %s 的浏览器里，用户在旁边的浏览器面板里看得到、能操作\n", "in project %s's browser, beside the chat in the Browser pane, where the user can act\n"), t.Project)
+				} else {
+					fmt.Printf(i18n.S("在项目 %s 的浏览器里，浮在角落给用户看；要用户来操作（登录、验证码）先 gerdr browser show\n", "in project %s's browser, floating in a corner for the user to watch; before asking the user to act (sign in, a captcha) run gerdr browser show\n"), t.Project)
+				}
 			}
 			return nil
 		},
 	}
+	open.Flags().BoolVar(&dock, "show", false, i18n.S("面板直接停在对话旁边（真页面，用户要操作时用）；默认浮在角落", "dock the pane beside the chat (the real page, for the user to act in); default: floating in a corner"))
 	open.Flags().BoolVar(&chrome, "chrome", false, i18n.S("在用户自己的 Chrome 里开（经浏览器插件，用户已登录的账号）", "open in the user's own Chrome (through the browser extension, their signed-in accounts)"))
 	open.Flags().StringVar(&why, "why", "", i18n.S("--chrome：问用户允许网站时窗口上写的理由", "--chrome: the reason shown when the user is asked to allow the site"))
 	open.Flags().StringVar(&profile, "profile", "", i18n.S("--chrome：用哪个 Chrome profile，用户在插件弹窗里起的名字（如 Work）或 status 里的 id；默认按网站选", "--chrome: which Chrome profile, the name the user gave it in the extension's popup (like Work) or an id from status; default: picked by site"))
@@ -138,6 +143,15 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 	addProjectFlag(open)
 	open.Flags().StringVar(&size, "size", "", i18n.S("窗口大小，如 1440x900", "window size, like 1440x900"))
 	cmd.AddCommand(open)
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "show",
+		Short: i18n.S("把页面的面板从角落停到对话旁边（真页面），要用户来操作（登录、验证码）前用", "Dock the page's pane beside the chat (the real page), before asking the user to act in it (sign in, a captcha)"),
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return browserShow(tab)
+		},
+	})
 
 	var keep bool
 	closeCmd := &cobra.Command{
@@ -403,7 +417,9 @@ type browserOpened struct {
 }
 
 // browserOpen: chrome / profile → the user's Chrome; else the caller's project's browser.
-func browserOpen(url, why, profile string, chrome, focus bool, w, h int) (*browserOpened, error) {
+// show: the pane docked beside the agent as the real page, not the floating corner it gets by default (the user is to
+// act in it: sign in, a captcha)
+func browserOpen(url, why, profile string, chrome, focus, show bool, w, h int) (*browserOpened, error) {
 	c, err := newAPIClient()
 	if err != nil {
 		return nil, err
@@ -411,7 +427,7 @@ func browserOpen(url, why, profile string, chrome, focus bool, w, h int) (*brows
 	c.http.Timeout = 11 * time.Minute // the user may have to allow the site first
 	cl := c.caller()
 	body := map[string]any{"url": url, "why": why, "profile": profile, "chrome": chrome, "focused": focus,
-		"project": cl.Project, "from": cl.Session, "term": cl.Term}
+		"project": cl.Project, "from": cl.Session, "term": cl.Term, "show": show}
 	if w > 0 && h > 0 {
 		body["width"], body["height"] = w, h
 	}
@@ -420,6 +436,16 @@ func browserOpen(url, why, profile string, chrome, focus bool, w, h int) (*brows
 		return nil, err
 	}
 	return &t, nil
+}
+
+// browserShow: the page's pane docked beside the calling agent (POST /api/browser/show).
+func browserShow(tab int) error {
+	c, err := newAPIClient()
+	if err != nil {
+		return err
+	}
+	cl := c.caller()
+	return c.do("POST", "/api/browser/show", map[string]any{"tab": tab, "project": cl.Project, "from": cl.Session, "term": cl.Term}, nil)
 }
 
 func argOrStdin(s string) (string, error) {

@@ -19,12 +19,12 @@ installed version's exact flags.
 Two browsers, the same actions on both:
 
 - **The project's browser** (default): a Chrome Gerdr runs in the background with a profile per project, so a site
-  signed in to once stays signed in for that project. Pages you open show in the **Browser pane** beside your chat
-  (when you are a panel's agent or one of its workers: in a browser column at the right of that panel, which opens by
-  itself):
-  the user watches you work and can click and type there themselves. A site that needs a sign-in or a captcha: open
-  it, then ask the user to do that part in the Browser pane, and carry on when they say so. Also the way to show the
-  user a page (a dev server you started, a report): open it, it appears next to the conversation.
+  signed in to once stays signed in for that project. A page you open shows **floating in a corner** of Gerdr (beside
+  your chat, or over the panel when you are a panel's agent or one of its workers): the user watches you work without
+  it taking half the screen. When the user has to act in it (a sign-in, a captcha, a choice of theirs), run
+  `gerdr browser show` first: it docks as the **Browser pane** beside the chat, the real page they can click and type
+  in; then ask them, and carry on when they say so. To show the user a page (a dev server you started, a report):
+  `open --show`. `close` when done: its pane goes too.
 - **The user's own Chrome** (`open --chrome`, or `--profile`): their everyday Chrome through the Gerdr browser
   extension, signed in as they already are (their ChatGPT / Doubao / a company back office). Only when the user asks
   for it or the work needs their own accounts. The extension must be installed and Chrome open (`gerdr browser
@@ -35,6 +35,7 @@ Not for fetching what a plain HTTP request or your own tools can get.
 
 ```bash
 gerdr browser open http://localhost:5173/  # the project's browser; waits for the page; prints `tab <n>`
+gerdr browser show                         # dock it beside the chat for the user to act in (--show on open: at once)
 gerdr browser open https://www.doubao.com/chat/ --chrome --why "ask Doubao about X"   # the user's own Chrome
 gerdr browser snapshot                     # what's on the page, each thing with a ref: [e12] button "发送"
 gerdr browser click e12                    # real mouse events; or x,y from a screenshot

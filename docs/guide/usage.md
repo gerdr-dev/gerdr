@@ -66,8 +66,9 @@ same directory).
 ## the Browser pane
 
 A browser can sit beside the chat: the pane's "⋯" menu → "Browser on the right", or `prefix+i`, then type an address
-at the top. Pages an agent opens with `gerdr browser open` show up beside it too: you watch it work and can click and
-type there yourself (input methods and paste included), e.g. to sign in or solve a captcha for it.
+at the top. Pages an agent opens with `gerdr browser open` float in a corner, so you can watch it work without losing
+room; when it needs you (to sign in or solve a captcha) it docks the page beside the chat, where you click and type
+(input methods and paste included). When it closes the page, the pane goes too.
 
 Each project has its own browser (the profile lives in `~/.gerdr/projects/<project>/browser`): a site signed in to
 in one project stays signed in there, and other projects don't see it. It is a Chrome Gerdr runs in the background (the

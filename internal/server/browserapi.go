@@ -63,6 +63,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			Caller
 			// NoWait: return as soon as the page is open (the pane's own address bar), not after its first load
 			NoWait bool `json:"noWait"`
+			// Show: the agent's pane docked beside it (the real page); else it floats in a corner (pictures)
+			Show bool `json:"show"`
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
@@ -88,7 +90,7 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			b.SetSession(id, in.Caller.Session)
 			// the UI puts the Browser pane beside the agent that opened it (ui/src/lib/actions/browser.ts), or a
 			// panel beside its conversation (ui/src/core/SessionBrowser.tsx)
-			s.Hub.Broadcast("browser_open", map[string]any{"tab": id, "project": project, "session": in.Caller.Session})
+			s.Hub.Broadcast("browser_open", map[string]any{"tab": id, "project": project, "session": in.Caller.Session, "show": in.Show})
 		}
 		// wait for the first load; a page that never settles is still open and usable
 		if !in.NoWait {
@@ -133,6 +135,34 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		slog.Info("browser pane stream", "tab", id, "remote", remote, "query", r.URL.RawQuery)
 		defer slog.Info("browser pane stream ended", "tab", id)
 		streamPictures(conn, r, browserSource{v: v, remote: remote}, !remote)
+	})
+	// An agent's page to the front for the user to act in (`gerdr browser show`): its pane, floating in a corner while
+	// the agent worked alone, docks beside the agent (ui/src/lib/actions/browser.ts browserOpened, show)
+	mux.HandleFunc("POST /api/browser/show", func(w http.ResponseWriter, r *http.Request) {
+		b := br(w)
+		if b == nil {
+			return
+		}
+		var in struct {
+			Tab int `json:"tab"`
+			Caller
+		}
+		if err := decode(r, &in); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var page *chromeext.Tab
+		for _, t := range b.Tabs() { // oldest first: without a number, the last one opened, as the actions take it
+			if in.Tab == 0 || t.ID == in.Tab {
+				page = &t
+			}
+		}
+		if page == nil || page.Project == "" {
+			httpError(w, http.StatusNotFound, i18n.S("没有这个项目浏览器里的页面", "No such page in a project's browser"))
+			return
+		}
+		s.Hub.Broadcast("browser_open", map[string]any{"tab": page.ID, "project": page.Project, "session": in.Caller.Session, "show": true})
+		writeJSON(w, map[string]any{"ok": true, "tab": page.ID})
 	})
 	mux.HandleFunc("POST /api/browser/close", func(w http.ResponseWriter, r *http.Request) {
 		b := br(w)

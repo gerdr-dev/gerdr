@@ -5,12 +5,14 @@ import {
   activeWs,
   allLeaves,
   closePane,
+  floatable,
   leaves,
   locateSession,
   rid,
   setPane,
   spaceOf,
   split,
+  toggleFloat,
   updateTab,
   type FloatFit,
   type Layout,
@@ -215,24 +217,34 @@ function leavesOf(l: Layout) {
 /** The page each agent session opened last, as it opened (browser_open): a panel turns to its browser then
  * (core/SessionBrowser.tsx useSessionBrowser). Only what happened since this UI loaded: an open seen again on reload
  * would pull the panel there again. */
-export const useBrowserOpens = create<Record<string, { tab: number; at: number }>>(() => ({}));
+export const useBrowserOpens = create<Record<string, { tab: number; at: number; show?: boolean }>>(() => ({}));
 
 /**
- * An agent opened a page (`gerdr browser open`): show it beside that agent's pane, without taking the focus from
- * where the user is. A tab that already has a Browser pane switches it to the new page. An agent no pane shows (a
- * panel's, a closed one) gets no pane: a panel shows its conversation's pages itself (core/SessionBrowser.tsx), and
- * the project's pages are in any Browser pane's page list.
+ * An agent opened a page (`gerdr browser open`) or wants the user in it (`gerdr browser show`, show): put it beside that
+ * agent's pane, without taking the focus from where the user is. A tab that already has a Browser pane switches it to
+ * the new page. A new pane floats in a corner (the page's pictures, laid out at a desktop's size): an agent testing
+ * its own work only needs to be watched (asked for: a pane taking half the screen each time). show docks it, as the
+ * App's real page, which the user can sign in and type into. An agent no pane shows (a panel's, a closed one) gets no
+ * pane: a panel shows its conversation's pages itself (core/SessionBrowser.tsx), and the project's pages are in any
+ * Browser pane's page list.
  */
-export function browserOpened(m: { tab: number; project: string; session?: string }) {
+export function browserOpened(m: { tab: number; project: string; session?: string; show?: boolean }) {
   if (!m.session) return;
-  useBrowserOpens.setState({ [m.session]: { tab: m.tab, at: Date.now() } });
+  useBrowserOpens.setState({ [m.session]: { tab: m.tab, at: Date.now(), show: !!m.show } });
   const loc = locateSession(get().layout, m.session);
   if (!loc) return;
   setLayout((l) => {
     const old = leaves(loc.tab.root).find((p) => p.browser);
-    if (old) return setPane(l, old.id, { browser: { project: m.project, tab: m.tab } });
+    if (old) {
+      const out = setPane(l, old.id, { browser: { project: m.project, tab: m.tab } });
+      // docked for the user to act in; a pane they placed themselves stays where it is otherwise
+      return m.show && loc.tab.float?.[old.id] ? updateTab(out, loc.tab.id, (t) => ({ ...toggleFloat(t, old.id), focus: t.focus })) : out;
+    }
     const fresh: PaneLeaf = { type: "pane", id: rid("p"), browser: { project: m.project, tab: m.tab } };
-    return updateTab(l, loc.tab.id, (tab) => ({ ...split(tab, loc.pane.id, "row", fresh), focus: tab.focus }));
+    return updateTab(l, loc.tab.id, (tab) => {
+      const docked = { ...split(tab, loc.pane.id, "row", fresh), focus: tab.focus };
+      return m.show || !floatable(docked, fresh.id) ? docked : { ...toggleFloat(docked, fresh.id), focus: tab.focus };
+    });
   });
 }
 

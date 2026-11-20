@@ -30,7 +30,13 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   `streamPictures` takes a `pictureSource`: the display (`desktopSource`) or a tab (`browserSource`). So the pane works
   the same in the App, a plain browser, over remote access and on a phone.
 - **Opening**: an agent's `open` broadcasts `browser_open`, and the UI puts a Browser pane beside that agent's
-  pane (`actions/browser.ts browserOpened`, without moving the focus). The user opens one from the pane menu or
+  pane (`actions/browser.ts browserOpened`, without moving the focus). **Floating** by default, in a corner as
+  pictures at a desktop's size (asked for: an agent testing its own work only needs watching, and a docked pane took
+  half the screen each time). When the user has to act in the page (sign in, a captcha) the agent runs `gerdr browser
+  show` (or `open --show`): `POST /api/browser/show` broadcasts `browser_open` with `show`, and the pane docks as the
+  App's real page. A panel's browser does the same (`PanelFloat` in core/SessionBrowser.tsx, over the panel's corner;
+  its title bar has the float / dock switch). An agent's `close` (not `--keep`) broadcasts `browser_close` and the
+  panes showing the page close with it (`browserClosed`; not one alone in its tab, nor the user's own "close page"). The user opens one from the pane menu or
   `prefix+i` and types an address. A pane remembers its page's last URL (`PaneLeaf.browser.url`): pages don't
   outlive the backend (every update restarts it), so after a restart the pane offers to open it again. It doesn't
   reopen by itself, because every device showing the layout would open its own copy.
