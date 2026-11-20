@@ -67,7 +67,7 @@ export function BrowserOutCard({
   );
   return (
     <>
-      <div onPointerDown={onHeadPointerDown} className={cn("flex shrink-0 items-center gap-1 border-b px-2 text-[12px]", headClassName ?? "h-10")}>
+      <div onPointerDown={onHeadPointerDown} className={cn("flex shrink-0 items-center gap-1 border-b px-3 text-[12px]", headClassName ?? "h-10")}>
         <Globe className="mr-1 size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">{url}</span>
         {end}

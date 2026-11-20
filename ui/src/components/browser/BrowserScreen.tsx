@@ -935,7 +935,7 @@ export function BrowserScreen({
 
   return (
     <>
-      <div onPointerDown={onHeadPointerDown} className={cn("relative flex shrink-0 items-center gap-1 border-b px-2 text-[12px] max-md:pl-4", headClassName)}>
+      <div onPointerDown={onHeadPointerDown} className={cn("relative flex shrink-0 items-center gap-1 border-b px-3 text-[12px] max-md:pl-4", headClassName)}>
         {busy && <div className="page-loading pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden" />}
         <Globe className="mr-1 size-4 shrink-0 text-muted-foreground" />
         <Button
