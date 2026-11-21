@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
 type session struct {
@@ -36,7 +37,7 @@ type session struct {
 	model   string
 	effort  string
 	respawn bool   // 下一轮前换个进程（改了只能在启动参数里给的东西）
-	extFP   string // 起进程时 skill / MCP 设置的指纹；对不上就换进程
+	extFP   string // 起进程时 skill / MCP 设置的指纹（加上 API 改走哪：routeFP）；对不上就换进程
 	// 起进程时 claude 自己配的 MCP 的指纹（ext.ClaudeMCPFingerprint）。对不上只在 /clear 时换进程：
 	// 中途换的话工具列表变了，提示缓存全废，长对话下一轮整段重新计费；清空之后上下文是空的，换了不亏。
 	mcpFP string
@@ -113,12 +114,13 @@ type toolState struct {
 // ensure 保证进程在跑（必要时起一个，并做 initialize 握手）。
 func (s *session) ensure(ctx context.Context) error {
 	fp := ""
+	s.mu.Lock()
+	meta := s.meta
+	s.mu.Unlock()
 	if s.a.opts.Ext != nil {
-		s.mu.Lock()
-		meta := s.meta
-		s.mu.Unlock()
 		fp = s.a.opts.Ext.Fingerprint(meta)
 	}
+	fp += routeFP(s.routeTarget(s.childEnv(meta)))
 	for {
 		s.mu.Lock()
 		if s.p != nil && s.p.alive() && s.p != s.exiting && !s.respawn && (s.extFP == fp || s.turn != nil) {
@@ -169,12 +171,19 @@ func (s *session) start(ctx context.Context) error {
 		o.env = append(append([]string(nil), o.env...), f(s.id, s.meta)...)
 	}
 	s.mcpFP = s.a.mcpFingerprint(s.cwd)
+	s.extFP = ""
 	if e := s.a.opts.Ext; e != nil {
 		s.extFP = e.Fingerprint(s.meta)
 		o.extra = e.Args(s.id, s.cwd, s.meta)
 	}
 	o.extra = append(o.extra, s.clientMCPArgs()...)
 	o.extra = append(o.extra, s.a.opts.Args...)
+	route := s.routeTarget(append(sysenv.ChildEnv(), o.env...))
+	s.extFP += routeFP(route)
+	if route != "" {
+		o.extra = withBaseURL(o.extra, route)
+		s.a.log.Info("api routed", "session", s.id, "to", route)
+	}
 	fresh, from, at := s.pendingLocked()
 	for _, id := range []string{from, s.id} {
 		if id != "" && !fresh {

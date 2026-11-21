@@ -142,6 +142,9 @@ type Options struct {
 	ExtraAgents []AgentDef
 	Log         *slog.Logger
 	Ext         *ext.Manager // skill / MCP 从哪来；nil = 全用 agent 自己的
+	// Routes: model API addresses add-ons' services serve locally (internal/addons/routes.go); agents pointed at one
+	// talk to the service instead. nil = none.
+	Routes Routes
 	// LLM：native agent 的模型配置（config.json 的 llm），每次现取。nil = 没配。
 	LLM func() native.Config
 	// Defaults：新会话的默认模式 / 模型（config.json 的 defaultModes / defaultConfig），按 agent id，每次现取。
@@ -494,6 +497,52 @@ func (h *Hub) llm() native.Config {
 	return h.opt.LLM()
 }
 
+// Routes: API addresses served locally (addons.Services).
+type Routes interface {
+	// Rewrite: the address agent (its id: claude, codex, a role) configured with base uses instead; "" = base.
+	Rewrite(agent, base string) string
+}
+
+// routesFor is r as one agent sees it, for the adapters (claude.Routes / codex.Routes).
+type routesFor struct {
+	r     Routes
+	agent string
+}
+
+func (x routesFor) Rewrite(base string) string { return x.r.Rewrite(x.agent, base) }
+
+// claudeRoutes / codexRoutes: nil interfaces when there are no routes, so the adapters skip working out addresses.
+func claudeRoutes(r Routes, agent string) claude.Routes {
+	if r == nil {
+		return nil
+	}
+	return routesFor{r, agent}
+}
+
+func codexRoutes(r Routes, agent string) codex.Routes {
+	if r == nil {
+		return nil
+	}
+	return routesFor{r, agent}
+}
+
+// routeLLM points providers whose address an add-on serves locally at that service (internal/addons/routes.go). The
+// config is read for each model call, so a route taking effect or going away applies from the next call on.
+func routeLLM(c native.Config, r Routes, agent string) native.Config {
+	if r == nil {
+		return c
+	}
+	ps := make([]native.Provider, len(c.Providers))
+	copy(ps, c.Providers)
+	for i := range ps {
+		if to := r.Rewrite(agent, ps[i].BaseURL); to != "" {
+			ps[i].BaseURL = to
+		}
+	}
+	c.Providers = ps
+	return c
+}
+
 func errStr(err error) string {
 	if err == nil {
 		return ""
@@ -578,12 +627,12 @@ func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, err
 	em := h.opt.Ext.Scoped(def.only())
 	switch base {
 	case "claude":
-		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: agentwire.ClaudeExt(em), Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.SessionPrompt(em)}), handler, log)
+		return agenthost.StartInProc(sctx, claude.New(log, claude.Options{IdleTimeout: h.opt.ClaudeIdle, Ext: agentwire.ClaudeExt(em), Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.SessionPrompt(em), Routes: claudeRoutes(h.opt.Routes, agent)}), handler, log)
 	case "codex":
-		return agenthost.StartInProc(sctx, codex.NewWith(log, agentwire.CodexExt(em), codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.SessionPrompt(em)}), handler, log)
+		return agenthost.StartInProc(sctx, codex.NewWith(log, agentwire.CodexExt(em), codex.Options{Bin: def.Bin, Args: def.Args, Env: def.envList(), Prompt: def.Prompt, AppendPrompt: agentwire.SessionPrompt(em), Routes: codexRoutes(h.opt.Routes, agent)}), handler, log)
 	case "native":
 		// 基于 Gerdr Agent 的角色和原版共用会话目录（id 是 uuid，撞不了）和记忆：记忆是人的偏好、项目的约定，不分角色
-		return agenthost.StartInProc(sctx, native.New(log, agentwire.NativeOptions(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return h.llm().Only(def.Providers) }, def.Prompt)), handler, log)
+		return agenthost.StartInProc(sctx, native.New(log, agentwire.NativeOptions(filepath.Join(h.opt.Dir, "native"), em, func() native.Config { return routeLLM(h.llm().Only(def.Providers), h.opt.Routes, agent) }, def.Prompt)), handler, log)
 	}
 	home, _ := os.UserHomeDir()
 	return agenthost.StartProcess(sctx, def.Command, def.envList(), home, handler, log)

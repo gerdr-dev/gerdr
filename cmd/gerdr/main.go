@@ -341,8 +341,20 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		}
 		return c.Root
 	})
+	// Add-ons (~/.gerdr/addons): the old plugin directory moves there once.
+	if err := addons.Migrate(env.Dir); err != nil {
+		log.Warn("migrate plugins to addons", "err", err)
+	}
+	am := addons.New(env.Dir, log)
+	if err := am.Install(); err != nil {
+		log.Warn("install addon declarations", "err", err)
+	}
+	// Add-on services (addon.json): processes this backend keeps running. Started once the server listens (below);
+	// made before the hub, whose Claude Code sessions follow the API routes they report (addons/routes.go).
+	asvc := addons.NewServices(am, log)
+	asvc.Env = func() []string { return sysenv.ChildEnv() }
 	artsOf := server.SessionArtifacts(sessionProject(env.Dir, layout))
-	h, err := hub.New(hub.Options{Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
+	h, err := hub.New(hub.Options{Routes: asvc, Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
 		Artifacts: func(rec hub.Record) string { d, _, _ := artsOf(rec); return d },
 		// config.json skillUpdates: tell sessions their skill files changed (hub skillnote.go); left out = on
 		SkillUpdates: func() bool {
@@ -355,17 +367,6 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	if err != nil {
 		return err
 	}
-	// Add-ons (~/.gerdr/addons): the old plugin directory moves there once.
-	if err := addons.Migrate(env.Dir); err != nil {
-		log.Warn("migrate plugins to addons", "err", err)
-	}
-	am := addons.New(env.Dir, log)
-	if err := am.Install(); err != nil {
-		log.Warn("install addon declarations", "err", err)
-	}
-	// Add-on services (addon.json): processes this backend keeps running. Started once the server listens (below).
-	asvc := addons.NewServices(am, log)
-	asvc.Env = func() []string { return sysenv.ChildEnv() }
 	am.Watch(func() {
 		h.Broadcast("addons", nil)
 		go asvc.Sync()

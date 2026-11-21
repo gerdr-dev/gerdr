@@ -52,6 +52,9 @@ type Options struct {
 	AppendPrompt func(sessionID, cwd string, meta map[string]any) string
 	// SessionEnv adds per-session environment variables (K=V) on top of Env.
 	SessionEnv func(sessionID string, meta map[string]any) []string
+	// Routes: an API address served locally instead (route.go). Checked before each turn: when its answer for a
+	// session changes, the session's process restarts before the turn, like an Ext change.
+	Routes Routes
 	// StrictMCP: only the mcpServers passed in session/new (or resume / load) — none of the user's own MCP
 	// servers or claude.ai connectors (--strict-mcp-config). Either way the client's servers are added and their
 	// tools never ask for approval.

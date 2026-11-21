@@ -217,6 +217,41 @@ sees: `internal/addons/builtin/gerdr.d.ts`, copied into `~/.gerdr/addons` on eve
   answer / refused / offline as unreachable but not a timeout (URLSession can't tell a connect timeout from a slow
   answer), so there a host that drops packets fails after 30s instead of falling back.
 
+## Serving agents' API traffic (services with "routes": true)
+
+- Asked for (2026-11) by SubHub, a relay with an incremental-upload protocol of its own (`X-Delta`: each turn sends
+  only the messages after a prefix the relay already has, instead of the whole conversation — megabytes per turn,
+  slow from far away; one of its users saw turns cut off when an upload ran past a proxy's 60s read limit). The
+  protocol is private to that relay, so the sending side lives in its add-on (a local proxy), and Gerdr only gives
+  the general half: a service may say "I serve this API address" and Claude Code sessions pointed at it are started
+  with the proxy's address instead; so are Gerdr Agent providers whose `baseUrl` matches. Code:
+  `internal/addons/routes.go`, `agents/claude/route.go`, `hub.routeLLM`, wired through `hub.Options.Routes`
+  (cmd/gerdr/main.go builds the add-on services before the hub for it).
+- `{"type":"routes","routes":[{from,to}]}` on stdout, opt-in with `"routes": true` in addon.json like `pending`: the
+  service sees every request's API key. `to` must be http on the loopback.
+- Only sessions whose own address matches are touched. Gerdr works out the address claude will use the way claude
+  does: environment, then the env of the config dir's settings.json, the project's settings.json and
+  settings.local.json, then the last `--settings` — settings files beat the process environment (tested, claude
+  2.1.327), so setting `ANTHROPIC_BASE_URL` in the child's environment would not have worked for the common case of
+  a relay set in `~/.claude/settings.json`. The new address goes into the env of the one `--settings` Gerdr already
+  passes (skill overrides): of two `--settings`, claude reads only the last.
+- The route is part of the session's process fingerprint (`extFP`): checked before each turn, so a service starting,
+  stopping or crashing restarts only the sessions whose answer changed, between turns. A proxy that dies mid-turn
+  fails that turn; the next one goes direct. Chosen over "set it by hand": a person pointing their agent at
+  127.0.0.1 themselves gets a dead agent whenever the add-on isn't running, and has to undo it to uninstall.
+- Gerdr Agent reads its provider config for every model call (`hub.routeLLM` rewrites a copy), so no restart there:
+  the next call goes to the proxy, or back to the relay.
+- Codex (`agents/codex/route.go`): one app-server serves every thread, so the address is changed per thread. Which
+  provider and address a thread uses comes from the app-server itself (`config/read` with the thread's cwd: profiles,
+  `-c` arguments and project layers already applied) rather than Gerdr reading config.toml. A thread's config may
+  override the active provider's `base_url` (or `openai_base_url` for the built-in one) but not switch providers:
+  tested on 0.166, turn/start then fails with `modelProviderMismatch`. The route is part of the thread's fingerprint,
+  so a change reloads the thread (unsubscribe + resume, as for skill / MCP changes) before the next turn.
+- Per agent (`agents` on a route): the person picks in the add-on's settings. Not a new setting type — the types stop
+  where they are on purpose (gerdr.d.ts) — but `g.agents()` (the list the page already has), so the add-on draws its
+  own checkboxes in `g.slot("settings")` and stores the ids. The hub hands each adapter the routes as that agent sees
+  them (`routesFor`), so the adapters know nothing about agent ids.
+
 ## Languages
 
 - addon.json's `i18n` ({locale: {name, description, settings: {key: {title, description, unit, options}}}}) is passed

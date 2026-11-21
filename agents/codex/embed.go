@@ -81,6 +81,11 @@ func (a *Agent) threadConfig(ctx context.Context, rpc *rpcline.Conn, sid, cwd st
 			set("shell_environment_policy.set", env)
 		}
 	}
+	if key, to := a.route(ctx, rpc, cwd); to != "" {
+		set(key, to)
+		fp += routeFP(key, to)
+		a.log.Info("api routed", "session", sid, "to", to)
+	}
 	return cfg, fp
 }
 

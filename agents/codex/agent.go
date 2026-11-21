@@ -120,6 +120,9 @@ type Options struct {
 	// NoApprovals: codex never asks (approval policy "never"); what the sandbox doesn't allow fails instead.
 	// With mode auto + Network: workspace-write, network on, no questions.
 	NoApprovals bool
+	// Routes: an API address served locally instead (route.go). Checked before each turn: when its answer for a
+	// thread changes, the thread is reloaded with the new address, like an Ext change.
+	Routes Routes
 }
 
 // Ext is where skills and MCP servers come from besides codex's own configuration (gerdr's settings).
@@ -333,13 +336,17 @@ func (a *Agent) extConfig(ctx context.Context, rpc *rpcline.Conn, cwd string, me
 // refreshExt：设置改过了就把这个 thread 退订再接回来 —— 对一个已经加载着的 thread 直接
 // thread/resume，新的 config 不生效（实测），得先让它卸载。
 func (a *Agent) refreshExt(ctx context.Context, rpc *rpcline.Conn, s *session) {
-	if a.ext == nil {
+	if a.ext == nil && a.opts.Routes == nil {
 		return
 	}
 	s.mu.Lock()
-	meta := s.meta
+	meta, cwd := s.meta, s.cwd
 	s.mu.Unlock()
-	fp := a.ext.Fingerprint(meta)
+	fp := ""
+	if a.ext != nil {
+		fp = a.ext.Fingerprint(meta)
+	}
+	fp += routeFP(a.route(ctx, rpc, cwd))
 	s.mu.Lock()
 	stale := s.extFP != fp
 	s.mu.Unlock()

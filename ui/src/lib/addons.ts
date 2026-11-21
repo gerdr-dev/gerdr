@@ -745,6 +745,8 @@ function makeApi(id: string, hash: string) {
     },
     usage: (force?: boolean) => api.usage(force),
     turns: (r: { since: number; until?: number }) => api.turns(r.since, r.until),
+    // What the page already holds (the hub's agent list), so a settings form can draw it without waiting
+    agents: () => get().agents.map((a) => ({ id: a.id, name: a.name, base: a.base ?? a.id, available: a.available })),
     // An add-on's own events go out under its id unless it names a source
     events: {
       emit: (e: Record<string, unknown>) => api.emitEvent({ source: id, ...e }),

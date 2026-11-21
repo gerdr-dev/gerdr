@@ -69,6 +69,14 @@
 //     {"type":"answer","session":"…","reqId":"…","skip":true}                  don't answer a question
 //                                                         only with "pending": true — that's the person's power to
 //                                                         approve commands, given when they install the add-on
+//     {"type":"routes","routes":[{"from":"https://relay.example","to":"http://127.0.0.1:7861","agents":["claude"]}]}
+//                                                         only with "service": {…, "routes": true}: agents whose API
+//                                                         address starts with from (Claude Code's ANTHROPIC_BASE_URL,
+//                                                         Codex's provider base_url, a Gerdr Agent provider's baseUrl)
+//                                                         use to instead while it runs; agents (optional, ids as
+//                                                         g.agents() lists them) narrows it. You forward to from. to:
+//                                                         http on 127.0.0.1 / localhost. A new line replaces the list;
+//                                                         [] or exiting ends the routing
 //
 // Other stdout lines go to gerdr's log; stderr goes to ~/.gerdr/logs/addons/<id>.log.
 // stdin closing means gerdr is stopping it (quitting, add-on removed): clean up (let go of the device) and exit.
@@ -502,6 +510,12 @@ declare global {
      * up. Today's: g.turns({ since: new Date().setHours(0, 0, 0, 0) }). g.on("turn") brings each new one.
      */
     turns(range: { since: number; until?: number }): Promise<TurnRecord[]>;
+    /**
+     * The agents a session can be started on: the built-in ones (claude, codex, native) and the person's own roles /
+     * variants, as `gerdr session agents` lists them. For letting the person pick some (which agents a service's
+     * "routes" take): store the picked ids in a setting of yours and draw the choice in g.slot("settings").
+     */
+    agents(): AgentEntry[];
 
     /**
      * Events: things that happened outside a conversation (a review comment, a failed pipeline, a chat message), one
@@ -613,6 +627,16 @@ declare global {
     tallIcon?: boolean;
     /** Open the panel on hover (default) or on click. */
     open?: "hover" | "click";
+  }
+
+  interface AgentEntry {
+    /** What sessions record as their agent and `gerdr session new --agent` takes: claude / codex / native / a role's id. */
+    id: string;
+    name: string;
+    /** The engine running it: "claude" (Claude Code), "codex", "native" (Gerdr Agent), an external agent's id. */
+    base: string;
+    /** Installed and usable on this computer. */
+    available: boolean;
   }
 
   /** g.slot("settings"): your own layout of the settings declared in addon.json. */
@@ -860,6 +884,8 @@ declare global {
     text?: string;
     /** The "link" settings' addresses the process reported ({"type":"status","links"}), by setting key. */
     links?: Record<string, string>;
+    /** The API addresses it serves for agents now ({"type":"routes"}; needs "routes": true in its addon.json). */
+    routes?: { from: string; to: string; agents?: string[] }[];
     /** Why it isn't running: command not found, or how it last exited plus the end of its stderr. */
     error?: string;
     restarts?: number;

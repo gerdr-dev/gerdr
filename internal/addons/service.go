@@ -39,6 +39,9 @@ package addons
 //	  {"type":"error","id":"…","reason":"…","retry":false}
 //	                                                    a get it can't answer: retry false = a person has to act
 //	                                                    (not logged in, no such thing), true = try again soon
+//	  {"type":"routes","routes":[{"from":"https://api.example.com","to":"http://127.0.0.1:7861"}]}
+//	                                                    only with "routes": true — agents whose API address starts
+//	                                                    with from talk to to instead while this run lasts (routes.go)
 //
 // stdin closing means gerdr is going away: the service should clean up (close its device) and exit. gerdr waits a few
 // seconds for that before it kills the process group. stderr goes to <dir>/logs/addons/<id>.log.
@@ -57,6 +60,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -64,7 +68,9 @@ import (
 
 type ServiceSpec struct {
 	// Command: a name looked up on PATH (the login shell's, like agents get), an absolute path, or a path relative to
-	// the add-on's folder ("./bin/x"). ~ is expanded.
+	// the add-on's folder ("./bin/x"). ~ is expanded, and {os} / {arch} become Go's names for this computer
+	// ("./bin/proxy-{os}-{arch}" → proxy-darwin-arm64), so an add-on can ship a compiled program per platform; on
+	// Windows a path without ".exe" is also tried with it.
 	Command string            `json:"command"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
@@ -75,15 +81,19 @@ type ServiceSpec struct {
 	// question) — the person's own power, handed over when they install an add-on that asks for it. Off unless the
 	// add-on says so: an add-on that only drives a device has no business approving commands.
 	Pending bool `json:"pending,omitempty"`
+	// Routes: the service may take over agents' model API traffic ({"type":"routes"}, routes.go) — it then sees
+	// their API keys. Off unless the add-on says so, for the same reason as Pending.
+	Routes bool `json:"routes,omitempty"`
 }
 
 // ServiceStatus is what Settings → Add-ons and g.service.status() show.
 type ServiceStatus struct {
-	State    string            `json:"state"`           // starting / running / exited (waiting to restart) / stopped
-	PID      int               `json:"pid,omitempty"`   // while running
-	Text     string            `json:"text,omitempty"`  // the service's own one-liner ({"type":"status"})
-	Links    map[string]string `json:"links,omitempty"` // "link" settings' addresses, by key ({"type":"status","links"})
-	Error    string            `json:"error,omitempty"` // why it is not running: command not found, last exit + stderr tail
+	State    string            `json:"state"`            // starting / running / exited (waiting to restart) / stopped
+	PID      int               `json:"pid,omitempty"`    // while running
+	Text     string            `json:"text,omitempty"`   // the service's own one-liner ({"type":"status"})
+	Links    map[string]string `json:"links,omitempty"`  // "link" settings' addresses, by key ({"type":"status","links"})
+	Routes   []Route           `json:"routes,omitempty"` // API addresses it serves for agents now ({"type":"routes"})
+	Error    string            `json:"error,omitempty"`  // why it is not running: command not found, last exit + stderr tail
 	Restarts int               `json:"restarts,omitempty"`
 	Since    int64             `json:"since"` // unix ms of the last state change
 }
@@ -454,7 +464,7 @@ func (s *Services) run(p *svcProc) {
 }
 
 func (s *Services) resolve(p *svcProc) (string, error) {
-	c := p.spec.Command
+	c := strings.NewReplacer("{os}", runtime.GOOS, "{arch}", runtime.GOARCH).Replace(p.spec.Command)
 	if home, _ := os.UserHomeDir(); home != "" && (c == "~" || strings.HasPrefix(c, "~/")) {
 		c = filepath.Join(home, c[1:])
 	}
@@ -463,6 +473,11 @@ func (s *Services) resolve(p *svcProc) (string, error) {
 			c = filepath.Join(p.dir, c)
 		}
 		if _, err := os.Stat(c); err != nil {
+			if runtime.GOOS == "windows" && filepath.Ext(c) == "" {
+				if _, err := os.Stat(c + ".exe"); err == nil {
+					return c + ".exe", nil
+				}
+			}
 			return "", fmt.Errorf("command %s not found", c)
 		}
 		return c, nil
@@ -519,7 +534,7 @@ func (s *Services) runOnce(p *svcProc) error {
 	p.in = in
 	s.mu.Unlock()
 	s.setStatus(p, func(st *ServiceStatus) {
-		st.State, st.PID, st.Error, st.Text, st.Links, st.Since = "running", cmd.Process.Pid, "", "", nil, time.Now().UnixMilli()
+		st.State, st.PID, st.Error, st.Text, st.Links, st.Routes, st.Since = "running", cmd.Process.Pid, "", "", nil, nil, time.Now().UnixMilli()
 	})
 	s.log.Info("addon service started", "addon", p.id, "cmd", bin, "pid", cmd.Process.Pid)
 
@@ -597,6 +612,9 @@ func (s *Services) runOnce(p *svcProc) error {
 	}
 	s.mu.Lock()
 	p.in = nil
+	// Its routes end with it: agents started from now on talk to the API directly again (sessions with a process
+	// pointed at it restart before their next turn, as Fingerprint changes).
+	p.st.Routes = nil
 	for k, ch := range p.asks {
 		select {
 		case ch <- nil:
@@ -625,13 +643,14 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 	for sc.Scan() {
 		line := sc.Bytes()
 		var m struct {
-			Type  string            `json:"type"`
-			Text  string            `json:"text"`
-			Links map[string]string `json:"links"`
-			Data  json.RawMessage   `json:"data"`
-			Event json.RawMessage   `json:"event"`
-			ReqID string            `json:"reqId"`
-			ID    string            `json:"id"`
+			Type   string            `json:"type"`
+			Text   string            `json:"text"`
+			Links  map[string]string `json:"links"`
+			Data   json.RawMessage   `json:"data"`
+			Event  json.RawMessage   `json:"event"`
+			ReqID  string            `json:"reqId"`
+			ID     string            `json:"id"`
+			Routes []Route           `json:"routes"`
 		}
 		if json.Unmarshal(line, &m) != nil || m.Type == "" {
 			s.log.Info("addon service", "addon", p.id, "stdout", string(line))
@@ -682,6 +701,16 @@ func (s *Services) readStdout(p *svcProc, r io.Reader) {
 			} else if m.Type == "state" && s.OnState != nil {
 				s.OnState(p.id, append(json.RawMessage(nil), line...))
 			}
+		case "routes":
+			if !p.spec.Routes {
+				s.log.Warn("addon service: routes refused, its addon.json service has no \"routes\": true", "addon", p.id)
+				continue
+			}
+			routes, bad := cleanRoutes(m.Routes)
+			for _, b := range bad {
+				s.log.Warn("addon service: route refused", "addon", p.id, "route", b)
+			}
+			s.setStatus(p, func(st *ServiceStatus) { st.Routes = routes })
 		case "answer":
 			err := fmt.Errorf("add-on %q may not answer: its addon.json service has no \"pending\": true", p.id)
 			if p.spec.Pending && s.OnAnswer != nil {

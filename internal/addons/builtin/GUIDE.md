@@ -458,7 +458,9 @@ removed.
 "service": { "command": "./bin/bridge", "args": ["--quiet"], "env": { "K": "V" } }
 ```
 
-`command` is a name on the login shell's PATH, an absolute path, or `./…` relative to the folder. It talks JSON lines:
+`command` is a name on the login shell's PATH, an absolute path, or `./…` relative to the folder. `{os}` and `{arch}`
+in it become Go's names for the computer (`darwin` / `windows` / `linux`, `arm64` / `amd64`), so a compiled program
+can ship one file per platform: `"./bin/proxy-{os}-{arch}"`; on Windows `.exe` is added when the file has none. It talks JSON lines:
 
 - stdin: `{"type":"hello",…,"lang":"zh"}` first (`lang`: the computer's language, zh / en — what Gerdr's own texts it hands you are in), then `{"type":"settings","settings":{…}}` (your [settings](#settings), secrets in
   the clear — that's how a service gets its token; sent again whenever they change), `{"type":"sessions","sessions":[…]}`
@@ -502,6 +504,37 @@ events of that same conversation (same `source` and `key`). The `remote-answer` 
 add-on only has to bring messages in and post replies.
 - Keep files in `$GERDR_ADDON_DATA`, never in the add-on's folder (writing there reloads every window, and an update
   replaces the folder).
+
+#### Serving agents' model API
+
+With `"service": { …, "routes": true }` a service can stand between agents and the model API they are pointed at —
+a local proxy for a relay (a protocol of its own, compressing, logging). It reports the addresses it serves, at any
+time and as often as they change (each line replaces the last):
+
+```
+{"type":"routes","routes":[{"from":"https://relay.example","to":"http://127.0.0.1:7861","agents":["claude","native"]}]}
+```
+
+An agent whose API address is `from` or starts with it uses `to` in its place, the rest of the path kept:
+
+- Claude Code: `ANTHROPIC_BASE_URL`, wherever it is set (the environment, the agent's env in Gerdr's settings,
+  `~/.claude/settings.json` or the project's). The session's process restarts before its next turn.
+- Codex: the base URL of the provider it is set to use (`model_providers.<id>.base_url`, or `openai_base_url` for the
+  built-in one), for each thread, from its next turn.
+- Gerdr Agent: a provider's `baseUrl`, from its next model call.
+
+`agents` (optional) narrows a route to those agents, by the ids `gerdr session agents` lists (`claude`, `codex`,
+`native`, a role's id); without it every agent on `from` is routed. To let the person pick, list them with
+`g.agents()`, store the ids in a setting and draw the choice in `g.slot("settings")`. Agents on other addresses
+(signed in to Anthropic or ChatGPT, another relay) are never touched. Your service forwards each request to `from`
+with its headers, the API key included. `to` must be plain http on `127.0.0.1` / `localhost`; pick a free port and
+report it once you listen.
+
+While your process runs, its routes hold. When it exits, crashes, is switched off, or reports `{"type":"routes","routes":[]}`,
+they end and agents talk to `from` directly again from their next turn (never mid-turn). So a request that fails in
+your proxy is what the person sees — keep it a thin, careful forwarder: stream responses through as they come (SSE),
+keep status codes and bodies. Without `"routes": true` the line is refused (it sees every request's key); say why you
+need it in your README.
 
 #### Shared machine switches
 
