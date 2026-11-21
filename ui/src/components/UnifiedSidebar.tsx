@@ -476,14 +476,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                       >
                         {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
                   the ones on screen just light up. data-side-row(s): drag a row between two others to move it (TabDrag.tsx) */}
-                        {groups.get(ws.id)?.map((r, i, rs) => (
-                          // A thin line where the rows kept at the top end and the ones sorted by activity begin; part of the
-                          // first unpinned row (not an element of its own) so dropping between rows still counts them right
-                          <div
-                            key={r.pane.id}
-                            data-side-row={r.pane.id}
-                            className={cn(!r.pinned && rs[i - 1]?.pinned && "mt-1 border-t border-border/60 pt-1")}
-                          >
+                        {groups.get(ws.id)?.map((r) => (
+                          <div key={r.pane.id} data-side-row={r.pane.id}>
                             <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} groupId={ws.id} pinned={!!r.pinned} />
                           </div>
                         ))}
@@ -530,10 +524,20 @@ function FootButton({ onClick, title, children }: { onClick: () => void; title: 
  * A row's icon, with its ⌘1–9 number laid over it while ⌘ is held: the number fills the icon's own box, so it lines up
  * whatever the row's padding or the icon's size, and nothing on the row moves. See-through, so the icon still shows.
  */
-function IconSlot({ n, children }: { n?: number; children: React.ReactNode }) {
+/**
+ * A row's icon, with what is laid over it: its ⌘ number, or a small corner mark when the row is kept at the top of its
+ * group. On the icon rather than beside it so it costs the title no width (asked for); a line between the kept rows and
+ * the rest read as a level the groups themselves don't have.
+ */
+function IconSlot({ n, pinned, children }: { n?: number; pinned?: boolean; children: React.ReactNode }) {
   return (
     <span className="relative flex shrink-0">
       {children}
+      {pinned && !n && (
+        <span className="absolute -right-1 -bottom-1 flex size-2.5 items-center justify-center rounded-full bg-sidebar text-muted-foreground">
+          <ArrowUpToLine className="size-2" strokeWidth={3} />
+        </span>
+      )}
       {!!n && (
         <span className="absolute inset-0 flex items-center justify-center rounded-[3px] bg-background/70 text-[10px] leading-none font-semibold text-foreground tabular-nums ring-1 ring-border/70">
           {n}
@@ -591,7 +595,6 @@ function Group({
               "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
             )}
             onClick={onFold}
-            onDoubleClick={edit}
             title={ws.cwd ? ws.cwd : undefined}
           >
             {/* The margin lines the group name up with its rows' titles (row icon + gap-2 vs chevron + gap-1) */}
@@ -812,7 +815,7 @@ const Row = memo(function Row({
           )}
         >
           {loading && <BorderFlow />}
-          <IconSlot n={num}>
+          <IconSlot n={num} pinned={pinned}>
             {s ? (
               <AgentIcon agent={s.agent} className={cn("shrink-0", roomy ? "size-4" : "size-3.5")} />
             ) : (
