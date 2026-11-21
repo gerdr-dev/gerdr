@@ -253,7 +253,10 @@ export default function App() {
   useEffect(() => syncWatch(), [mode]);
   // The phone-only overview (PhoneOverview) covers the tabs one tile at a time. Once opened it stays mounted, hidden,
   // so reopening keeps each chat's scroll position, like the kept tabs below. Desktop uses the sidebar's Active list directly.
-  const overview = phone && useStore((s) => s.overview.on) && mode !== "work";
+  // Read unconditionally: `phone && useStore(...)` skipped the hook on wide screens, so a phone crossing the width
+  // (rotating, split screen, the WebView resizing on resume) changed the hook count and crashed with React #311.
+  const overviewOn = useStore((s) => s.overview.on);
+  const overview = phone && overviewOn && mode !== "work";
   const unified = !phone;
   const [overviewMounted, setOverviewMounted] = useState(overview);
   if (overview && !overviewMounted) setOverviewMounted(true);

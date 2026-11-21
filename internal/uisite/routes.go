@@ -106,6 +106,9 @@ function RouteError() {
   return h("div", { style: { padding: 24, font: "12px/1.6 ui-monospace, monospace" } },
     h("pre", { style: { margin: 0, whiteSpace: "pre-wrap", color: "#e5484d" } }, text),
     h("p", { style: { marginTop: 16, opacity: 0.6, fontFamily: "system-ui" } }, ` + strconv.Quote(i18n.S("界面代码出错了。改好之后会自动刷新。", "The UI code has an error. The page reloads once it's fixed.")) + `),
+    // The page only reloads by itself on the next build. An error that isn't in the code just saved (a state the
+    // current build crashes in, e.g. a hook skipped on one screen width) never gets one, so give a way out by hand.
+    h("button", { onClick: function () { location.reload(); }, style: { display: "block", marginBottom: 12, padding: "6px 14px", font: "14px system-ui", color: "inherit", background: "transparent", border: "1px solid currentColor", borderRadius: 6, opacity: 0.8, cursor: "pointer" } }, ` + strconv.Quote(i18n.S("刷新页面", "Reload page")) + `),
     h("a", { href: "/rescue", onClick: function (ev) { if (window.__gerdrRescue) { ev.preventDefault(); window.__gerdrRescue.open(); } }, style: { fontFamily: "system-ui", fontSize: 14, color: "#7aa2f7" } }, ` + strconv.Quote(i18n.S("打开急救面板，叫 agent 来修 →", "Open the rescue panel and have an agent fix it →")) + `));
 }
 // A mounted panel reopens on the path it was last on (WorkView keeps it): one it no longer has goes to its home page

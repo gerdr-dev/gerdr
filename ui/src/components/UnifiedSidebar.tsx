@@ -239,7 +239,9 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const unread = useStore((s) => s.unread);
   const sidebarW = useStore((s) => s.sidebarW);
   const phone = usePhone();
-  const gridOn = phone && useStore((s) => s.overview.on);
+  // Unconditional for the same reason as App's overviewOn: a skipped hook crashes when `phone` flips.
+  const overviewOn = useStore((s) => s.overview.on);
+  const gridOn = phone && overviewOn;
   const gridFocus = useStore((s) => s.overview.focus);
   useStore((s) => s.addonVersion);
   const tiles = useOverviewIds().split(",").filter(Boolean);
