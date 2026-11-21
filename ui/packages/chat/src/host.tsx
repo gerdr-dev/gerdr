@@ -229,9 +229,10 @@ export type ComposerHooks = {
    * Called inside every composer (a hook): host features that need the composer's state (gerdr: drafts shared across
    * devices). onSelect is called when the caret moves. ready: the host has something to send even with the box empty
    * (Annulo: an element attached from the page that carries its own instruction); send is enabled and goes out with no
-   * blocks of the composer's own, host.send adds what it has.
+   * blocks of the composer's own, host.send adds what it has. marks: stretches of the text drawn the host's way
+   * (see ComposerMark; gerdr: voice input's words the recognizer may still change, in grey).
    */
-  useExtras?(ctx: ComposerContext): { onSelect?(): void; ready?: boolean } | void;
+  useExtras?(ctx: ComposerContext): { onSelect?(): void; ready?: boolean; marks?: ComposerMark[] } | void;
   /** Slash commands the host runs itself instead of sending them (gerdr: /resume, /usage). Return true from run to clear the composer. */
   localCommands?(session: ChatSession): { name: string; description: string; run(paneId: string): void }[];
   /** A send failed; return true if the host deals with it (gerdr: "open elsewhere" → its dialog, then retry). */
@@ -281,6 +282,15 @@ export type TurnStatDeco = { timeClassName?: string; title?: string; after?: Rea
  * it sits (text-brand while running, text-warn while waiting). fallback: the default PixelLoader.
  */
 export type LoaderProps = { paused: boolean; className?: string; fallback: ReactNode };
+
+/**
+ * A stretch of the composer's text [start, end) drawn with className (colour, weight, background, decoration: nothing
+ * that changes the text's size, or the caret drifts off the letters). A textarea can't style part of its text, so
+ * while any mark is up the composer draws the whole text itself in the layer under the field and makes the field's
+ * own letters transparent (its caret and selection stay). Marks outside the text are ignored; the host drops its
+ * marks when the text changes under them (the person typed), as only it knows whether they still hold.
+ */
+export type ComposerMark = { start: number; end: number; className: string };
 
 export type ComposerContext = {
   session: ChatSession;

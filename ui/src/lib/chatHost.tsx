@@ -25,7 +25,7 @@ import {
 } from "./store";
 import { pushDraft, sameDraft } from "./sync";
 import { AddonCodeBlock, AddonComposerActions, AddonComposerOverlay, AddonLoader } from "@/components/AddonSlot";
-import { useComposerBox } from "./composerText";
+import { useComposerBox, useComposerMarks } from "./composerText";
 import { codeBlockRegs, useAddonTurnStat, useCodeBlockVersion } from "./addons";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { locale, t } from "./i18n";
@@ -403,7 +403,8 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
           drafts,
           useExtras: (ctx) => {
             useComposerBox(ctx.paneId, ctx.textarea, ctx.send); // add-ons' words go in at its caret, and send it (lib/composerText)
-            return useSharedDraft(ctx);
+            const marks = useComposerMarks(ctx.paneId, ctx.text); // an add-on's unsettled words, in grey
+            return { ...useSharedDraft(ctx), marks };
           },
           localCommands,
           onExit: closeAgentInPane,

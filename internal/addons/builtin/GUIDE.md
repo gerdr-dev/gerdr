@@ -149,7 +149,7 @@ own gesture is sideways (a slider, swipe to send) puts `data-no-swipe` on itself
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
 | Every pane's title bar | `g.slot("paneTitle", Component)` | `{ pane, tab }` |
 | The working indicator (the dots before "Pondering…", a 20px row), drawn your own way; the user picks which one draws. Only a picture? Make it a sprite | `g.slot("loader", Component)` | `{ paused, className, fallback }` (`fallback`: gerdr's own dots) |
-| The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.selection` (the caret), `ctx.insert()` (at the caret), `ctx.setText(text, caret?)` |
+| The composer's bottom bar | `g.composerAction({ id, title, icon, run })` | `run(ctx)`: `ctx.text`, `ctx.selection` (the caret), `ctx.insert()` (at the caret), `ctx.setText(text, caret?, pending?)` (pending: a stretch still changing, drawn grey) |
 | Right-click menu (desktop and Android App) | `g.contextMenu({ id, title, when, run })` | `{ selection, sessionId }` |
 | The line under each finished turn | `g.turnStat(fn)` | `fn(info)` returns `{ className, title, after }` |
 | A fenced code block of a language (```plantuml), in replies and .md files | `g.codeBlock(lang, Component)` | `{ code, lang }`: see [Drawing code blocks](#drawing-code-blocks) |

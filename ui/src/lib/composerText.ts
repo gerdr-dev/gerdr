@@ -1,7 +1,8 @@
 // Where add-ons' words go in a composer: at the caret, not after everything typed (voice input landed at the end
 // whatever the caret said, reported). Drafts live in the store per pane; the caret only in the pane's textarea, so each
 // mounted composer registers its textarea here (chatHost's useExtras).
-import { useEffect, type RefObject } from "react";
+import { useEffect, useSyncExternalStore, type RefObject } from "react";
+import type { ComposerMark } from "@gerdr/chat";
 import { get, set } from "./store";
 
 const boxes = new Map<string, HTMLTextAreaElement>();
@@ -45,11 +46,17 @@ export function composerSelection(paneId: string) {
 }
 
 /**
- * Replace the pane's draft, the caret put at `caret` (default: the end). Setting a textarea's value sends its caret to
+ * Replace the pane's draft, the caret put at `caret` (default: the end). pending: the stretch [start, end) of it that
+ * isn't settled yet, drawn in grey (voice input: words the recognizer may still change, as an input method shows its
+ * composing text); it lasts only while the draft is this text, so any edit by hand drops it. Setting a textarea's value sends its caret to
  * the end, so it's put back after React has written the new text. Not on an unfocused touch screen: moving the
  * selection of an unfocused field can pop the keyboard up on iOS (same rule as the shared draft, chatHost).
  */
-export function setComposerText(paneId: string, text: string, caret?: number) {
+export function setComposerText(paneId: string, text: string, caret?: number, pending?: { start: number; end: number }) {
+  const was = pendings.get(paneId);
+  if (pending && pending.start < pending.end) pendings.set(paneId, { text, start: Math.max(0, pending.start), end: Math.min(pending.end, text.length) });
+  else pendings.delete(paneId);
+  if (was || pendings.has(paneId)) for (const f of pendingSubs) f();
   set((s) => ({ drafts: { ...s.drafts, [paneId]: text } }));
   const el = boxes.get(paneId);
   if (!el || caret === undefined) return;
@@ -63,4 +70,16 @@ export function insertComposerText(paneId: string, s: string) {
   const t = draft(paneId);
   const { start, end } = composerSelection(paneId);
   setComposerText(paneId, t.slice(0, start) + s + t.slice(end), start + s.length);
+}
+
+// Each pane's unsettled stretch (setComposerText's pending), with the text it belongs to
+const pendings = new Map<string, { text: string; start: number; end: number }>();
+const pendingSubs = new Set<() => void>();
+const subPending = (f: () => void) => (pendingSubs.add(f), () => void pendingSubs.delete(f));
+
+/** The composer's marks for the pane (ChatHost useExtras): its pending stretch in grey, while the text is still it. */
+export function useComposerMarks(paneId: string, text: string): ComposerMark[] | undefined {
+  const p = useSyncExternalStore(subPending, () => pendings.get(paneId));
+  if (!p || p.text !== text) return undefined;
+  return [{ start: p.start, end: p.end, className: "text-muted-foreground" }];
 }

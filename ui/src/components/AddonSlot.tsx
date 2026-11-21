@@ -220,7 +220,8 @@ function composerCtx(sessionId: string, paneId: string) {
       return composerSelection(paneId);
     },
     // Drafts are kept per pane (what is typed in this composer), not per session
-    setText: (t: string, caret?: number) => setComposerText(paneId, t, caret),
+    // pending: the stretch still being settled (voice input), drawn in grey until the next setText
+    setText: (t: string, caret?: number, pending?: { start: number; end: number }) => setComposerText(paneId, t, caret, pending),
     insert: (t: string) => insertComposerText(paneId, t),
     // As Enter does, attachments included; with no composer drawn, the text alone
     send: async () => {

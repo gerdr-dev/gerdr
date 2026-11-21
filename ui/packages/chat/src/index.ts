@@ -15,6 +15,7 @@ export type {
   ThinkingDisplay,
   ComposerHooks,
   ComposerContext,
+  ComposerMark,
   MessageInfo,
   TurnStatInfo,
   TurnStatDeco,

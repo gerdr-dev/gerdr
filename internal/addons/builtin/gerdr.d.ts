@@ -695,8 +695,14 @@ declare global {
     readonly selection: { readonly start: number; readonly end: number };
     /** Put text in at the caret (over the selection, if any); the caret ends up after it. */
     insert(text: string): void;
-    /** Replace what is typed; caret: where to put the caret in the new text (default: wherever the browser leaves it, the end). */
-    setText(text: string, caret?: number): void;
+    /**
+     * Replace what is typed; caret: where to put the caret in the new text (default: wherever the browser leaves it, the end).
+     * pending: the stretch [start, end) of the new text that isn't settled yet, drawn in grey (voice input: words the
+     * recognizer may still change, the way an input method shows what it is composing). It is part of the text all the
+     * same (sent if the person sends now) and lasts until the next setText, or until the person edits the text by hand.
+     * Older Gerdr ignores it.
+     */
+    setText(text: string, caret?: number, pending?: { start: number; end: number }): void;
     /**
      * Send what is in the composer, attached images and files included, as pressing Enter does (g.actions.send takes
      * text only). A setText just before it is what goes. With no composer on screen, only the text is sent.

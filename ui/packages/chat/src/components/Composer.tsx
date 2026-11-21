@@ -1207,6 +1207,9 @@ const ComposerImpl = forwardRef<
     onChange: (v) => host.setConfig!(session.id, o.id, v).catch((e) => toast.error(e.message)),
   }));
 
+  // The host's marks on the text (ComposerMark), drawn by the layer under the field, see `field`
+  const marks = (extras?.marks ?? []).filter((m) => m.start < m.end && m.end <= text.length);
+  const painted = marks.length > 0;
   sendRef.current = send;
   const input = (
     <textarea
@@ -1265,28 +1268,60 @@ const ComposerImpl = forwardRef<
         host.placeholder?.(session, running) ??
         (shellReady ? tr("composer.sendShell") : running ? tr("composer.busy") : host.shell ? tr("composer.idleShell") : tr("composer.idle"))
       }
-      className={cn("relative block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/70", TEXT_BOX)}
+      className={cn(
+        "relative block max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground/70",
+        // The letters drawn by the layer under the field (marks): transparent here, the caret and selection stay
+        painted && "[-webkit-text-fill-color:transparent]",
+        TEXT_BOX,
+      )}
     />
   );
   // Drawn under the textarea with the same text laid out the same way, invisible but for a tint behind each inline
-  // image's placeholder (a textarea can't style part of its text). Also what tokenAt measures
+  // image's placeholder (a textarea can't style part of its text). Also what tokenAt measures. With the host's marks
+  // up (ComposerMark) it draws the text itself, visible, and the field's own letters go transparent: the text is cut
+  // at every token's and mark's edge, each piece carrying the classes of what covers it
+  const pieces = (() => {
+    if (!liveTokens.length && !painted) return [];
+    const cuts = new Set([0, text.length]);
+    for (const x of liveTokens) cuts.add(x.start).add(x.end);
+    for (const m of marks) cuts.add(m.start).add(m.end);
+    const at = [...cuts].sort((a, b) => a - b);
+    return at.slice(0, -1).map((a, i) => {
+      const b = at[i + 1];
+      const tok = liveTokens.find((x) => x.start <= a && b <= x.end);
+      const cls = marks.filter((m) => m.start <= a && b <= m.end).map((m) => m.className);
+      return { a, b, tok, cls };
+    });
+  })();
   const field = (
     <div className="relative">
-      {liveTokens.length > 0 && (
+      {pieces.length > 0 && (
         <div
           ref={mirror}
           aria-hidden
-          className={cn("pointer-events-none absolute left-0 top-0 overflow-hidden whitespace-pre-wrap text-transparent [overflow-wrap:break-word]", TEXT_BOX)}
+          className={cn(
+            "pointer-events-none absolute left-0 top-0 overflow-hidden whitespace-pre-wrap [overflow-wrap:break-word]",
+            !painted && "text-transparent",
+            TEXT_BOX,
+          )}
         >
-          {liveTokens.map((x, i) => (
-            <span key={x.start}>
-              {text.slice(i ? liveTokens[i - 1].end : 0, x.start)}
-              <span data-n={x.n} className={cn("rounded-sm [box-decoration-break:clone] transition-colors", hot === x.n ? "bg-brand/35" : "bg-brand/15")}>
-                {text.slice(x.start, x.end)}
+          {pieces.map((p) =>
+            p.tok ? (
+              <span
+                key={p.a}
+                data-n={p.tok.n}
+                className={cn("rounded-sm [box-decoration-break:clone] transition-colors", hot === p.tok.n ? "bg-brand/35" : "bg-brand/15", ...p.cls)}
+              >
+                {text.slice(p.a, p.b)}
               </span>
-            </span>
-          ))}
-          {text.slice(liveTokens[liveTokens.length - 1].end)}
+            ) : p.cls.length ? (
+              <span key={p.a} className={cn(...p.cls)}>
+                {text.slice(p.a, p.b)}
+              </span>
+            ) : (
+              <span key={p.a}>{text.slice(p.a, p.b)}</span>
+            ),
+          )}
           {"\u200b"}
         </div>
       )}
