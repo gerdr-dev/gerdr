@@ -299,6 +299,40 @@ open class MainActivity : ComponentActivity() {
         bridge?.keyboard(hardKeyboard(newConfig))
     }
 
+    // Coming back from the background: hold the window's drawing until the page has a frame (holdForPage)
+    private var holdDraw: android.view.ViewTreeObserver.OnPreDrawListener? = null
+
+    override fun onRestart() {
+        super.onRestart()
+        holdForPage()
+    }
+
+    /**
+     * Back from the background, the WebView's renderer may have been frozen or have dropped its tiles (HyperOS does
+     * after a while), and its first frame comes a few hundred ms after the window's. The window drew anyway, empty,
+     * so the recents snapshot faded into a black window and then the page popped in. Not drawing the window until the
+     * page's visual state is ready (postVisualStateCallback, made for this) keeps the system's snapshot on screen
+     * until then, so the page appears in one step. Capped at 600ms so a stuck renderer never holds the window blank.
+     */
+    private fun holdForPage() {
+        val w = web ?: return
+        if (holdDraw != null || w.parent == null || w.visibility != View.VISIBLE) return
+        val vto = root.viewTreeObserver
+        val hold = android.view.ViewTreeObserver.OnPreDrawListener { false }
+        holdDraw = hold
+        vto.addOnPreDrawListener(hold)
+        val release = Runnable {
+            if (holdDraw !== hold) return@Runnable
+            holdDraw = null
+            root.viewTreeObserver.removeOnPreDrawListener(hold)
+            root.invalidate()
+        }
+        w.postVisualStateCallback(0, object : WebView.VisualStateCallback() {
+            override fun onComplete(requestId: Long) = release.run()
+        })
+        root.postDelayed(release, 600)
+    }
+
     override fun onResume() {
         super.onResume()
         resumed.incrementAndGet()

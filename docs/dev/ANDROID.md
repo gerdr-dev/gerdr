@@ -157,7 +157,10 @@ connection opened beside the old one, swapped in once open, so nothing reads "re
 chat). With Labs → "stay connected in the background" on, `MainActivity.setKeepConnected` skips `web.onPause()`: the
 page keeps handling /ws, and it is current when it comes back. Never set `setRendererPriorityPolicy(…,
 waivedWhenNotVisible = true)`, for either state: the default (not waived) is what we want, and waiving it made every
-return after ~20s in the background show a black window for a few frames before the page drew again. Off by default, for the reasons in "后台通知" above
+return after ~20s in the background show a black window for a few frames before the page drew again. Even
+without it, a longer stay lets Android freeze the renderer or drop its tiles, so `MainActivity.holdForPage` (from
+onRestart) keeps the window from drawing until `postVisualStateCallback` says the page has a frame (at most 600ms):
+the recents snapshot stays up until then instead of fading into a black window. Off by default, for the reasons in "后台通知" above
 (/ws traffic in the background, and a connected remote page keeps the Mac awake). Without notifications on, nothing
 keeps the App's process alive and the setting does little.
 
