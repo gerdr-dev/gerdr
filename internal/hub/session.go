@@ -476,7 +476,7 @@ func (s *Session) record(e *Event) {
 	s.h.broadcastEvents(s.rec.ID, []*Event{e}, false)
 	if e.Kind == EvTurnEnd {
 		s.mu.Lock()
-		r := TurnRecord{TS: e.TS, SessionID: s.rec.ID, Agent: s.rec.Agent, Cwd: s.rec.Cwd, StopReason: e.StopReason, Auto: e.Auto,
+		r := TurnRecord{TS: e.TS, SessionID: s.rec.ID, Agent: s.rec.Agent, Base: s.h.Base(s.rec.Agent), Cwd: s.rec.Cwd, StopReason: e.StopReason, Auto: e.Auto,
 			DurationMs: e.DurationMs, OutputTokens: e.OutputTokens, CostUSD: e.CostUSD, Tokens: use}
 		s.mu.Unlock()
 		s.h.recordTurn(r)

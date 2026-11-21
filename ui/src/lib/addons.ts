@@ -140,6 +140,7 @@ const turnStats: Reg<TurnStatFn>[] = [];
 export function useAddonTurnStat(info: { sessionId: string; ts?: number; ms: number; tokens: number; latest: boolean }) {
   useStore((s) => s.addonVersion);
   const agent = useStore((s) => s.sessions[info.sessionId]?.agent ?? "");
+  const base = useStore((s) => s.sessions[info.sessionId]?.base) || agent;
   const [now, setNow] = React.useState(Date.now);
   const on = turnStats.length > 0;
   React.useEffect(() => {
@@ -153,7 +154,7 @@ export function useAddonTurnStat(info: { sessionId: string; ts?: number; ms: num
   let title: string | undefined;
   for (const r of turnStats) {
     try {
-      const d = r.fn({ ...info, agent, now });
+      const d = r.fn({ ...info, agent, base, now });
       if (!d) continue;
       if (d.className) classes.push(d.className);
       if (d.title) title = d.title;

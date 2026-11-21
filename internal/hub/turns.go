@@ -23,9 +23,13 @@ import (
 // twice) and in none while no window is open; the hub sees each turn exactly once, window or not.
 
 type TurnRecord struct {
-	TS           int64   `json:"ts"` // when it ended, unix ms
-	SessionID    string  `json:"sessionId"`
-	Agent        string  `json:"agent"`
+	TS        int64  `json:"ts"` // when it ended, unix ms
+	SessionID string `json:"sessionId"`
+	Agent     string `json:"agent"`
+	// Base: the engine that ran it (claude / codex / native, or an external agent's own id), as Hub.Base. Agent is the
+	// variant or role ("claude-2", a role's id), which a reader can't map to an engine itself. Empty on lines written
+	// before it was added: fall back to Agent.
+	Base         string  `json:"base,omitempty"`
 	Cwd          string  `json:"cwd,omitempty"`
 	StopReason   string  `json:"stopReason"`     // end_turn / cancelled / error / max_tokens / …
 	Auto         bool    `json:"auto,omitempty"` // the agent started it itself (a background task finished), no user message

@@ -27,6 +27,8 @@ export type TurnRecord = {
   ts: number;
   sessionId: string;
   agent: string;
+  /** The engine: claude / codex / native (an external agent: its id). Missing on turns logged before it existed. */
+  base?: string;
   cwd?: string;
   stopReason: string;
   auto?: boolean;

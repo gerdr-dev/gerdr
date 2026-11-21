@@ -635,8 +635,11 @@ declare global {
 
   interface TurnStatInfo {
     sessionId: string;
-    /** claude / codex / … */
+    /** The session's agent as picked: claude / codex / a variant like claude-2 / a role's id. */
     agent: string;
+    /** The engine running it: "claude" (Claude Code), "codex", "native" (Gerdr Agent), an external agent's id.
+     *  Tell agents apart by this, not by agent. */
+    base: string;
     /** When the turn ended (unix ms); missing on very old turns. */
     ts?: number;
     /** How long it ran (ms). */
@@ -812,8 +815,14 @@ declare global {
     /** When it ended (unix ms). */
     ts: number;
     sessionId: string;
-    /** claude / codex / … (a variant like claude-2 as is) */
+    /** claude / codex / … (a variant like claude-2, or a role's id, as is) */
     agent: string;
+    /**
+     * The engine that ran it, whatever the variant or role: "claude" (Claude Code), "codex", "native" (Gerdr Agent),
+     * an external agent's own id. Tell agents apart by this, not by agent. Missing on turns logged before Gerdr had
+     * it: use agent then.
+     */
+    base?: string;
     cwd?: string;
     /** end_turn (finished normally) · cancelled · error · max_tokens · refusal … */
     stopReason: string;
