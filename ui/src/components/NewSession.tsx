@@ -1,4 +1,4 @@
-import { ChevronUp, Folder, FolderGit2, Globe, History, Laptop, Loader2, Play, Server, Settings2, SquareTerminal } from "lucide-react";
+import { ArrowRight, ChevronUp, Folder, FolderGit2, Globe, History, Laptop, Loader2, Play, Server, Settings2, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { browserHere, closeFocusedPane, continueInPane, createInPane, focusPane,
 import { api, ApiError } from "@/lib/api";
 import { get, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
-import { locateSession, type PaneLeaf } from "@/lib/layout";
+import { locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { workProjectOf } from "@/lib/work";
 import { AgentIcon, StatusDot } from "./AgentIcon";
@@ -285,6 +285,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   );
   const [cwd, setCwd] = useState(tilde(pane.draft?.cwd ?? home, home));
   const [busy, setBusy] = useState(false);
+  const layout = useStore((s) => s.layout);
   const startRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -296,14 +297,30 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   }, [focused]);
 
   const abs = cwd.startsWith("~") ? home + cwd.slice(1) : cwd;
-  // Earlier conversations here = gerdr's own sessions in this directory, whatever agent had them: the agent picked above is
-  // the one that carries on (a conversation of another agent is handed over to it, hub/handoff.go), so running out of one
+  // The open workspaces of this pane's project, as quick picks over the directory input: the input starts with the
+  // current workspace's directory, and these switch it in one tap (typing a path on a phone is slow). Only this
+  // computer's: another one's folders aren't these.
+  const wsDirs = useMemo(() => {
+    const seen = new Set<string>();
+    return spaceWorkspaces(layout, paneSpace(layout, pane.id)).filter((w) => w.cwd && !seen.has(w.cwd) && (seen.add(w.cwd), true));
+  }, [layout, pane.id]);
+  // The picked one may sit past the row's right edge: bring it into view (scrollLeft, not scrollIntoView, which would
+  // also scroll the page)
+  const wsRow = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = wsRow.current;
+    const on = row?.querySelector<HTMLElement>("[data-on]");
+    if (!row || !on) return;
+    const l = on.offsetLeft - row.offsetLeft;
+    if (l < row.scrollLeft || l + on.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = l - 4;
+  }, [abs, wsDirs.length]);
+  // Earlier conversations here = gerdr's own sessions in this directory, whatever agent had them: a click carries one on
+  // with its own agent, and the row's button hands it to the agent picked above (hub/handoff.go), so running out of one
   // agent's quota doesn't strand a conversation. Ones a pane already shows are listed too, marked, and clicking one with the
   // same agent jumps to its pane instead of opening it a second time. Not the agent's native history: that's a one-off
   // import (ImportAgentDialog), and as conversations move into gerdr it would only empty out. Work agent conversations
   // belong to their Work view, and never-used sessions (an empty pane) have nothing to resume.
   const sessions = useStore((s) => s.sessions);
-  const layout = useStore((s) => s.layout);
   // Untitled = nothing said in it yet (a fresh pane, or a tab right after /clear): nothing to pick up, see ResumeDialog
   const old = Object.values(sessions)
     .filter((s) => s.cwd === abs && !!s.title && !workProjectOf(s.id) && (s.host?.id ?? "") === host)
@@ -314,10 +331,12 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   const nameOf = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
   const agentName = nameOf(agent);
 
-  // An earlier conversation, carried on by the agent picked above
-  const pick = async (id: string, open: boolean) => {
-    const o = sessions[id];
-    if (o?.agent === agent) return open ? focusSession(id) : resumeInPane(pane.id, id);
+  // An earlier conversation carries on with its own agent, whatever card is picked above: clicking a Claude conversation
+  // while Gemini was picked used to fork it into Gemini, and that was rarely what the click meant.
+  const pick = (id: string, open: boolean) => (open ? focusSession(id) : resumeInPane(pane.id, id));
+  // Handing it to the picked agent (hub/handoff.go; the original stays) is the row's own button, so one agent running
+  // out of quota still doesn't strand a conversation.
+  const handoff = async (id: string) => {
     if (busy) return;
     setBusy(true);
     try {
@@ -427,7 +446,30 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             </button>
           ))}
         </div>
-        <DirPicker value={cwd} onChange={setCwd} onEnter={(v) => start(undefined, undefined, agent, v)} host={host || undefined} hostHome={home} />
+        <div className="space-y-2">
+          {!host && wsDirs.length > 1 && (
+            // One row that scrolls sideways: wrapped, a dozen workspaces ate half a phone screen. Both scrollbar hiders, as
+            // Android's WebView ignores scrollbar-width (OverviewPhone).
+            <div ref={wsRow} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {wsDirs.map((w) => (
+                <button
+                  key={w.id}
+                  data-on={w.cwd === trimSlash(abs) || undefined}
+                  title={tilde(w.cwd!, home)}
+                  onClick={() => setCwd(tilde(w.cwd!, home))}
+                  className={cn(
+                    "flex max-w-48 shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors",
+                    w.cwd === trimSlash(abs) ? "border-brand bg-brand/8" : "hover:bg-accent",
+                  )}
+                >
+                  <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{w.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <DirPicker value={cwd} onChange={setCwd} onEnter={(v) => start(undefined, undefined, agent, v)} host={host || undefined} hostHome={home} />
+        </div>
         <div className="flex gap-2">
           {/* Another computer's home isn't known until it answered: "~/x" would land in the wrong place */}
           <Button
@@ -468,34 +510,39 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             </button>
           </div>
           {old.length === 0 && <div className="text-[12px] text-muted-foreground">{t("newSession.noOld")}</div>}
-          <div className="space-y-0.5">
+          {/* -mx-2 cancels the rows' padding, so their icons line up with the header's and everything above */}
+          <div className="-mx-2 space-y-0.5">
             {old.slice(0, 12).map(({ s: o, open }) => (
-              <button
-                key={o.id}
-                disabled={busy}
-                className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
-                title={
-                  o.agent !== agent
-                    ? t("newSession.handoffTitle", { from: nameOf(o.agent), agent: agentName })
-                    : open
-                      ? t("newSession.alreadyOpenTitle")
-                      : undefined
-                }
-                onClick={() => pick(o.id, open)}
-              >
-                <AgentIcon agent={o.agent} className="size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{o.title || o.id}</span>
+              <div key={o.id} className="group flex items-center rounded-md hover:bg-accent">
+                <button
+                  disabled={busy}
+                  className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 pr-1 text-left text-[13px]"
+                  title={open ? t("newSession.alreadyOpenTitle") : undefined}
+                  onClick={() => pick(o.id, open)}
+                >
+                  <AgentIcon agent={o.agent} className="size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{o.title || o.id}</span>
+                  {open && (
+                    <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                      <StatusDot status={o.status} />
+                      {t("newSession.opened")}
+                    </span>
+                  )}
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{ago(o.updatedAt)}</span>
+                </button>
+                {/* Another agent's conversation: hand it to the picked one. Shown on hover, always on touch screens */}
                 {o.agent !== agent && (
-                  <span className="hidden shrink-0 text-[11px] text-muted-foreground group-hover:inline">{t("newSession.handoff", { agent: agentName })}</span>
+                  <button
+                    disabled={busy}
+                    title={t("newSession.handoffTitle", { from: nameOf(o.agent), agent: agentName })}
+                    onClick={() => void handoff(o.id)}
+                    className="mr-1 hidden shrink-0 items-center gap-0.5 rounded-sm px-1 py-1 text-muted-foreground group-hover:flex hover:bg-background hover:text-foreground [@media(hover:none)]:flex"
+                  >
+                    <ArrowRight className="size-3" />
+                    <AgentIcon agent={agent} className="size-3.5" />
+                  </button>
                 )}
-                {open && (
-                  <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                    <StatusDot status={o.status} />
-                    {t("newSession.opened")}
-                  </span>
-                )}
-                <span className="shrink-0 text-[11px] text-muted-foreground">{ago(o.updatedAt)}</span>
-              </button>
+              </div>
             ))}
           </div>
         </div>

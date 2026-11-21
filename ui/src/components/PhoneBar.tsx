@@ -2,7 +2,7 @@ import { ClipboardCheck, Plus } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { addTab, focusedSessionId, tabName } from "@/lib/actions";
-import { activeWs, allLeaves, currentSpace, spaceOf } from "@/lib/layout";
+import { activeWs, allLeaves, currentSpace, findLeaf, spaceOf } from "@/lib/layout";
 import { applyTabLabel } from "@/lib/addons";
 import { get, set, useStore } from "@/lib/store";
 import { MAX_TILES, focusTile, overviewIds, showInOverview, toggleOverview } from "@/lib/overview";
@@ -31,6 +31,11 @@ export function PhoneBar() {
   const ti = ws.tabs.findIndex((t) => t.id === ws.activeTab);
   const tab = ws.tabs[ti] ?? ws.tabs[0];
   const st = tabStatus(tab, sessions, unread);
+  // The phone shows the focused pane only. When that is already an empty one (the new-session screen), + would only
+  // stack another identical tab on top of it, so it's off.
+  const shown = findLeaf(tab.root, tab.zoom ?? tab.focus);
+  const starting = useStore((s) => !!shown && !!s.starting[shown.id]);
+  const onNewPage = !!shown && !shown.sessionId && !shown.sub && !shown.term && !shown.file && !shown.browser && !starting;
   // Waiting in this project (the drawer lists this project's panes); other projects' show on the drawer's project switcher
   const space = currentSpace(layout);
   const waiting = new Set(
@@ -62,7 +67,7 @@ export function PhoneBar() {
       <div className="flex shrink-0 items-center">
         <OverviewButton />
         <InboxButton phone />
-        <Button variant="ghost" size="icon" className="size-9" aria-label={t("phoneBar.newTab")} onClick={() => addTab()}>
+        <Button variant="ghost" size="icon" className="size-9" aria-label={t("phoneBar.newTab")} disabled={onNewPage} onClick={() => addTab()}>
           <Plus className="size-[18px]" />
         </Button>
       </div>
