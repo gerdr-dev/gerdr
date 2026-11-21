@@ -7,6 +7,9 @@
 #   desktop/ changed since the tag the latest dmgs were built for (signing, packaging aren't all in the id). Otherwise
 #   only the ~10MB backends are built and the previous dmgs are copied into this release: an App on an older shell
 #   still needs a whole App, and its updater looks for it under this release's tag (desktop/updater.js releaseURL).
+# - Windows installer: the same rule as the dmgs, judged on its own (it may come from another release than they do).
+#   Otherwise only gerdr.exe and its .br are built (on Linux: no Electron, packager or makensis) and the previous
+#   setup.exe is copied in. The full package took ~8 minutes, the longest job of a backend-only release.
 # - apk: rebuilt only when android/ changed since the tag of the apk the latest release offers. Otherwise that
 #   release's android.json is reused as is (it names its own version, so the App keeps downloading from that tag)
 #   and the apk is copied over for people picking it off the release page.
@@ -33,6 +36,7 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       prev: ${{ steps.p.outputs.prev }}
       dmg: ${{ steps.p.outputs.dmg }}
+      exe: ${{ steps.p.outputs.exe }}
       apk: ${{ steps.p.outputs.apk }}
     steps:
       # all history and tags, for the git diff against the apk's tag
@@ -46,13 +50,13 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-dev"; fi
           [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "the tag must be v<major>.<minor>.<patch>: $GITHUB_REF_NAME"; exit 1; }
           echo "version=$v" >> "$GITHUB_OUTPUT"
-      # dmg / apk = build | reuse. Anything unexpected (no previous release, a feed missing a platform) → build
+      # dmg / exe / apk = build | reuse. Anything unexpected (no previous release, a feed missing a platform) → build
       - id: p
         env:
           GH_TOKEN: ${{ github.token }}
           FULL: ${{ inputs.full }}
         run: |
-          dmg=build apk=build
+          dmg=build exe=build apk=build
           prev=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName 2>/dev/null || true)
           # a re-run after this tag's Release already exists would copy from itself
           [ "$prev" = "$GITHUB_REF_NAME" ] && prev=""
@@ -68,14 +72,22 @@ jobs:
               dmg=reuse
             fi
             echo "dmg of $prev is v$dv; rebuild: $dmg"
+            # the Windows installer, by the same rule: its own version (the dmgs may have been rebuilt since, or not)
+            wv=$(jq -r '.app["win32-x64"].file // ""' prev/update.json | sed -nE 's/^Gerdr-(.+)-windows-x64-setup\.exe$/\1/p')
+            if [ -n "$wv" ] && jq -e --arg s "$shell" '.shell == $s' prev/update.json >/dev/null &&
+              git rev-parse -q --verify "refs/tags/v$wv" >/dev/null &&
+              git diff --quiet "v$wv" HEAD -- desktop tools/shell-id.sh; then
+              exe=reuse
+            fi
+            echo "setup.exe of $prev is v$wv; rebuild: $exe"
             av=$(jq -r .version prev/android.json)
             if git rev-parse -q --verify "refs/tags/v$av" >/dev/null && git diff --quiet "v$av" HEAD -- android/; then
               apk=reuse
             fi
             echo "apk of $prev is v$av; rebuild: $apk"
           fi
-          echo "prev=$prev dmg=$dmg apk=$apk"
-          { echo "prev=$prev"; echo "dmg=$dmg"; echo "apk=$apk"; } >> "$GITHUB_OUTPUT"
+          echo "prev=$prev dmg=$dmg exe=$exe apk=$apk"
+          { echo "prev=$prev"; echo "dmg=$dmg"; echo "exe=$exe"; echo "apk=$apk"; } >> "$GITHUB_OUTPUT"
 
   mac:
     needs: plan
@@ -152,7 +164,8 @@ jobs:
     # On macOS, not Linux: the installer needs makensis, and Linux runners get it from Ubuntu's archive, which they at
     # times can't reach for hours (apt hangs, then fails; v0.2.30 never got a Release). Homebrew's bottles come from
     # GitHub's own ghcr.io. The packages don't depend on the build machine (Go cross-compiles them).
-    runs-on: macos-latest
+    # Installer reused (plan): only the backend is built, which needs none of that, so a Linux runner (starts sooner).
+    runs-on: ${{ needs.plan.outputs.exe == 'reuse' && 'ubuntu-latest' || 'macos-latest' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -161,15 +174,24 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: brew install makensis
+      - if: needs.plan.outputs.exe == 'build'
+        run: brew install makensis
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
-      - run: |
+      - if: needs.plan.outputs.exe == 'build'
+        run: |
           v="${{ needs.plan.outputs.version }}"
           NAME=Gerdr ID=io.github.zbysir.gerdr VERSION="$v" desktop/package-win.sh
           node desktop/compress.js desktop/dist/win/gerdr.exe "gerdr-$v-win32-x64.br"
           mv desktop/dist/win/Gerdr-*-windows-x64-setup.exe .
+      # Only the update-only backend: built as desktop/package-win.sh builds the one it packs
+      - if: needs.plan.outputs.exe == 'reuse'
+        run: |
+          v="${{ needs.plan.outputs.version }}"
+          make ui
+          GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X github.com/gerdr-dev/gerdr/internal/version.Version=$v" -o gerdr.exe ./cmd/gerdr
+          node desktop/compress.js gerdr.exe "gerdr-$v-win32-x64.br"
       - uses: actions/upload-artifact@v7
         with:
           name: windows
@@ -242,6 +264,9 @@ jobs:
         run: |
           if [ "${{ needs.plan.outputs.dmg }}" = reuse ]; then
             gh release download "$PREV" --repo "$GITHUB_REPOSITORY" -p 'Gerdr-*-mac-*.dmg' -D out
+          fi
+          if [ "${{ needs.plan.outputs.exe }}" = reuse ]; then
+            gh release download "$PREV" --repo "$GITHUB_REPOSITORY" -p 'Gerdr-*-windows-x64-setup.exe' -D out
           fi
           if [ "${{ needs.plan.outputs.apk }}" = reuse ]; then
             gh release download "$PREV" --repo "$GITHUB_REPOSITORY" -p 'Gerdr-*-android.apk' -p android.json -D out

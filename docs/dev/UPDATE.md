@@ -49,6 +49,10 @@ The workflow's `plan` job only rebuilds what changed, judged from the latest rel
   Copied, not linked: an App on an older shell builds the dmg URL from **this** feed's version
   (`releases/download/v<new>/Gerdr-<old>-mac-arm64.dmg`), and changing that would itself change the shell id. Someone
   installing the copied (older) dmg gets the new backend on the first check.
+- Windows installer (setup.exe): the same rule as the dmgs, with its own version (from its file name in `update.json`).
+  Otherwise the windows job builds only `gerdr.exe` and its `.br`, on a Linux runner (no Electron, packager or
+  makensis needed), and the release job copies the previous setup.exe in. The full package was ~8 of a backend-only
+  release's ~9 minutes.
 - apk: rebuilt when `git diff v<android.json's version> HEAD -- android/` isn't empty. Otherwise the previous
   `android.json` is published unchanged (`AppUpdate.kt` downloads from the tag it names) and the apk copied for the
   release page.
