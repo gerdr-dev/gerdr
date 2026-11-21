@@ -91,6 +91,31 @@ useStore.subscribe((s, p) => {
   if (ids.length) setActive((a) => ({ ...a, added: [...a.added, ...ids.filter((id) => !a.added.includes(id))] }));
 });
 
+/**
+ * Empty panes opened from the phone overview's "new tab" (pane id → the tile it was opened from): whatever conversation
+ * gets started or picked up in one joins "active" next to that tile, and the view goes back to the overview on it. Kept
+ * here, not in the layout: it only means something on this device, until that pane gets a session or is closed.
+ */
+const joinOnStart = new Map<string, string | undefined>();
+export function joinActiveOnStart(paneId: string, after?: string) {
+  joinOnStart.set(paneId, after);
+}
+useStore.subscribe((s, p) => {
+  if (!joinOnStart.size || s.layout === p.layout) return;
+  const panes = new Map(allLeaves(s.layout).map((x) => [x.pane.id, x.pane]));
+  for (const [paneId, after] of [...joinOnStart]) {
+    const pane = panes.get(paneId);
+    if (pane?.sessionId || !pane) joinOnStart.delete(paneId);
+    if (!pane?.sessionId) continue;
+    const id = pane.sessionId;
+    // After this store update has finished: addActive / setOverview write the store too
+    queueMicrotask(() => {
+      if (!showInOverview(id)) return;
+      if (after) placeTilesAfter([id], after);
+    });
+  }
+});
+
 /** Put agents in "active" by hand: they stay until taken out. */
 export function addActive(ids: string[]) {
   setActive((a) => {

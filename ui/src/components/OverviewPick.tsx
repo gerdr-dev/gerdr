@@ -1,9 +1,9 @@
-import { ArrowDownWideNarrow, Check, ListPlus, MoreHorizontal, Plus } from "lucide-react";
+import { ArrowDownWideNarrow, Check, ListPlus, MoreHorizontal, Plus, SquarePlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { basename, newAgentInOverview } from "@/lib/actions";
+import { basename, newAgentInOverview, newTabForOverview } from "@/lib/actions";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
 import { activeAllProjects, activeIds, addActive, focusTile, placeTilesAfter } from "@/lib/overview";
@@ -33,7 +33,7 @@ export function PickButton() {
 /**
  * The phone bar's ⋯ menu. The + used to start an agent like the shown tile's on a single tap (easy to hit by accident,
  * and no way to add one already open). Now a menu: a new one like the shown tile's (Cmd+D in the grid; only with a
- * tile), pick open ones, and re-sort the strip by "look at first" (its order is frozen on opening, phoneOrder, so one
+ * tile), a new tab to pick any agent / folder in (it joins "active" once started), pick open ones, and re-sort the strip by "look at first" (its order is frozen on opening, phoneOrder, so one
  * finished or waiting since stays where it was until asked for).
  */
 export function PhoneMenu({ focus, onResort }: { focus?: string; onResort: () => void }) {
@@ -54,6 +54,10 @@ export function PhoneMenu({ focus, onResort }: { focus?: string; onResort: () =>
               <span className="min-w-0 truncate">{t("overviewPick.newLike", { dir: basename(s.cwd) })}</span>
             </DropdownMenuItem>
           )}
+          {/* Any agent / folder / earlier conversation, on the new-session screen; what starts there joins "active" */}
+          <DropdownMenuItem onClick={() => newTabForOverview()}>
+            <SquarePlus /> {t("overviewPick.newTab")}
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setPick(true)}>
             <ListPlus /> {t("overviewPick.addExisting")}
           </DropdownMenuItem>

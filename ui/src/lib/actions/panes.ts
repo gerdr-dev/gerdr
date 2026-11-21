@@ -27,12 +27,13 @@ import {
   type Workspace,
 } from "../layout";
 import { get, set, setLayout } from "../store";
-import { addActive, focusTile, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter } from "../overview";
+import { addActive, focusTile, joinActiveOnStart, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter, toggleOverview } from "../overview";
 import { spaceOfKey, workProjectOf } from "../work";
 import { rememberPane } from "./reopen";
 import { createInPane, focusSession, openInWork } from "./sessions";
 import { basename, focusedLeaf, inSpace, inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
 import { openTerminal } from "./terminal";
+import { addTab } from "./tabs";
 import { showCode } from "./views";
 import { t } from "../i18n";
 import { subagentOpener } from "../subagents";
@@ -126,6 +127,20 @@ export function newAgentInOverview(): boolean {
     })
     .catch((e) => toast.error(t("actionsSessions.openFailed", { error: e.message ?? e }), { id: opening }));
   return true;
+}
+
+/**
+ * The phone overview's "new tab": leaves the overview for a new tab on the new-session screen, where any agent, folder
+ * or earlier conversation can be picked (newAgentInOverview only repeats the shown tile's). What starts there joins
+ * "active" next to the tile it was opened from, and the view comes back to the overview on it (joinActiveOnStart).
+ */
+export function newTabForOverview() {
+  const after = overviewFocus(get());
+  addTab();
+  const ws = activeWs(get().layout);
+  const tab = ws.tabs.find((x) => x.id === ws.activeTab);
+  if (tab) joinActiveOnStart(tab.focus, after);
+  toggleOverview(false);
 }
 
 /**
