@@ -151,13 +151,13 @@ App 关着 / 锁屏时，一个前台服务（`NoticeService`）挂在两个长�
 
 ## Staying connected in the background (Labs)
 
-By default the page stops in the background: `web.onPause()`, and the WebView waives its renderer's priority when it
-isn't visible, so Android (HyperOS readily) freezes the renderer even while NoticeService keeps the App's own process
-alive. /ws then delivers nothing, and on coming back the page catches up (sync.ts `wake` → `refresh`: a new
+By default the page stops in the background (`web.onPause()`), and Android (HyperOS readily) freezes the App's
+processes even while NoticeService keeps the App's own process alive. /ws then delivers nothing, and on coming back the page catches up (sync.ts `wake` → `refresh`: a new
 connection opened beside the old one, swapped in once open, so nothing reads "reconnecting"; still a moment of stale
-chat). With Labs → "stay connected in the background" on, `MainActivity.setKeepConnected` skips `web.onPause()` and
-sets `setRendererPriorityPolicy(IMPORTANT, waivedWhenNotVisible = false)`: the renderer shares the App's importance,
-the page keeps handling /ws, and it is current when it comes back. Off by default, for the reasons in "后台通知" above
+chat). With Labs → "stay connected in the background" on, `MainActivity.setKeepConnected` skips `web.onPause()`: the
+page keeps handling /ws, and it is current when it comes back. Never set `setRendererPriorityPolicy(…,
+waivedWhenNotVisible = true)`, for either state: the default (not waived) is what we want, and waiving it made every
+return after ~20s in the background show a black window for a few frames before the page drew again. Off by default, for the reasons in "后台通知" above
 (/ws traffic in the background, and a connected remote page keeps the Mac awake). Without notifications on, nothing
 keeps the App's process alive and the setting does little.
 
