@@ -48,13 +48,15 @@ export function composerSelection(paneId: string) {
 /**
  * Replace the pane's draft, the caret put at `caret` (default: the end). pending: the stretch [start, end) of it that
  * isn't settled yet, drawn in grey (voice input: words the recognizer may still change, as an input method shows its
- * composing text); it lasts only while the draft is this text, so any edit by hand drops it. Setting a textarea's value sends its caret to
+ * composing text); look "cancel" draws it struck through instead (voice input: the finger is on "cancel", these words
+ * are about to go). It lasts only while the draft is this text, so any edit by hand drops it. Setting a textarea's value sends its caret to
  * the end, so it's put back after React has written the new text. Not on an unfocused touch screen: moving the
  * selection of an unfocused field can pop the keyboard up on iOS (same rule as the shared draft, chatHost).
  */
-export function setComposerText(paneId: string, text: string, caret?: number, pending?: { start: number; end: number }) {
+export function setComposerText(paneId: string, text: string, caret?: number, pending?: PendingRange) {
   const was = pendings.get(paneId);
-  if (pending && pending.start < pending.end) pendings.set(paneId, { text, start: Math.max(0, pending.start), end: Math.min(pending.end, text.length) });
+  if (pending && pending.start < pending.end)
+    pendings.set(paneId, { text, start: Math.max(0, pending.start), end: Math.min(pending.end, text.length), look: pending.look });
   else pendings.delete(paneId);
   if (was || pendings.has(paneId)) for (const f of pendingSubs) f();
   set((s) => ({ drafts: { ...s.drafts, [paneId]: text } }));
@@ -73,13 +75,14 @@ export function insertComposerText(paneId: string, s: string) {
 }
 
 // Each pane's unsettled stretch (setComposerText's pending), with the text it belongs to
-const pendings = new Map<string, { text: string; start: number; end: number }>();
+export type PendingRange = { start: number; end: number; look?: "pending" | "cancel" };
+const pendings = new Map<string, PendingRange & { text: string }>();
 const pendingSubs = new Set<() => void>();
 const subPending = (f: () => void) => (pendingSubs.add(f), () => void pendingSubs.delete(f));
 
-/** The composer's marks for the pane (ChatHost useExtras): its pending stretch in grey, while the text is still it. */
+/** The composer's marks for the pane (ChatHost useExtras): its pending stretch in grey (struck: cancel), while the text is still it. */
 export function useComposerMarks(paneId: string, text: string): ComposerMark[] | undefined {
   const p = useSyncExternalStore(subPending, () => pendings.get(paneId));
   if (!p || p.text !== text) return undefined;
-  return [{ start: p.start, end: p.end, className: "text-muted-foreground" }];
+  return [{ start: p.start, end: p.end, className: p.look === "cancel" ? "text-muted-foreground line-through" : "text-muted-foreground" }];
 }

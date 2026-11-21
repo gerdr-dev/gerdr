@@ -728,9 +728,10 @@ declare global {
      * pending: the stretch [start, end) of the new text that isn't settled yet, drawn in grey (voice input: words the
      * recognizer may still change, the way an input method shows what it is composing). It is part of the text all the
      * same (sent if the person sends now) and lasts until the next setText, or until the person edits the text by hand.
-     * Older Gerdr ignores it.
+     * look "cancel": struck through instead, for words about to be dropped (voice input with the finger on "cancel").
+     * Older Gerdr ignores it (or the look, drawing it grey).
      */
-    setText(text: string, caret?: number, pending?: { start: number; end: number }): void;
+    setText(text: string, caret?: number, pending?: { start: number; end: number; look?: "pending" | "cancel" }): void;
     /**
      * Send what is in the composer, attached images and files included, as pressing Enter does (g.actions.send takes
      * text only). A setText just before it is what goes. With no composer on screen, only the text is sent.

@@ -1,7 +1,7 @@
 import { Component, createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { composerActions, fail, slots, type CodeBlockReg, type SlotName, type SlotReg } from "@/lib/addons";
 import { get, useStore } from "@/lib/store";
-import { composerSelection, insertComposerText, sendComposer, setComposerText } from "@/lib/composerText";
+import { composerSelection, insertComposerText, sendComposer, setComposerText, type PendingRange } from "@/lib/composerText";
 import { Button } from "@/components/ui/button";
 import type { LoaderProps } from "@gerdr/chat";
 import type { LoaderChoice } from "@/lib/store/config";
@@ -220,8 +220,8 @@ function composerCtx(sessionId: string, paneId: string) {
       return composerSelection(paneId);
     },
     // Drafts are kept per pane (what is typed in this composer), not per session
-    // pending: the stretch still being settled (voice input), drawn in grey until the next setText
-    setText: (t: string, caret?: number, pending?: { start: number; end: number }) => setComposerText(paneId, t, caret, pending),
+    // pending: the stretch still being settled (voice input), drawn in grey (struck through: look "cancel") until the next setText
+    setText: (t: string, caret?: number, pending?: PendingRange) => setComposerText(paneId, t, caret, pending),
     insert: (t: string) => insertComposerText(paneId, t),
     // As Enter does, attachments included; with no composer drawn, the text alone
     send: async () => {

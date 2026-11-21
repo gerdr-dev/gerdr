@@ -99,7 +99,7 @@ export type ComposerCtx = {
   text: string;
   selection: { start: number; end: number };
   insert(text: string): void;
-  setText(text: string, caret?: number, pending?: { start: number; end: number }): void;
+  setText(text: string, caret?: number, pending?: { start: number; end: number; look?: "pending" | "cancel" }): void;
   send(): Promise<void>;
 };
 export const composerActions: ComposerAction[] = [];
