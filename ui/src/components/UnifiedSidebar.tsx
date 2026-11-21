@@ -23,6 +23,8 @@ import {
   SquareTerminal,
   SquareSplitHorizontal,
   X,
+  ArrowDownWideNarrow,
+  ArrowUpToLine,
 } from "lucide-react";
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import {
@@ -49,6 +51,7 @@ import {
   muteWorkspace,
   openTerminal,
   paneToTab,
+  pinRow,
   selectWorkspace,
   tabName,
 } from "@/lib/actions";
@@ -114,8 +117,9 @@ import { PanelPhoneMenu } from "./PhoneMenu";
  * the workspace switcher, the tab bar, the agents list and the to-do view.
  *
  * - Every workspace of the project is a group, all shown at once (no switching), each collapsible. A group lists one row
- *   per pane, each on its own: panes split together on screen are not tied together here. Where a row sits (group and
- *   order) is the sidebar's own (Workspace.rows, lib/layout.ts sideRows); dragging it never touches the split on screen.
+ *   per pane, each on its own: panes split together on screen are not tied together here. Which group a row sits in is
+ *   the sidebar's own (Workspace.rows / pins, lib/layout.ts sideRows); dragging it never touches the split on screen.
+ *   In a group, rows kept at the top (pins: dragged there, or the row menu) come first, the rest by latest activity.
  *   Panes shown next to the current one are tinted lightly.
  * - "Active" above the groups replaces both the to-do list and the agents list. Who's in is overviewState.activeIds,
  *   shared with the overview: what needs you or runs joins on its own, anything else can be added by
@@ -270,7 +274,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     return () => clearInterval(t);
   }, [roomy]);
   const list = spaceWorkspaces(layout);
-  const groups = sideRows(layout);
+  const groups = sideRows(layout, undefined, sessions);
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
   const scroller = useRef<HTMLDivElement>(null);
@@ -472,9 +476,15 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                       >
                         {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
                   the ones on screen just light up. data-side-row(s): drag a row between two others to move it (TabDrag.tsx) */}
-                        {groups.get(ws.id)?.map((r) => (
-                          <div key={r.pane.id} data-side-row={r.pane.id}>
-                            <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} />
+                        {groups.get(ws.id)?.map((r, i, rs) => (
+                          // A thin line where the rows kept at the top end and the ones sorted by activity begin; part of the
+                          // first unpinned row (not an element of its own) so dropping between rows still counts them right
+                          <div
+                            key={r.pane.id}
+                            data-side-row={r.pane.id}
+                            className={cn(!r.pinned && rs[i - 1]?.pinned && "mt-1 border-t border-border/60 pt-1")}
+                          >
+                            <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} groupId={ws.id} pinned={!!r.pinned} />
                           </div>
                         ))}
                         {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>}
@@ -699,6 +709,8 @@ const Row = memo(function Row({
   where,
   num,
   groupDir,
+  groupId,
+  pinned,
 }: {
   tab: Tab;
   pane: PaneLeaf;
@@ -720,6 +732,10 @@ const Row = memo(function Row({
   num?: number;
   /** The folder of the row's workspace: its group's header already says it, so a row there in the same folder doesn't. */
   groupDir?: string;
+  /** The group (workspace) listing this row, for keeping it at the top there; unset in "active". */
+  groupId?: string;
+  /** Kept at the top of its group (layout.sideRows pins) instead of sorting by activity. */
+  pinned?: boolean;
 }) {
   const label = paneLabel(pane, s);
   const { title } = label;
@@ -877,6 +893,11 @@ const Row = memo(function Row({
         {s && unread && (
           <ContextMenuItem onClick={() => markRead(s.id)}>
             <MailCheck /> {t("unifiedSidebar.markRead")}
+          </ContextMenuItem>
+        )}
+        {groupId && (
+          <ContextMenuItem onClick={() => pinRow(pane.id, groupId, !pinned)} title={t("unifiedSidebar.pinTopHint")}>
+            {pinned ? <ArrowDownWideNarrow /> : <ArrowUpToLine />} {pinned ? t("unifiedSidebar.unpinTop") : t("unifiedSidebar.pinTop")}
           </ContextMenuItem>
         )}
         {canBeside && (

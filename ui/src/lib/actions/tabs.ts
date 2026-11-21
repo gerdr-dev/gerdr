@@ -232,7 +232,8 @@ export function moveTabToWorkspace(tabId: string, wsId: string, index?: number) 
     if (!fw || !tab || fw.id === wsId || !l.workspaces.some((w) => w.id === wsId)) return l;
     // Its panes' sidebar places go too: they follow the tab to the new workspace's group
     const ids = new Set(leaves(tab.root).map((p) => p.id));
-    l = { ...l, workspaces: l.workspaces.map((w) => (w.rows?.some((id) => ids.has(id)) ? { ...w, rows: w.rows.filter((id) => !ids.has(id)) } : w)) };
+    const off = (xs?: string[]) => (xs?.some((id) => ids.has(id)) ? xs.filter((id) => !ids.has(id)) : xs);
+    l = { ...l, workspaces: l.workspaces.map((w) => (off(w.rows) === w.rows && off(w.pins) === w.pins ? w : { ...w, rows: off(w.rows), pins: off(w.pins) })) };
     const out = updateWs(removeTab(l, fw, tabId), wsId, (w) => {
       const tabs = [...w.tabs];
       tabs.splice(index ?? tabs.length, 0, tab);
@@ -244,23 +245,36 @@ export function moveTabToWorkspace(tabId: string, wsId: string, index?: number) 
 
 /**
  * The sidebar only: list pane `paneId` in group `wsId` at `index` (counted without it). Tabs and splits stay as they are:
- * the sidebar's groups are just how the list is arranged (layout.sideRows).
+ * the sidebar's groups are just how the list is arranged (layout.sideRows). A group shows its pins first, then the rest
+ * by activity, so a drop among the pins (or just below them) pins it there, and a drop lower down unpins it: the order
+ * there isn't the hand's. Dropped lower in another workspace's group, it is listed there without a pin.
  */
 export function placeRow(paneId: string, wsId: string, index: number) {
   setLayout((l) => {
     const owner = allLeaves(l).find((x) => x.pane.id === paneId);
-    const groups = owner && sideRows(l, spaceOf(owner.ws));
-    const rows = groups?.get(wsId);
-    if (!rows) return l;
-    const ids = rows.map((r) => r.pane.id).filter((id) => id !== paneId);
-    ids.splice(Math.min(index, ids.length), 0, paneId);
+    const rows = owner && sideRows(l, spaceOf(owner.ws)).get(wsId);
+    if (!owner || !rows) return l;
+    const pins = rows.filter((r) => r.pinned && r.pane.id !== paneId).map((r) => r.pane.id);
+    const pin = index <= pins.length;
+    if (pin) pins.splice(index, 0, paneId);
+    const away = !pin && owner.ws.id !== wsId;
+    const drop = (ids?: string[]) => (ids?.includes(paneId) ? ids.filter((x) => x !== paneId) : ids);
     return {
       ...l,
-      workspaces: l.workspaces.map((w) =>
-        w.id === wsId ? { ...w, rows: ids } : w.rows?.includes(paneId) ? { ...w, rows: w.rows.filter((x) => x !== paneId) } : w,
-      ),
+      workspaces: l.workspaces.map((w) => {
+        const rows = drop(w.rows);
+        const next = w.id === wsId ? { ...w, pins, rows: away ? [...(rows ?? []), paneId] : rows } : { ...w, pins: drop(w.pins), rows };
+        return next.rows === w.rows && next.pins === w.pins ? w : next;
+      }),
     };
   });
+}
+
+/** Keep a row at the top of its sidebar group (after the ones already kept there), or let it sort by activity again. */
+export function pinRow(paneId: string, wsId: string, on: boolean) {
+  const owner = allLeaves(get().layout).find((x) => x.pane.id === paneId);
+  const rows = owner && sideRows(get().layout, spaceOf(owner.ws)).get(wsId);
+  if (rows) placeRow(paneId, wsId, on ? rows.filter((r) => r.pinned && r.pane.id !== paneId).length : Infinity);
 }
 
 /** 复制一个 tab：同样的分屏结构，每个 pane 用同样的 agent / 目录开新会话（对话本身复制不了）。 */

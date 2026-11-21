@@ -75,7 +75,9 @@ export const fitOf = (b: FloatBox): FloatFit => (b.fit && b.fit in FLOAT_FITS ? 
 export type Tab = { id: string; name?: string; root: PaneNode; focus: string; zoom?: string; float?: Record<string, FloatBox> };
 /** space: which session (see Space below) it belongs to; unset = the default one. */
 /**
- * rows: the sidebar's own order for this group (pane ids), see sideRows. Only the list; the screen doesn't follow it.
+ * rows / pins: where the sidebar lists a pane, see sideRows. Only the list; the screen doesn't follow it. rows: panes
+ * moved here from another workspace's group (unordered, they sort with the rest); pins: panes kept at the top of this
+ * group, in this order. rows used to hold the whole group's hand-made order; such old lists just mean "listed here".
  * muted: do not disturb. Its agents still show their own state on their rows, but nothing goes up from them: no dot or
  * "waiting" count on the group or the project, no joining "active" on their own, no system / inbox / Android notification,
  * not in the dock badge or next-needs-you (mutedSession). The server reads it too (internal/server/spaces.go MutedSessions).
@@ -89,6 +91,7 @@ export type Workspace = {
   lastTab?: string;
   space?: string;
   rows?: string[];
+  pins?: string[];
   muted?: true;
 };
 /**
@@ -341,29 +344,73 @@ export function activeTab(l: Layout): Tab {
   return w.tabs.find((t) => t.id === w.activeTab) ?? w.tabs[0];
 }
 
-/** A sidebar row: one pane, with the workspace and tab it really lives in (clicking it goes there). */
-export type SideRow = { ws: Workspace; tab: Tab; pane: PaneLeaf };
+/** A sidebar row: one pane, with the workspace and tab it really lives in (clicking it goes there). pinned: in its group's pins. */
+export type SideRow = { ws: Workspace; tab: Tab; pane: PaneLeaf; pinned?: boolean };
+
+/** What sideRows needs to know about a session to sort by activity; SessionSummary fits. */
+type Activity = { updatedAt: number; turn?: { startedAt: number } };
 
 /**
- * The sidebar's groups: the panes each of a project's workspaces lists, in order. Decoupled from the screen (asked for):
- * the panes of one split can sit in different groups. A pane is listed where it was dragged to (some workspace's `rows`,
- * the first one claiming it), else under its own tab's workspace, after the ones placed by hand, in tab order.
+ * When a pane last moved, for the sidebar's order. A running turn counts from when it started (you sent it), not its
+ * latest output: rows only move when you send and when a turn ends, so a row doesn't slip away while you reach for it.
+ * A new conversation not started yet is newest (just opened); a subagent's pane goes by its session; a terminal / file /
+ * browser by the agent in its tab, else last.
  */
-export function sideRows(l: Layout, space = currentSpace(l)): Map<string, SideRow[]> {
+function rowTime(tab: Tab, pane: PaneLeaf, sessions: Record<string, Activity | undefined>): number {
+  const at = (id?: string) => {
+    const s = id ? sessions[id] : undefined;
+    return s ? (s.turn?.startedAt ?? s.updatedAt) : undefined;
+  };
+  if (pane.sessionId) return at(pane.sessionId) ?? -Infinity;
+  if (pane.sub) return at(pane.sub.sessionId) ?? -Infinity;
+  if (!pane.term && !pane.file && !pane.browser) return Infinity;
+  const near = leaves(tab.root)
+    .map((p) => at(p.sessionId))
+    .filter((x) => x != null);
+  return near.length ? Math.max(...near) : -Infinity;
+}
+
+/**
+ * The sidebar's groups: the panes each of a project's workspaces lists. A pane is listed in the group that pinned it
+ * (`pins`) or that it was dragged to (`rows`), the first one claiming it, else under its own tab's workspace. Each group
+ * shows its pins first, in their order, then the rest, last moved first (rowTime; without `sessions`, in tab order).
+ * Decoupled from the screen (asked for): the panes of one split can sit in different groups.
+ */
+export function sideRows(l: Layout, space = currentSpace(l), sessions?: Record<string, Activity | undefined>): Map<string, SideRow[]> {
   const wss = spaceWorkspaces(l, space);
   const byPane = new Map<string, SideRow>();
   for (const ws of wss) for (const tab of ws.tabs) for (const pane of leaves(tab.root)) byPane.set(pane.id, { ws, tab, pane });
-  const out = new Map<string, SideRow[]>();
+  const pinned = new Map<string, SideRow[]>();
+  const rest = new Map<string, SideRow[]>(wss.map((g) => [g.id, []]));
   const claimed = new Set<string>();
   for (const g of wss) {
     const rows: SideRow[] = [];
+    for (const id of g.pins ?? []) {
+      const r = byPane.get(id);
+      if (r && !claimed.has(id)) (claimed.add(id), rows.push({ ...r, pinned: true }));
+    }
+    pinned.set(g.id, rows);
+  }
+  for (const g of wss)
     for (const id of g.rows ?? []) {
       const r = byPane.get(id);
-      if (r && !claimed.has(id)) (claimed.add(id), rows.push(r));
+      if (r && !claimed.has(id)) (claimed.add(id), rest.get(g.id)!.push(r));
     }
-    out.set(g.id, rows);
+  for (const r of byPane.values()) if (!claimed.has(r.pane.id)) rest.get(r.ws.id)!.push(r);
+  const out = new Map<string, SideRow[]>();
+  for (const g of wss) {
+    let rs = rest.get(g.id)!;
+    if (sessions) {
+      const time = new Map(rs.map((r) => [r.pane.id, rowTime(r.tab, r.pane, sessions)]));
+      // Ties (two terminals with no agent beside them) keep tab order: sort is stable
+      rs = [...rs].sort((a, b) => {
+        const x = time.get(a.pane.id)!,
+          y = time.get(b.pane.id)!;
+        return x === y ? 0 : x < y ? 1 : -1;
+      });
+    }
+    out.set(g.id, [...pinned.get(g.id)!, ...rs]);
   }
-  for (const r of byPane.values()) if (!claimed.has(r.pane.id)) out.get(r.ws.id)!.push(r);
   return out;
 }
 
