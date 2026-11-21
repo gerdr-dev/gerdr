@@ -197,10 +197,14 @@ export function buildRows(
   // 排着队的插话、发送中的、运行中跑的 `!` 命令挂在最底下（见 Transcript.queued / sending / parked），还在跑的那条是它们前面那条
   let liveIdx = lastIdx;
   while (liveIdx >= 0 && (msgs[liveIdx].metadata?.queued || msgs[liveIdx].metadata?.sending || msgs[liveIdx].metadata?.parked)) liveIdx--;
-  // The latest turn's metadata line: the last data-turnStat of the last message that has one
+  // The latest turn's metadata line: the last data-turnStat of the last message that has one, unless a message the
+  // person sent comes after it: the next turn has started from it then (add-ons decorating "the turn the next message
+  // continues from", like a prompt cache running out, must let go as soon as it's sent, not when that turn ends).
+  // Queued / parked ones haven't gone to the agent yet, so they don't count.
   let latestStat = "";
   for (let mi = msgs.length - 1; mi >= 0 && !latestStat; mi--) {
     const m = msgs[mi];
+    if (m.role === "user" && !m.metadata?.queued && !m.metadata?.parked) break;
     for (let i = m.parts.length - 1; i >= 0; i--) {
       if (m.parts[i].type === "data-turnStat") {
         latestStat = `${m.id}:${i}`;

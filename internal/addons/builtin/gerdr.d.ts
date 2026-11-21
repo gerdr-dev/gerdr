@@ -646,7 +646,8 @@ declare global {
     ms: number;
     /** Output tokens. */
     tokens: number;
-    /** The newest finished turn of the session (the one the next message continues from). */
+    /** The newest finished turn of the session (the one the next message continues from); false again as soon as a
+     *  message is sent after it, without waiting for that turn to finish. */
     latest: boolean;
     /** The current time (unix ms), refreshed every 30s. */
     now: number;
