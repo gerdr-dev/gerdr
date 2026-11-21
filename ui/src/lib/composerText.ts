@@ -62,9 +62,49 @@ export function setComposerText(paneId: string, text: string, caret?: number, pe
   set((s) => ({ drafts: { ...s.drafts, [paneId]: text } }));
   const el = boxes.get(paneId);
   if (!el || caret === undefined) return;
-  if (document.activeElement !== el && window.matchMedia("(pointer: coarse)").matches) return;
   const at = Math.max(0, Math.min(caret, text.length));
-  requestAnimationFrame(() => el.value === text && el.setSelectionRange(at, at));
+  const place = document.activeElement === el || !window.matchMedia("(pointer: coarse)").matches;
+  requestAnimationFrame(() => {
+    if (el.value !== text) return;
+    if (place) el.setSelectionRange(at, at);
+    showCaret(el, at);
+  });
+}
+
+/**
+ * Scroll the box so the line holding `at` shows. A browser scrolls a textarea to its caret only for typing, not for a
+ * value or selection set from script, so voice input past the box's height went on out of sight below (reported).
+ * Done whether or not the box has focus: scrolling it doesn't bring a keyboard up.
+ */
+function showCaret(el: HTMLTextAreaElement, at: number) {
+  if (el.scrollHeight <= el.clientHeight) return;
+  if (at >= el.value.length) return void (el.scrollTop = el.scrollHeight);
+  // Where the caret's line ends: the text up to it laid out in a copy of the box's text area
+  const cs = getComputedStyle(el);
+  const d = document.createElement("div");
+  for (const k of [
+    "font",
+    "letterSpacing",
+    "wordSpacing",
+    "lineHeight",
+    "paddingLeft",
+    "paddingRight",
+    "paddingTop",
+    "boxSizing",
+    "whiteSpace",
+    "overflowWrap",
+    "wordBreak",
+    "tabSize",
+  ] as const)
+    (d.style as any)[k] = cs[k];
+  Object.assign(d.style, { position: "fixed", left: "-9999px", top: "0", visibility: "hidden", width: el.clientWidth + "px", paddingBottom: "0", border: "0" });
+  d.textContent = el.value.slice(0, at) + "\u200b";
+  document.body.appendChild(d);
+  const bottom = d.offsetHeight;
+  d.remove();
+  const line = parseFloat(cs.lineHeight) || 20;
+  if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom - el.clientHeight + parseFloat(cs.paddingBottom);
+  else if (bottom - line < el.scrollTop) el.scrollTop = bottom - line - parseFloat(cs.paddingTop);
 }
 
 /** Put text in at the caret (over the selection, if any), the caret after it. */
