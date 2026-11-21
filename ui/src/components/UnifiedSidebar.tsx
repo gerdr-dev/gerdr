@@ -105,6 +105,7 @@ import { WsDot } from "./WsDot";
 import { TabDragLayer, startPaneDrag, startWsDrag, useDrag } from "./TabDrag";
 import { t } from "@/lib/i18n";
 import { useWorkProject } from "@/lib/work";
+import { usePhone } from "@/lib/phone";
 import { usePanelPhoneMenu } from "@/core/phoneMenu";
 import { PanelPhoneMenu } from "./PhoneMenu";
 
@@ -237,7 +238,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const sidebarW = useStore((s) => s.sidebarW);
-  const gridOn = useStore((s) => s.overview.on);
+  const phone = usePhone();
+  const gridOn = phone && useStore((s) => s.overview.on);
   const gridFocus = useStore((s) => s.overview.focus);
   useStore((s) => s.addonVersion);
   const tiles = useOverviewIds().split(",").filter(Boolean);
@@ -431,18 +433,20 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                          <button
-                            className={cn(
-                              "flex h-5 items-center gap-1 rounded-sm px-1",
-                              gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
-                            )}
-                            title={gridOn ? t("unifiedSidebar.gridOff") : t("unifiedSidebar.gridOn", { n: MAX_TILES })}
-                            // On a phone the grid is behind the drawer: close it
-                            onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
-                          >
-                            <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
-                            {t("unifiedSidebar.grid")}
-                          </button>
+                          {phone && (
+                            <button
+                              className={cn(
+                                "flex h-5 items-center gap-1 rounded-sm px-1",
+                                gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
+                              )}
+                              title={gridOn ? t("unifiedSidebar.gridOff") : t("unifiedSidebar.gridOn", { n: MAX_TILES })}
+                              // On a phone the overview sits behind the drawer: close it
+                              onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
+                            >
+                              <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
+                              {t("unifiedSidebar.grid")}
+                            </button>
+                          )}
                         </div>
                         {!activeFolded && <div>{active.map((item, i) => flatRow(item, true, numbers && i < 9 ? i + 1 : undefined))}</div>}
                         {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}

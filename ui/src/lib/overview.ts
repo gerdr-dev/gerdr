@@ -30,6 +30,7 @@ import { get, markRead, set, setConfig, useStore } from "./store";
 import { syncWatch } from "./sync";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
+import { isPhone } from "./phone";
 
 export { activeIds, MAX_TILES, overviewFocus, overviewIds, type Overview };
 
@@ -74,7 +75,9 @@ export const useOverviewIds = () => useStore((s) => overviewIds(s).join(","));
 export const useActiveIds = () => useStore((s) => activeIds(s).join(","));
 
 export function toggleOverview(on = !get().overview.on) {
-  setOverview((o) => ({ ...o, on }));
+  // Desktop dropped the multi-tile grid; keep the overview state off there while preserving phone overview.
+  const next = isPhone() ? on : false;
+  setOverview((o) => (o.on === next ? o : { ...o, on: next }));
 }
 
 // An agent that joined "active" on its status (started running, asks you something…) stays once that passes: finishing
@@ -194,11 +197,12 @@ export function showInOverview(id: string): boolean {
   return true;
 }
 
-/** "Add to active" from a menu: stay where you are, but the toast offers a way to jump to the tile. */
+/** "Add to active" from a menu: on a phone offer jumping into PhoneOverview; on desktop the sidebar's Active section shows it directly. */
 export function addToActive(id: string) {
   addActive([id]);
   if (!activeIds(get()).includes(id)) return void toast(t("overview.addedElsewhere"));
-  toast(t("overview.added"), { action: { label: t("overview.view"), onClick: () => showInOverview(id) } });
+  if (isPhone()) toast(t("overview.added"), { action: { label: t("overview.view"), onClick: () => showInOverview(id) } });
+  else toast(t("overview.added"));
 }
 
 export function focusTile(id: string) {

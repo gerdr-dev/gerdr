@@ -251,11 +251,9 @@ export default function App() {
   const mode = useStore((s) => s.mode);
   const workKept = useStore((s) => s.workKept);
   useEffect(() => syncWatch(), [mode]);
-  // The overview covers sidebar and tabs (on a phone too, one tile at a time). Once opened it stays mounted, hidden, so reopening keeps each
-  // chat's scroll position, like the kept tabs below.
-  const overview = useStore((s) => s.overview.on) && mode !== "work";
-  // Desktop: the active grid (the overview) opens over the main area, beside the sidebar. The phone has its own
-  // full-window overview (PhoneOverview); its sidebar is the same UnifiedSidebar, as a drawer.
+  // The phone-only overview (PhoneOverview) covers the tabs one tile at a time. Once opened it stays mounted, hidden,
+  // so reopening keeps each chat's scroll position, like the kept tabs below. Desktop uses the sidebar's Active list directly.
+  const overview = phone && useStore((s) => s.overview.on) && mode !== "work";
   const unified = !phone;
   const [overviewMounted, setOverviewMounted] = useState(overview);
   if (overview && !overviewMounted) setOverviewMounted(true);
@@ -336,11 +334,6 @@ export default function App() {
             {/* The unified sidebar lists the tabs itself; with it hidden the tab bar comes back (and its show-sidebar button) */}
             {phone ? <PhoneBar /> : !(unified && sidebar) && <TabBar />}
             <div className="relative min-h-0 flex-1">
-              {overviewMounted && unified && (
-                <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
-                  <OverviewView shown={overview} />
-                </div>
-              )}
               {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里
                 挪这些节点，而**挪动 DOM 节点会把里面的滚动位置清零** —— 切走的 tab 一藏起来就回到最顶上（踩过）。
                 顺序固定的话切 tab 只改 invisible，节点不动。 */}
