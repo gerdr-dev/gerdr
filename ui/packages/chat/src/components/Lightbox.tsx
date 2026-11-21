@@ -9,6 +9,9 @@ import { cn } from "../utils";
  *
  * - 从点的那张缩略图的位置放大出来，关的时候缩回去（还在原处的话；翻到别的图了就原地淡出）；
  * - 一组图（同一条消息里的几张 / agent 排成网格的几张）能左右翻：← → 键、两边的按钮、手机上左右划；
+ *   the neighbours are mounted beside the current one (off screen, keyed by their index), so a swipe drags the next
+ *   image in with the finger and a page turn slides; the one that slid in stays the same element when it becomes
+ *   current, so nothing reloads or blinks at the switch;
  * - 看细节：手机上双指捏合缩放、单指拖动、双击放大 / 还原；电脑上点图放大 / 还原、滚轮（触控板捏合）缩放、拖动；
  * - 关：点空白处、Esc、右上角 ✕；没放大时往下划也能关（和手机相册一样）；
  * - 本机文件右上角多一个「在查看器里打开」（gerdr 的 FileViewer，能看路径、用系统程序打开）。
@@ -70,6 +73,8 @@ type View = { s: number; x: number; y: number };
 type Box = { left: number; top: number; w: number; h: number };
 
 const MAX = 8;
+/** Space between pages while sliding */
+const GAP = 16;
 const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 
 /** 适应屏幕的大小和位置（不放大比屏幕小的图：小图硬拉大是糊的，要看细节自己捏） */
@@ -109,8 +114,20 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
   const imgRef = useRef<HTMLImageElement & HTMLVideoElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
   const chromeRef = useRef<HTMLDivElement>(null);
-  const [nat, setNat] = useState(() => natOf(origin?.index === index ? origin.el : undefined, it.url));
+  // Natural sizes by url: the current image's and its neighbours', so one that slides in already has its box
+  const sizes = useRef<Map<string, { w: number; h: number }> | null>(null);
+  if (!sizes.current) {
+    sizes.current = new Map();
+    const n = natOf(origin?.index === index ? origin.el : undefined, it.url);
+    if (n) sizes.current.set(it.url, n);
+  }
   const [, relayout] = useState(0);
+  const sized = (url: string, w: number, h: number) => {
+    if (sizes.current!.has(url)) return;
+    sizes.current!.set(url, { w: w || 800, h: h || 800 });
+    relayout((x) => x + 1);
+  };
+  const nat = sizes.current.get(it.url) ?? null;
   const [zoomed, setZoomed] = useState(false);
   const view = useRef<View>({ s: 1, x: 0, y: 0 });
   const opening = useRef(true);
@@ -174,21 +191,67 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     setTimeout(() => (emit(null), chatHost().refocus?.()), 220);
   };
 
-  const go = (d: number) => {
-    if (!many || closing.current) return;
-    emit({ items, index: (index + d + items.length) % items.length, origin });
+  // ---- Paging: the neighbours sit one screen (+ GAP) to each side and move with the current image ----
+  const n = items.length;
+  const wrap = (i: number) => (i + n) % n;
+  const sides = many ? [...new Set([wrap(index - 1), wrap(index + 1)])] : [];
+  const sideEls = useRef(new Map<number, HTMLElement>());
+  const page = () => window.innerWidth + GAP;
+  const sliding = useRef(false);
+  /** The page turn just finished by sliding: the new image is already in place, no fade-in */
+  const slid = useRef(false);
+  const move = (el: HTMLElement | undefined, x: number, ms = 0) => {
+    if (!el) return;
+    el.style.transition = ms ? `transform ${ms}ms ${EASE}` : "none";
+    el.style.transform = `translateX(${x}px)`;
+  };
+  /** Put the neighbours beside the current image dragged by dx. With two images the one neighbour is both the
+   *  previous and the next, so it goes to the side `dir` (-1 left, 1 right) the finger is pulling from. */
+  const placeSides = (dx: number, dir: number, ms = 0) => {
+    if (n === 2) return move(sideEls.current.get(wrap(index + 1)), dx + dir * page(), ms);
+    move(sideEls.current.get(wrap(index + 1)), dx + page(), ms);
+    move(sideEls.current.get(wrap(index - 1)), dx - page(), ms);
   };
 
-  // 翻到另一张：重新量（新图的尺寸），回到适应屏幕
+  /** Turn the page: slide the current image out and the neighbour in, then make the neighbour current.
+   *  fromSwipe: the finger already dragged both into place; otherwise (keys, buttons) they start from rest. */
+  const slide = (d: number, fromSwipe = false) => {
+    if (!many || closing.current || sliding.current) return;
+    const next = wrap(index + d);
+    const el = sideEls.current.get(next);
+    if (!el || !sizes.current!.has(items[next].url) || view.current.s > 1.01 || it.video) {
+      emit({ items, index: next, origin });
+      return;
+    }
+    sliding.current = true;
+    if (!fromSwipe) {
+      placeSides(0, d);
+      el.getBoundingClientRect(); // lay the start out, so the transition has one
+    }
+    const ms = 260;
+    apply({ s: 1, x: -d * page(), y: 0 }, ms);
+    move(el, 0, ms);
+    setTimeout(() => {
+      sliding.current = false;
+      slid.current = true;
+      emit({ items, index: next, origin });
+    }, ms);
+  };
+  const go = (d: number) => slide(d);
+
+  // 翻到另一张：回到适应屏幕
   const first = useRef(true);
   useLayoutEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
-    setNat(null);
     setZoomed(false);
     view.current = { s: 1, x: 0, y: 0 };
+  }, [index]);
+  // After this index's layout effects (the fade-in check below) have read it
+  useEffect(() => {
+    slid.current = false;
   }, [index]);
 
   // 打开的那一下：从缩略图的位置放大到适应屏幕。要等知道图的尺寸（fit）才能算
@@ -197,7 +260,7 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     if (!opening.current) {
       // 翻到的新图：原地淡入
       apply(view.current);
-      imgRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150 });
+      if (!slid.current) imgRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150 });
       return;
     }
     opening.current = false;
@@ -264,6 +327,10 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     v: View;
     moved: boolean;
     onImg: boolean;
+    /** Swipe speed (px/ms), from the last move */
+    vx?: number;
+    lx?: number;
+    lt?: number;
     dist?: number;
     c?: { x: number; y: number };
   }>({ mode: "none", sx: 0, sy: 0, v: { s: 1, x: 0, y: 0 }, moved: false, onImg: false });
@@ -291,7 +358,7 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
 
   const onDown = (e: React.PointerEvent) => {
     // A video's own controls (play, seek, volume) get the pointer, not our gestures.
-    if (closing.current || (e.target as HTMLElement).closest("button, a, video")) return;
+    if (closing.current || sliding.current || (e.target as HTMLElement).closest("button, a, video")) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -321,8 +388,14 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     st.moved = true;
     if (st.mode === "none") st.mode = Math.abs(dx) > Math.abs(dy) ? (many ? "swipe" : "pan") : dy > 0 ? "dismiss" : "pan";
     if (st.mode === "pan") apply(view.current.s > 1.01 ? { ...st.v, x: st.v.x + dx, y: st.v.y + dy } : { ...st.v, y: st.v.y + dy * 0.3 });
-    else if (st.mode === "swipe") apply({ ...st.v, x: st.v.x + dx });
-    else if (st.mode === "dismiss") {
+    else if (st.mode === "swipe") {
+      const now = performance.now();
+      if (st.lt != null && now > st.lt) st.vx = (e.clientX - st.lx!) / (now - st.lt);
+      st.lx = e.clientX;
+      st.lt = now;
+      apply({ ...st.v, x: st.v.x + dx });
+      placeSides(dx, dx < 0 ? 1 : -1);
+    } else if (st.mode === "dismiss") {
       const k = Math.max(0.6, 1 - Math.max(0, dy) / 1000);
       apply({ s: k, x: (f.w * (1 - k)) / 2 + dx, y: (f.h * (1 - k)) / 2 + dy });
       fade(Math.max(0.2, 1 - Math.max(0, dy) / 400));
@@ -348,8 +421,11 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
       return;
     }
     if (st.mode === "swipe") {
-      if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
-      else apply({ s: 1, x: 0, y: 0 }, 200);
+      // Past a quarter of the screen, or a flick that way
+      const d = dx < 0 ? 1 : -1;
+      const flick = Math.abs(st.vx ?? 0) > 0.4 && Math.sign(st.vx!) === -d && Math.abs(dx) > 20;
+      if (e.type !== "pointercancel" && (Math.abs(dx) > window.innerWidth / 4 || flick)) slide(d, true);
+      else (apply({ s: 1, x: 0, y: 0 }, 200), placeSides(0, -d, 200));
       return;
     }
     if (st.mode === "dismiss") {
@@ -389,40 +465,82 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
       onPointerCancel={onUp}
     >
       <div ref={bgRef} className="absolute inset-0 bg-background/90 backdrop-blur-sm" style={{ opacity: 0 }} />
-      {it.video ? (
-        <video
-          key={`${index}:${it.url}`}
-          ref={imgRef}
-          src={it.url}
-          controls
-          autoPlay
-          playsInline
-          onLoadedMetadata={(e) => {
-            const v = e.currentTarget;
-            if (!nat) setNat({ w: v.videoWidth || 800, h: v.videoHeight || 450 });
-            // A video that hasn't played or seeked shows its poster, not its first frame, and Android's WebView
-            // supplies a poster of its own when there is none (autoPlay with sound is blocked there, so it stays).
-            // A tiny seek clears that state and the first frame is drawn instead.
-            if (v.paused && v.currentTime === 0) v.currentTime = 0.001;
-          }}
-          className="absolute top-0 left-0 max-w-none rounded-md bg-black shadow-2xl will-change-transform"
-          style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
-        />
-      ) : (
-        <img
-          key={`${index}:${it.url}`}
-          ref={imgRef}
-          src={it.url}
-          alt={it.alt}
-          draggable={false}
-          onLoad={(e) => !nat && setNat({ w: e.currentTarget.naturalWidth || 800, h: e.currentTarget.naturalHeight || 800 })}
-          className={cn(
-            "absolute top-0 left-0 max-w-none rounded-md shadow-2xl will-change-transform",
-            zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
-          )}
-          style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
-        />
-      )}
+      {/* One keyed list with the current image, so the neighbour that slides in is kept as the same element when it
+          becomes current (React matches keys only among siblings of one array) */}
+      {[
+        ...sides.map((i) => {
+          const side = items[i];
+          const sz = sizes.current!.get(side.url);
+          const f = sz ? fitOf(sz.w, sz.h) : null;
+          // At rest off screen to its side (with two images the neighbour waits on the right)
+          const rest = (i === wrap(index - 1) && n > 2 ? -1 : 1) * page();
+          const style: React.CSSProperties = f
+            ? { left: f.left, top: f.top, width: f.w, height: f.h, transform: `translateX(${rest}px)`, transition: "none" }
+            : { opacity: 0, transform: `translateX(${rest}px)`, transition: "none" };
+          const ref = (el: HTMLElement | null) => {
+            if (el) sideEls.current.set(i, el);
+            else sideEls.current.delete(i); // React re-sets it right after when only the callback changed
+          };
+          return side.video ? (
+            <video
+              key={`${i}:side`}
+              ref={ref}
+              src={side.url + "#t=0.001"}
+              muted
+              playsInline
+              preload="metadata"
+              onLoadedMetadata={(e) => sized(side.url, e.currentTarget.videoWidth, e.currentTarget.videoHeight)}
+              className="pointer-events-none absolute top-0 left-0 max-w-none rounded-md bg-black shadow-2xl"
+              style={style}
+            />
+          ) : (
+            <img
+              key={i}
+              ref={ref}
+              src={side.url}
+              alt={side.alt}
+              draggable={false}
+              onLoad={(e) => sized(side.url, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
+              className="pointer-events-none absolute top-0 left-0 max-w-none rounded-md shadow-2xl will-change-transform"
+              style={style}
+            />
+          );
+        }),
+        it.video ? (
+          <video
+            key={`${index}:main`}
+            ref={imgRef}
+            src={it.url}
+            controls
+            autoPlay
+            playsInline
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              sized(it.url, v.videoWidth || 800, v.videoHeight || 450);
+              // A video that hasn't played or seeked shows its poster, not its first frame, and Android's WebView
+              // supplies a poster of its own when there is none (autoPlay with sound is blocked there, so it stays).
+              // A tiny seek clears that state and the first frame is drawn instead.
+              if (v.paused && v.currentTime === 0) v.currentTime = 0.001;
+            }}
+            className="absolute top-0 left-0 max-w-none rounded-md bg-black shadow-2xl will-change-transform"
+            style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
+          />
+        ) : (
+          <img
+            key={index}
+            ref={imgRef}
+            src={it.url}
+            alt={it.alt}
+            draggable={false}
+            onLoad={(e) => sized(it.url, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
+            className={cn(
+              "absolute top-0 left-0 max-w-none rounded-md shadow-2xl will-change-transform",
+              zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
+            )}
+            style={fit ? { left: fit.left, top: fit.top, width: fit.w, height: fit.h, transformOrigin: "0 0" } : { opacity: 0 }}
+          />
+        ),
+      ]}
       <div ref={chromeRef} style={{ opacity: 0 }}>
         <div className="absolute top-3 right-3 flex gap-2">
           {it.path && hostFor(it.sessionId).openPath && (
