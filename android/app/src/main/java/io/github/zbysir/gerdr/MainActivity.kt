@@ -1234,11 +1234,19 @@ open class MainActivity : ComponentActivity() {
         return name.replace('/', '_').ifEmpty { "download" }
     }
 
+    /**
+     * In a task of its own (NEW_TASK). Without it, a handler with the default launch mode (many system apps' link
+     * handlers, a mail composer) was pushed onto our task, on top of this window. Coming back was then an in-task
+     * activity close, with no recents snapshot to cover for us while holdForPage kept the window from drawing, so it
+     * showed black for a moment. As its own task, returning is a task switch, like coming back from recents.
+     */
     fun openExternal(url: String) {
         val u = Uri.parse(url)
         if (u.scheme != "http" && u.scheme != "https" && u.scheme != "mailto") return
         try {
-            startActivity(Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE))
+            startActivity(
+                Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
         } catch (_: ActivityNotFoundException) {
             Toast.makeText(this, "没有能打开这个链接的应用", Toast.LENGTH_SHORT).show()
         }
