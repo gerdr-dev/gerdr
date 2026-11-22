@@ -80,8 +80,14 @@ func limitImage(mime string, data []byte, l ImageLimits) (string, []byte) {
 	if err != nil {
 		return mime, data
 	}
+	// Re-encoding drops EXIF, so its orientation goes into the pixels (orient.go). After the scaling: fitImage
+	// treats both edges alike, and turning the small image is cheaper.
+	o := 1
+	if mime == "image/jpeg" || mime == "image/jpg" {
+		o = jpegOrientation(data)
+	}
 	if resize {
-		img = downscale(img, w, h)
+		img = orient(downscale(img, w, h), o)
 		var buf bytes.Buffer
 		if mime == "image/png" && png.Encode(&buf, img) == nil {
 			mime, data = "image/png", buf.Bytes()
@@ -90,6 +96,9 @@ func limitImage(mime string, data []byte, l ImageLimits) (string, []byte) {
 		}
 	}
 	if l.MaxBytes > 0 && len(data) > l.MaxBytes {
+		if !resize {
+			img = orient(img, o)
+		}
 		flat := flatten(img)
 		for _, q := range []int{80, 60, 40, 20} { // Claude Code's steps
 			var buf bytes.Buffer
