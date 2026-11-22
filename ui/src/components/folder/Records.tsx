@@ -43,14 +43,14 @@ export function Records({
       .catch((e) => toast.error(e.message));
   if (!items.length && !adding)
     return (
-      <div className="flex items-center justify-end px-3 pt-2">
+      <div className="flex items-center justify-end px-4 pt-2">
         <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-[12px] text-muted-foreground" onClick={() => setAdding(true)}>
           <Plus className="size-3.5" /> {t("folder.addRecord")}
         </Button>
       </div>
     );
   return (
-    <div className="border-b px-3 py-2">
+    <div className="border-b px-4 py-2">
       <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
         {t("folder.records")}
         <div className="flex-1" />

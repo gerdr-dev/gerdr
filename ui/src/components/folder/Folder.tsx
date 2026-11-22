@@ -283,7 +283,7 @@ export function Folder({ by, host }: { by: { session: string } | { dir: string }
   );
 
   const toolbar = (
-    <div className="flex shrink-0 items-center gap-0.5 border-b px-2 py-1">
+    <div className="flex shrink-0 items-center gap-0.5 border-b px-3 py-1">
       <span className="min-w-0 flex-1 truncate px-1 font-mono text-[11px] text-muted-foreground" title={info?.dir}>
         {info?.dir.replace(/^\/(?:Users|home)\/[^/]+/, "~")}
       </span>
@@ -421,7 +421,7 @@ export function Folder({ by, host }: { by: { session: string } | { dir: string }
           <div className="flex min-h-0 flex-1 flex-col">
             {sel && !selIsDir ? (
               <>
-                {!mdLead && <div className="flex shrink-0 border-b px-3 py-1.5">{back}</div>}
+                {!mdLead && <div className="flex shrink-0 border-b px-4 py-1.5">{back}</div>}
                 <div className="min-h-0 flex-1 overflow-auto">{right}</div>
               </>
             ) : (
@@ -495,7 +495,7 @@ function NameInput({ depth, folder, initial = "", onDone }: { depth: number; fol
     onDone(name);
   };
   return (
-    <div className="flex items-center gap-1.5 px-2 py-0.5" style={{ paddingLeft: 8 + depth * 14 + 14 }}>
+    <div className="flex items-center gap-1.5 px-2 py-0.5" style={{ paddingLeft: 12 + depth * 14 + 14 }}>
       {folder ? <FolderIcon className="size-4 shrink-0 text-brand" /> : <File className="size-4 shrink-0 text-muted-foreground" />}
       <input
         autoFocus
@@ -548,10 +548,10 @@ function Tree(props: {
             <div
               onClick={() => (e.dir && sel === p ? props.onToggle(p) : props.onPick(p, e.dir))}
               className={cn(
-                "group flex cursor-default items-center gap-1.5 py-[3px] pr-2 text-[13px] hover:bg-accent/60",
+                "group flex cursor-default items-center gap-1.5 py-[3px] pr-3 text-[13px] hover:bg-accent/60",
                 sel === p && "bg-accent text-foreground",
               )}
-              style={{ paddingLeft: 8 + depth * 14 }}
+              style={{ paddingLeft: 12 + depth * 14 }} // the chevron's stroke lands on the 16px line the rest of the view uses
             >
               {e.dir ? (
                 <button
@@ -600,7 +600,7 @@ function Listing({
   if (!entries.length) return <div className="py-16 text-center text-[13px] text-muted-foreground">{t("folder.empty")}</div>;
   if (view === "grid")
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 p-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 p-4">
         {entries.map((e) => {
           const p = join(dir, e.name);
           const img = e.mime?.startsWith("image/");
@@ -746,7 +746,7 @@ function MdFile({ path, mtime, host, lead }: { path: string; mtime: number; host
       }}
     >
       <div ref={barRef} className="sticky top-0 z-20 shrink-0 bg-background">
-        <div className="flex items-center gap-2 border-b px-3 py-1">
+        <div className="flex items-center gap-2 border-b px-4 py-1">
           {lead && <div className="flex min-w-0 flex-1">{lead}</div>}
           <div className={cn("flex shrink-0 rounded-md bg-muted p-0.5 text-[12px]", dirty && "pointer-events-none opacity-50")}>
             {(["rich", "source"] as const).map((m) => (
@@ -769,7 +769,7 @@ function MdFile({ path, mtime, host, lead }: { path: string; mtime: number; host
           </Button>
         </div>
         {state === "conflict" && (
-          <div className="flex flex-wrap items-center gap-2 border-b bg-warn/10 px-3 py-1.5 text-[12px]">
+          <div className="flex flex-wrap items-center gap-2 border-b bg-warn/10 px-4 py-1.5 text-[12px]">
             <span>{t("folder.changedOutside")}</span>
             <div className="flex-1" />
             <Button size="sm" variant="outline" className="h-6 px-2 text-[12px]" onClick={() => void load()}>
@@ -794,7 +794,7 @@ function MdFile({ path, mtime, host, lead }: { path: string; mtime: number; host
           {front && (
             <pre
               title={t("folder.frontHint")}
-              className="mx-auto mt-3 w-[calc(100%-2.5rem)] max-w-[820px] overflow-x-auto rounded-md bg-muted/60 px-3 py-2 font-mono text-[11px] text-muted-foreground"
+              className="mx-auto mt-3 w-[calc(100%-2rem)] max-w-[828px] overflow-x-auto rounded-md bg-muted/60 px-3 py-2 font-mono text-[11px] text-muted-foreground"
             >
               {front.trim()}
             </pre>

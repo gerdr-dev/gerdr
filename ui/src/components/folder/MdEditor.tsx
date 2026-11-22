@@ -121,7 +121,7 @@ export default function MdEditor({ value, onChange, resolveSrc }: { value: strin
   return (
     <div className="flex min-h-full flex-col">
       <Toolbar editor={editor} />
-      <EditorContent editor={editor} className="gerdr-editor mx-auto w-full max-w-[860px] flex-1 px-5 py-4" />
+      <EditorContent editor={editor} className="gerdr-editor mx-auto w-full max-w-[860px] flex-1 px-4 py-4" />
     </div>
   );
 }
@@ -144,8 +144,9 @@ function Toolbar({ editor }: { editor: Editor }) {
     { key: "folder.hr", icon: Minus, on: false, run: () => c().setHorizontalRule().run() },
   ];
   // One row on a phone, swiped sideways: wrapped to two it took another strip off a screen already short on room
+  // px-2.5 + the button's own 6px puts the icons on the 16px line the file header and the text share (px-4)
   return (
-    <div className="sticky top-[var(--md-bar,33px)] z-10 flex flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none]">
+    <div className="sticky top-[var(--md-bar,33px)] z-10 flex flex-wrap items-center gap-0.5 border-b bg-background px-2.5 py-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none]">
       {items.map(({ key, icon: Icon, on, run }) => (
         <button
           key={key}
