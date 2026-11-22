@@ -4,11 +4,21 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { browserHere, closeFocusedPane, continueInPane, createInPane, focusPane, focusSession, openTerminal, resumeInPane } from "@/lib/actions";
+import {
+  browserHere,
+  closeFocusedPane,
+  continueInPane,
+  createInPane,
+  focusPane,
+  focusSession,
+  movePaneToWorkspace,
+  openTerminal,
+  resumeInPane,
+} from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
 import { get, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
-import { locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
+import { allLeaves, locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { workProjectOf } from "@/lib/work";
 import { AgentIcon, StatusDot } from "./AgentIcon";
@@ -304,6 +314,18 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
     const seen = new Set<string>();
     return spaceWorkspaces(layout, paneSpace(layout, pane.id)).filter((w) => w.cwd && !seen.has(w.cwd) && (seen.add(w.cwd), true));
   }, [layout, pane.id]);
+  // Whatever this pane becomes goes into the workspace whose folder is picked: the chips above name workspaces, and
+  // picking one while the empty pane sat in another left the new session stuck in the wrong group (user report). The
+  // pane's own workspace wins when it has that folder too; another computer's folders aren't these workspaces.
+  const intoWorkspace = (dir: string) => {
+    if (host) return;
+    const d = trimSlash(dir);
+    const l = get().layout;
+    const own = allLeaves(l).find((x) => x.pane.id === pane.id)?.ws;
+    if (!own || own.cwd === d) return;
+    const to = spaceWorkspaces(l, paneSpace(l, pane.id)).find((w) => w.cwd === d);
+    if (to) movePaneToWorkspace(pane.id, to.id);
+  };
   // The picked one may sit past the row's right edge: bring it into view (scrollLeft, not scrollIntoView, which would
   // also scroll the page)
   const wsRow = useRef<HTMLDivElement>(null);
@@ -333,13 +355,18 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
 
   // An earlier conversation carries on with its own agent, whatever card is picked above: clicking a Claude conversation
   // while Gemini was picked used to fork it into Gemini, and that was rarely what the click meant.
-  const pick = (id: string, open: boolean) => (open ? focusSession(id) : resumeInPane(pane.id, id));
+  const pick = (id: string, open: boolean) => {
+    if (open) return focusSession(id);
+    intoWorkspace(abs);
+    resumeInPane(pane.id, id);
+  };
   // Handing it to the picked agent (hub/handoff.go; the original stays) is the row's own button, so one agent running
   // out of quota still doesn't strand a conversation.
   const handoff = async (id: string) => {
     if (busy) return;
     setBusy(true);
     try {
+      intoWorkspace(abs);
       await continueInPane(pane.id, id, agent);
     } catch {
       setBusy(false);
@@ -360,6 +387,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
         toast.error(e.message ?? String(e)); // createInPane reports its own failures; this one would go unseen
         throw e;
       }
+      intoWorkspace(cwd);
       await createInPane(pane.id, { agent: as, cwd, import: imp, title, host: host || undefined });
     } catch {
       setBusy(false);
@@ -487,13 +515,24 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             variant="outline"
             disabled={busy || (!!host && !home)}
             title={keyText("splitTerminal") ? t("newSession.terminalHereKey", { key: keyText("splitTerminal") }) : t("newSession.terminalHere")}
-            onClick={() => openTerminal({ pane: pane.id, cwd: abs, host: host || undefined })}
+            onClick={() => {
+              intoWorkspace(abs);
+              void openTerminal({ pane: pane.id, cwd: abs, host: host || undefined });
+            }}
           >
             <SquareTerminal className="size-4" />
             {t("newSession.terminal")}
           </Button>
           {/* or this pane becomes the project's browser (components/browser/) */}
-          <Button variant="outline" disabled={busy} title={t("newSession.browserHere")} onClick={() => void browserHere(pane.id)}>
+          <Button
+            variant="outline"
+            disabled={busy}
+            title={t("newSession.browserHere")}
+            onClick={() => {
+              intoWorkspace(abs);
+              void browserHere(pane.id);
+            }}
+          >
             <Globe className="size-4" />
             {t("newSession.browser")}
           </Button>

@@ -224,6 +224,18 @@ export function movePane(paneId: string, to: { tabId: string; paneId?: string; s
   });
 }
 
+/**
+ * Move a pane into workspace wsId (at the end, switching to it): alone in its tab, the whole tab moves; in a split,
+ * it leaves as a new tab. Nothing happens when it is already there. The new-session page uses it so a session started
+ * in another workspace's folder lands in that workspace, not in the one the empty pane happened to be in.
+ */
+export function movePaneToWorkspace(paneId: string, wsId: string) {
+  const loc = allLeaves(get().layout).find((x) => x.pane.id === paneId);
+  if (!loc || loc.ws.id === wsId) return;
+  if (loc.tab.root.type === "pane") moveTabToWorkspace(loc.tab.id, wsId);
+  else movePane(paneId, { wsId });
+}
+
 /** 把 tab 挪到另一个工作空间（拖到侧栏的工作空间上）：放到最后、切过去看着它。 */
 export function moveTabToWorkspace(tabId: string, wsId: string, index?: number) {
   setLayout((l) => {
