@@ -355,9 +355,25 @@ export function Folder({ by, host }: { by: { session: string } | { dir: string }
     </div>
   );
 
+  // On a narrow box an open file takes the whole height: the path bar and records step aside, and the way back
+  // sits in the file's own bar (Markdown) or a slim row above it, so a phone isn't left half a screen of chrome.
+  const fileOpenNarrow = narrow && !!root && !!sel && !selIsDir;
+  const back = sel && (
+    <button
+      type="button"
+      onClick={() => setSel(parentOf(sel) === root ? null : parentOf(sel))}
+      className="flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground"
+      title={t("folder.back")}
+    >
+      <ArrowLeft className="size-3.5 shrink-0" />
+      <span className="truncate font-medium text-foreground">{baseName(sel)}</span>
+    </button>
+  );
+  const mdLead = fileOpenNarrow && selEntry && isMd(selEntry.name);
+
   let right: ReactNode = null;
   if (root && selPath) {
-    if (!selIsDir && selEntry) right = <FileView key={selPath} path={selPath} entry={selEntry} host={host} />;
+    if (!selIsDir && selEntry) right = <FileView key={selPath} path={selPath} entry={selEntry} host={host} lead={mdLead ? back : undefined} />;
     else if (selIsDir)
       right = <Listing dir={selPath} entries={lists[selPath]} view={narrow ? "list" : view} host={host} onOpen={(p, d) => pick(p, d)} actions={actions} />;
   }
@@ -374,8 +390,8 @@ export function Folder({ by, host }: { by: { session: string } | { dir: string }
       onDragLeave={(e) => !box.current?.contains(e.relatedTarget as Node) && setDropping(false)}
       onDrop={onDrop}
     >
-      {toolbar}
-      {info && (
+      {!fileOpenNarrow && toolbar}
+      {info && !fileOpenNarrow && (
         <Records
           items={info.items}
           by={by}
@@ -405,14 +421,7 @@ export function Folder({ by, host }: { by: { session: string } | { dir: string }
           <div className="flex min-h-0 flex-1 flex-col">
             {sel && !selIsDir ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setSel(parentOf(sel) === root ? null : parentOf(sel))}
-                  className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground"
-                >
-                  <ArrowLeft className="size-3.5" /> {t("folder.back")}
-                  <span className="ml-1 truncate font-medium text-foreground">{baseName(sel)}</span>
-                </button>
+                {!mdLead && <div className="flex shrink-0 border-b px-3 py-1.5">{back}</div>}
                 <div className="min-h-0 flex-1 overflow-auto">{right}</div>
               </>
             ) : (
@@ -635,12 +644,12 @@ function Listing({
 }
 
 /** The selected file: Markdown editable, the rest as the file viewer draws it. */
-function FileView({ path, entry, host }: { path: string; entry: FsEntry; host?: string }) {
+function FileView({ path, entry, host, lead }: { path: string; entry: FsEntry; host?: string; lead?: ReactNode }) {
   const stat = useMemo<FileStat>(
     () => ({ path, name: entry.name, dir: false, size: entry.size, mtime: entry.mtime, mime: entry.mime || "application/octet-stream", host }),
     [path, entry.name, entry.size, entry.mtime, entry.mime, host],
   );
-  if (isMd(entry.name)) return <MdFile path={path} mtime={entry.mtime} host={host} />;
+  if (isMd(entry.name)) return <MdFile path={path} mtime={entry.mtime} host={host} lead={lead} />;
   return <FileContent key={`${entry.mtime}-${entry.size}`} stat={stat} fill />;
 }
 
@@ -652,7 +661,8 @@ const FRONT = /^﻿?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
  * edited in Source. Saved only over the version it read (sha256): if the agent changed it meanwhile, an unedited
  * file just reloads, an edited one asks.
  */
-function MdFile({ path, mtime, host }: { path: string; mtime: number; host?: string }) {
+/** `lead`: drawn first in the bar (the way back, on a narrow box). */
+function MdFile({ path, mtime, host, lead }: { path: string; mtime: number; host?: string; lead?: ReactNode }) {
   const [mode, setMode] = useState<"rich" | "source">("rich");
   const [loaded, setLoaded] = useState<{ text: string; sha: string; ver: number } | null>(null);
   const [draft, setDraft] = useState<string | null>(null); // the whole file as edited; null = unchanged
@@ -737,7 +747,8 @@ function MdFile({ path, mtime, host }: { path: string; mtime: number; host?: str
     >
       <div ref={barRef} className="sticky top-0 z-20 shrink-0 bg-background">
         <div className="flex items-center gap-2 border-b px-3 py-1">
-          <div className={cn("flex rounded-md bg-muted p-0.5 text-[12px]", dirty && "pointer-events-none opacity-50")}>
+          {lead && <div className="flex min-w-0 flex-1">{lead}</div>}
+          <div className={cn("flex shrink-0 rounded-md bg-muted p-0.5 text-[12px]", dirty && "pointer-events-none opacity-50")}>
             {(["rich", "source"] as const).map((m) => (
               <button
                 key={m}
@@ -749,8 +760,8 @@ function MdFile({ path, mtime, host }: { path: string; mtime: number; host?: str
               </button>
             ))}
           </div>
-          <div className="flex-1" />
-          <span className="text-[11px] text-muted-foreground">
+          {!lead && <div className="flex-1" />}
+          <span className="shrink-0 text-[11px] text-muted-foreground">
             {state === "saving" ? t("folder.saving") : dirty ? t("folder.unsaved") : state === "saved" ? t("folder.saved") : ""}
           </span>
           <Button size="sm" className="h-6 px-2.5 text-[12px]" disabled={!dirty || state === "saving"} onClick={() => void save()}>

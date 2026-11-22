@@ -143,8 +143,9 @@ function Toolbar({ editor }: { editor: Editor }) {
     { key: "folder.codeBlock", icon: SquareCode, on: editor.isActive("codeBlock"), run: () => c().toggleCodeBlock().run() },
     { key: "folder.hr", icon: Minus, on: false, run: () => c().setHorizontalRule().run() },
   ];
+  // One row on a phone, swiped sideways: wrapped to two it took another strip off a screen already short on room
   return (
-    <div className="sticky top-[var(--md-bar,33px)] z-10 flex flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1">
+    <div className="sticky top-[var(--md-bar,33px)] z-10 flex flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none]">
       {items.map(({ key, icon: Icon, on, run }) => (
         <button
           key={key}
@@ -153,7 +154,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           onMouseDown={(e) => e.preventDefault()} // keep the selection in the editor
           onClick={run}
           className={cn(
-            "flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground",
+            "flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground",
             on && "bg-accent text-foreground",
           )}
         >
