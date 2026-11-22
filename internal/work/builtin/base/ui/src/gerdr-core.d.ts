@@ -228,6 +228,14 @@ declare module "@gerdr/core" {
    */
   export function usePhoneMenu(items: PhoneMenuItem[]): void;
 
+  /**
+   * The panel's header in Gerdr's phone top bar: on a phone a panel sits under Gerdr's 44px bar (☰ at the left), and
+   * a header of its own below it costs a second strip. Wrap the header (or its phone version) in this: on a phone its
+   * children go into that bar right of ☰ (a portal, so they keep the panel's router and state); anywhere else they
+   * render where they are. Keep it one row of ~40px: a back arrow, a truncating title, a few icon buttons.
+   */
+  export function PhoneBar(props: { children: ReactNode }): ReactNode;
+
   /** One row of this panel's part of the command palette (useSearchItems). */
   export interface SearchItem {
     /** Stable per item (defaults to the label). Searched too, so a short id like "t144" finds its row. */

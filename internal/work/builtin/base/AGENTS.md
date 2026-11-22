@@ -57,7 +57,8 @@ and their choices are what they set or wrote down, not what the code says.
     `<FeedChat>` (the page's own list of what happened — several agents' feed — drawn and answered as a chat),
     `useSession` / `useSessions`, `usePanelChange`, `usePanelVisible`, `onShowSession` (the conversations this panel started are its own: brought up from a notification or
     the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`, `usePhoneMenu` (on a phone, the panel's top-left button
-    opens Gerdr's drawer: the rows this gives are the panel's part of it — what its header can't fit there). `useSearchItems` (the panel's
+    opens Gerdr's drawer: the rows this gives are the panel's part of it — what its header can't fit there), `<PhoneBar>` (on a phone,
+    its children go into Gerdr's top bar right of ☰ instead of a second strip under it: wrap the page's header in it). `useSearchItems` (the panel's
     rows in Gerdr's ⌘K palette, listed first while the panel is shown: give what someone would search for in it). Prefer them to the frame-era
     bridge calls below for anything new.
     Keeping a page current: don't poll a function on a timer. Reload what a function returned when

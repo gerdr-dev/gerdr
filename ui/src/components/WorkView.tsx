@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { PortalContext } from "@/core/portal";
 import { PanelKeyContext, setPanelShown } from "@/core/visible";
+import { setPhoneBarSlot, usePhoneBarFilled } from "@/core/phoneBar";
 import { useClearBadge } from "@/lib/badges";
 import { AgentIcon, StatusDot, dotRank, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
@@ -840,6 +841,8 @@ function WorkViewBody() {
   const sides = [...(["page"] as const), ...(ownChat ? [] : (["chat"] as const)), ...(hasPages ? (["browser"] as const) : [])];
   const at = side === "browser" && !hasPages ? "page" : side;
   const showChat = useCallback(() => setSide("chat"), []);
+  const barFilled = usePhoneBarFilled(phone ? project : null);
+  const barSlot = useCallback((el: HTMLDivElement | null) => setPhoneBarSlot(project, el), [project]);
   // Every panel of the project removed, its own Work too: nothing to show but the way to add one
   if (loaded && !panels.length) return <NoPanels space={space} ownRemoved={ownRemoved} />;
   if (ownChat && !phone)
@@ -859,7 +862,9 @@ function WorkViewBody() {
           {/* The drawer, as in Code (PhoneBar): projects, the Code / panel switch, settings, and the panel's own items
               (core/phoneMenu.ts). It used to be a Code button, which left a phone no way to anything else */}
           <DrawerButton />
-          <div className={cn("flex flex-1 justify-center", sides.length < 2 && "invisible")}>
+          {/* The panel's own header, if it gives one (core/phoneBar.tsx): one strip on top instead of two */}
+          <div ref={barSlot} className={cn("flex h-full min-w-0 items-center", barFilled ? "flex-1" : "hidden")} />
+          <div className={cn("flex justify-center", !barFilled && "flex-1", sides.length < 2 && (barFilled ? "hidden" : "invisible"))}>
             <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
               {sides.map((v) => (
                 <button
@@ -872,7 +877,7 @@ function WorkViewBody() {
               ))}
             </div>
           </div>
-          <div className="size-9" />
+          {!barFilled && <div className="size-9" />}
         </div>
         {/* both stay mounted: switching tabs keeps the page's state and the chat's scroll */}
         <div className={cn("min-h-0 flex-1", (at === "browser" || (at !== "page" && !ownChat)) && "hidden")}>

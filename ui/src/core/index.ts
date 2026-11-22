@@ -24,6 +24,7 @@ export { usePortalContainer } from "./portal";
 export { usePanelVisible } from "./visible";
 export { usePanelChange } from "./panelData";
 export { usePhoneMenu, type PhoneMenuItem } from "./phoneMenu";
+export { PhoneBar } from "./phoneBar";
 export { useSearchItems, type SearchItem } from "./search";
 // The chat's Markdown, so a panel draws what agents write the way the chat does: local images / videos (![](path))
 // shown and played, paths opening in Gerdr, code blocks. Outside a conversation it uses Gerdr's chat host as is.
