@@ -4,7 +4,7 @@ Everything on iOS is WebKit: Safari, the Gerdr iOS App's WKWebView, Chrome and F
 WebKit too. The UI is built and measured mostly in Chromium (the Android App, the desktop shells, headless Chrome in
 `tools/scrolltest`), and WebKit differs in ways headless Chrome can't show. Everything below was measured on an
 iPhone X (A11, iOS 16.7.7, 60Hz screen) in Safari, 2026-11-14; the problems were felt in the phone overview's page
-swipe. `WEBKIT` in `ui/src/lib/swipePager.ts` is how the code tells: `AppleWebKit` in the user agent without
+swipe. `WEBKIT` in `ui/packages/chat/src/swipePager.ts` is how the code tells: `AppleWebKit` in the user agent without
 `Chrome` / `Chromium` / `Android` (iOS Chrome says `CriOS`, so it counts as WebKit, as it should).
 
 ## What the code does differently on WebKit

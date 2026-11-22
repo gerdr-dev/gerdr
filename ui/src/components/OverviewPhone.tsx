@@ -105,7 +105,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
       mv.styled.add(el);
     }
   };
-  const pager = useSwipePager(body, track, tile, cur, (step) => sorted[cur + step], progress, focusTile);
+  const pager = useSwipePager(body, track, tile, Math.max(0, cur), (step) => sorted[cur + step], progress, focusTile);
 
   // Keep the current chip in view (on opening, switching from the list, a removal, a reorder). Scrolls the strip itself after layout:
   // scrollIntoView also moves ancestors, and run before the chips were laid out it left the current one off screen.

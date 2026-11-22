@@ -301,7 +301,7 @@ Virtuoso 在 ResizeObserver 里量行高、改布局，所以 rAF 里看到「�
     The pager centred its pages on the shown tile and, once the tile switched mid-slide, moved the track by a page width
     read back from the running transition (`getComputedStyle`). With the main thread busy rendering that read lagged the
     compositor, so the track was put back to the start. Pages now sit at fixed places by index (`pageX` in
-    lib/swipePager.ts) and the slide simply heads for the next page's place: nothing is re-centred or read back.
+    packages/chat/src/swipePager.ts) and the slide simply heads for the next page's place: nothing is re-centred or read back.
   - A second finger joining a drag dropped the gesture with the track mid-way: it is released first now.
   - The slide coming to rest was one 300–400ms task: the new neighbour only got watched then, its whole log arrived
     and was taken in (parse, rows, measure). The phone watches two pages either side (`phonePages`), and the pages two

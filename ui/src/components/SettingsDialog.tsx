@@ -590,7 +590,7 @@ function SwipePages({
     body,
     track,
     phone ? cur : undefined,
-    at,
+    Math.max(0, at),
     (step) => PAGES[at + step],
     (x) => progress(x, (body.current?.clientWidth ?? 1) + GAP),
     go,
