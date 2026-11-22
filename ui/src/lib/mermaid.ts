@@ -62,15 +62,32 @@ export function renderMermaid(code: string, dark: boolean): Promise<string> {
 /**
  * The SVG as an image for the lightbox (zoom, pan, download). Mermaid sizes its SVG to its container (width 100%),
  * which an <img> doesn't have: give it the size of its viewBox. And a background, as the page behind it is gone.
+ *
+ * Mermaid serializes flowcharts through innerHTML, which leaves unclosed HTML void tags (like <br> inside
+ * <foreignObject> labels) that fail XML parsing when loaded into an <img> as image/svg+xml. Re-serializing through
+ * XMLSerializer turns the parsed DOM into strict XML and avoids duplicate width/height attributes.
  */
 export function mermaidImageURL(svg: string, dark: boolean): string {
-  const vb = /viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)"/.exec(svg);
-  let out = svg.replace(/<svg\b[^>]*>/, (tag) => {
-    let t = tag.replace(/\swidth="[^"]*"/, "").replace(/\sstyle="[^"]*"/, "");
-    if (vb) t = t.replace("<svg", `<svg width="${vb[1]}" height="${vb[2]}"`);
-    return t.replace("<svg", `<svg style="background-color:${dark ? "#1e1e1e" : "#ffffff"}"`);
-  });
-  if (!/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(out)) out = out.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+  let out = svg;
+  const box = document.createElement("div");
+  box.innerHTML = svg;
+  const el = box.querySelector("svg");
+  if (el) {
+    const vb = el
+      .getAttribute("viewBox")
+      ?.trim()
+      .split(/[\s,]+/);
+    if (vb && vb.length === 4) {
+      el.setAttribute("width", vb[2]);
+      el.setAttribute("height", vb[3]);
+    } else {
+      el.removeAttribute("width");
+      el.removeAttribute("height");
+    }
+    el.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    el.setAttribute("style", `background-color:${dark ? "#1e1e1e" : "#ffffff"}`);
+    out = new XMLSerializer().serializeToString(el);
+  }
   // One lightbox at a time: the previous diagram's URL can go
   if (lastURL) URL.revokeObjectURL(lastURL);
   return (lastURL = URL.createObjectURL(new Blob([out], { type: "image/svg+xml" })));
