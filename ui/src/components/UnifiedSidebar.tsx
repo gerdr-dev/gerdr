@@ -11,7 +11,7 @@ import {
   ListPlus,
   FileText,
   FolderOpen,
-  LayoutGrid,
+  GalleryHorizontalEnd,
   MailCheck,
   Pencil,
   Pin,
@@ -449,7 +449,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                               // On a phone the overview sits behind the drawer: close it
                               onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
                             >
-                              <LayoutGrid className={cn("size-3", gridOn && "text-brand")} />
+                              <GalleryHorizontalEnd className={cn("size-3", gridOn && "text-brand")} />
                               {t("unifiedSidebar.grid")}
                             </button>
                           )}

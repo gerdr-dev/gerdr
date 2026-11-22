@@ -1,4 +1,4 @@
-import { ClipboardCheck, Plus } from "lucide-react";
+import { GalleryHorizontalEnd, Plus } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { addTab, focusedSessionId, tabName } from "@/lib/actions";
@@ -136,7 +136,7 @@ function OverviewButton() {
         toggleOverview(true);
       }}
     >
-      <ClipboardCheck className="size-[18px]" />
+      <GalleryHorizontalEnd className="size-[18px]" />
     </Button>
   );
 }

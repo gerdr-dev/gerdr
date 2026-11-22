@@ -1,4 +1,4 @@
-import { ClipboardCheck } from "lucide-react";
+import { GalleryHorizontalEnd } from "lucide-react";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { focusTile, setOverview } from "@/lib/overview";
 import { phoneOrder } from "@/lib/overviewState";
@@ -222,7 +222,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
             </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 bg-background px-8 text-center text-[13px] text-muted-foreground">
-              <ClipboardCheck className="size-6" />
+              <GalleryHorizontalEnd className="size-6" />
               {t("nav.activeEmpty")}
               <PickButton />
             </div>

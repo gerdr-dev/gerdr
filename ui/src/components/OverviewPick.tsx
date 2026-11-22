@@ -1,12 +1,12 @@
-import { ArrowDownWideNarrow, Check, ListPlus, MoreHorizontal, Plus, SquarePlus } from "lucide-react";
+import { ArrowDownWideNarrow, Check, ListPlus, LogOut, MoreHorizontal, Plus, SquarePlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { basename, newAgentInOverview, newTabForOverview } from "@/lib/actions";
+import { basename, focusSession, newAgentInOverview, newTabForOverview } from "@/lib/actions";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
-import { activeAllProjects, activeIds, addActive, focusTile, placeTilesAfter } from "@/lib/overview";
+import { activeAllProjects, activeIds, addActive, focusTile, placeTilesAfter, toggleOverview } from "@/lib/overview";
 import { openSessionsWithProject } from "@/lib/overviewState";
 import { useStore, useStoreWhile } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -63,6 +63,11 @@ export function PhoneMenu({ focus, onResort }: { focus?: string; onResort: () =>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onResort}>
             <ArrowDownWideNarrow /> {t("overviewPick.resort")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {/* Back to the tabs, on the agent shown here (the drawer's Overview toggle was the only way out, two taps deep) */}
+          <DropdownMenuItem onClick={() => (toggleOverview(false), focus && focusSession(focus))}>
+            <LogOut /> {t("overviewPick.exit")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

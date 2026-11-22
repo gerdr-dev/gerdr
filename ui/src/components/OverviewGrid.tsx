@@ -1,4 +1,4 @@
-import { ClipboardCheck } from "lucide-react";
+import { GalleryHorizontalEnd } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   arrange,
@@ -268,7 +268,7 @@ export function Grid({
       <div ref={box} className="absolute inset-[3px]" style={more.length ? { bottom: 3 + MORE_H } : undefined}>
         {ids.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-[13px] text-muted-foreground">
-            <ClipboardCheck className="size-6" />
+            <GalleryHorizontalEnd className="size-6" />
             {t("overviewGrid.empty")}
             <PickButton />
           </div>
