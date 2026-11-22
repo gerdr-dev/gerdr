@@ -159,6 +159,8 @@ function bangCommand(text: string): string | null {
 // across two lines, and the Run button ended up after the last fragment (user report).
 const LONG_COMMAND = 60;
 
+const isWholeURL = (t: string) => /^https?:\/\/[^\s`<>"]+$/i.test(t.trim());
+
 function InlineCode(props: any) {
   const session = useContext(SessionContext);
   const text = hastText(props.node);
@@ -172,6 +174,10 @@ function InlineCode(props: any) {
         {code}
       </PathLink>
     );
+  // A whole URL in backticks (`http://127.0.0.1:8765`) is a link too, through the same host.onLink as any other: agents
+  // often write the address of a server they started that way, and copying it out of the code was the only way in
+  const url = !cmd && isWholeURL(text) ? text.trim() : undefined;
+  if (url) return <A href={url}>{code}</A>;
   const actions = cmd && session ? hostFor(session.id).codeActions?.(cmd, "bang", session) : undefined;
   if (!actions) return code;
   if (cmd!.length > LONG_COMMAND || cmd!.includes("\n")) return <CommandRows cmds={[cmd!]} session={session!} />;

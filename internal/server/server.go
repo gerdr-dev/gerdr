@@ -38,6 +38,7 @@ import (
 	"github.com/gerdr-dev/gerdr/internal/hub"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/internal/peer"
+	"github.com/gerdr-dev/gerdr/internal/portproxy"
 	"github.com/gerdr-dev/gerdr/internal/projbrowser"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/service"
@@ -88,6 +89,9 @@ type Server struct {
 	OnConfig func()
 	// Remote：远程访问（设备表、passkey、中继）。nil = 这个进程不管远程（测试里）。
 	Remote *remote.Service
+	// Port: the local port this server listens on (0 = unknown, tests), never proxied (portapi.go)
+	Port  int
+	ports *portproxy.Proxy
 	// Service：后台常驻（launchd）。nil = 不管（测试里）。
 	Service *service.Manager
 	// Terms：界面里的终端。nil = 不开（测试里）。
@@ -148,8 +152,11 @@ func (s *Server) Handler() http.Handler {
 			return s.reportNext(id)
 		}
 	}
+	s.ports = s.portProxy()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /auth", s.auth)
+	mux.HandleFunc("GET "+portproxy.EntryPath+"{port}", s.portEntry)
+	mux.HandleFunc("POST /api/port-link", s.portLink)
 	mux.HandleFunc("POST /api/auth/code", s.authCode)
 	mux.HandleFunc("GET /api/hello", s.hello)
 	s.addonRoutes(mux)
@@ -279,7 +286,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /ws", s.ws)
 	s.uiRoutes(mux)
 	mux.Handle("/", s.ui())
-	return s.guard(gzipped(s.withHosts(mux)))
+	return s.withPorts(s.guard(gzipped(s.withHosts(mux))))
 }
 
 // guard：令牌 + CSRF + 安全头。远程（中继）进来的请求换一套规则，见 remoteGuard。
@@ -359,6 +366,13 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 	part("home", func() any { return home })
 	part("addonsDir", func() any { return s.Addons.Dir() })
 	part("remoteConns", func() any { return s.remoteConns.list() })
+	// Through the relay: where this computer's local ports show up, so the page can turn localhost links into
+	// them (ui/src/lib/portlink.ts). Not on this computer, where localhost is right
+	if s.ports != nil && auth.FromRemote(r) && (only == nil || only["portDomain"]) {
+		if d := s.ports.Domain(); d != "" {
+			out["portDomain"] = d
+		}
+	}
 	writeJSON(w, out)
 }
 

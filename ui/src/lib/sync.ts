@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { currentSpace, validLayout, withView } from "./layout";
 import { isNative, nativeNotify, runRelayedUpdateOp } from "./native";
 import { emitSessionChange } from "./addons";
+import { setPortDomain } from "./portlink";
 import {
   applyEvents,
   applyRemoteLayout,
@@ -103,6 +104,7 @@ async function start() {
     });
     unreadSync.server = !!h.unread;
     gotUnread(h.unread);
+    setPortDomain(h.portDomain);
     // 打开页面：服务端那份布局 + 这个端上次自己看的位置（不然一刷新就跳到别的端最后看的地方）
     // …and the mode that project was left in on this device, not the last mode of any window (they share localStorage)
     if (validLayout(h.layout)) {
@@ -393,6 +395,7 @@ async function refreshHello() {
     set({ config: mergeConfig(h.config) });
     unreadSync.server = !!h.unread;
     gotUnread(h.unread);
+    setPortDomain(h.portDomain);
     if (validLayout(h.layout)) applyRemoteLayout(h.layout);
   } catch {}
 }

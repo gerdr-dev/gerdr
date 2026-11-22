@@ -34,6 +34,7 @@ import { RunButton } from "@/components/chat/RunButton";
 import { LoginChip } from "@/components/chat/LoginChip";
 import { timedEscape } from "./escTiming";
 import { useMarkdownPlugins } from "./markdownPlugins";
+import { openPortLink } from "./portlink";
 import { MermaidBlock } from "@/components/chat/MermaidBlock";
 
 /**
@@ -215,6 +216,8 @@ function remoteSession(sessionId: string): Partial<ChatHost> | undefined {
     upload: (f, onProgress) => api.upload(f, host, onProgress),
     localPath: undefined,
     openNative: undefined,
+    // Its localhost is that computer's, not the one the port proxy reaches
+    onLink: undefined,
   };
 }
 
@@ -384,6 +387,8 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
         openNative: isNative() ? (p, cwd, reveal) => nativeOpenPath(p, cwd, reveal) : undefined,
         openSubagent,
         focusSession,
+        // A localhost link on a phone through the relay opens that port on the computer (lib/portlink.ts)
+        onLink: (href) => openPortLink(href),
         refocus: refocusAfterDialog,
         codeActions: (code, lang, session) => (lang === "bang" ? <RunButton cmd={code} session={session} /> : null),
         // Diagrams and formulas in replies, each loaded the first time a reply has one (lib/mermaid.ts, lib/markdownPlugins.ts),

@@ -548,6 +548,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		return err
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
+	srv.Port = port // never proxied to a phone (server/portapi.go)
 	si, _ := json.Marshal(serverInfo{PID: os.Getpid(), Port: port, Host: env.Host, Version: version.Version, Service: serviceMode, Build: buildID()})
 	_ = os.WriteFile(infoPath(env), si, 0o600)
 	defer os.Remove(infoPath(env))

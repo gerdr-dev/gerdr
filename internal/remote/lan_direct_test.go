@@ -88,7 +88,7 @@ func startTestLan(t *testing.T, cfg config.Remote) int {
 	cfg.LanPort = freePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() { cancel(); s.stop() })
-	s.startLan(ctx, cfg, testCert(t), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, r.RemoteAddr) }))
+	s.startLan(ctx, cfg, testCert(t).get, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, r.RemoteAddr) }))
 	return cfg.LanPort
 }
 

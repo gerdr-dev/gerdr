@@ -54,6 +54,11 @@ type Service struct {
 	err    string       // 起不来的原因（证书签不下来、没 join 过……）
 	lanHS  *http.Server // 局域网直连口（lan.go）
 	lanErr string       // 直连口起不来的原因（端口被占……）；不影响中继那条路
+	// wild: the `*.<host>` certificate for the port subdomains (internal/portproxy), issued after the main one and
+	// kept apart from it, so failing to get it (a CAA issuewild, a slow DNS) never touches the main site.
+	// portErr: why there is none.
+	wild    *certFile
+	portErr string
 }
 
 // Open 准备设备表、passkey 和限速。没开远程也照样打开：设置里要能看设备、踢设备，
@@ -196,6 +201,8 @@ func (s *Service) run() {
 			}
 			certFile, keyFile = am.Config().Files()
 			go s.renewLoop(ctx, am)
+			// After the main one, not beside it: both answer the same _acme-challenge name
+			go s.wildcard(ctx, cfg)
 		}
 		cf, err := loadCert(certFile, keyFile)
 		if err != nil {
@@ -203,7 +210,7 @@ func (s *Service) run() {
 			return
 		}
 		// 直连口在中继之前起：中继连不上（VPS 挂了）时人在家里照样能用
-		s.startLan(ctx, cfg, cf, h)
+		s.startLan(ctx, cfg, s.certFor(cfg.Host, cf), h)
 		if cfg.RelayURL == "" {
 			// Direct access: the LAN port is the way in, nothing more to start
 			s.mu.Lock()
@@ -236,7 +243,7 @@ func (s *Service) run() {
 		}
 		s.tunnel, s.certs, s.hs, s.err = tn, cf, hs, ""
 		s.mu.Unlock()
-		ln := tls.NewListener(tn, &tls.Config{GetCertificate: cf.get, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
+		ln := tls.NewListener(tn, &tls.Config{GetCertificate: s.certFor(cfg.Host, cf), MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
 		if err := hs.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) && ctx.Err() == nil {
 			s.setErr(i18n.S("远程那个口挂了：", "The remote listener went down: ") + err.Error())
 		}
@@ -248,6 +255,7 @@ func (s *Service) stop() {
 	s.mu.Lock()
 	tn, hs, lhs, cancel := s.tunnel, s.hs, s.lanHS, s.cancel
 	s.tunnel, s.hs, s.certs, s.cancel, s.lanHS, s.lanErr = nil, nil, nil, nil, nil, ""
+	s.wild, s.portErr = nil, ""
 	s.mu.Unlock()
 	if lhs != nil {
 		_ = lhs.Close()
@@ -266,6 +274,103 @@ func (s *Service) stop() {
 }
 
 func (s *Service) relayDir() string { return s.Dir + "/relay" }
+
+// certFor picks the certificate by the name the client asked for: a port subdomain gets the wildcard one once
+// there is one, everything else the main one.
+func (s *Service) certFor(host string, main *certFile) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		s.mu.Lock()
+		w := s.wild
+		s.mu.Unlock()
+		if w != nil && portName(h.ServerName, host) {
+			return w.get(h)
+		}
+		return main.get(h)
+	}
+}
+
+// portName: `<digits>.<host>`, the names the relay routes to this host's port proxy (dialhome's portParent).
+func portName(sni, host string) bool {
+	label, ok := strings.CutSuffix(strings.ToLower(sni), "."+strings.ToLower(host))
+	if !ok || label == "" {
+		return false
+	}
+	for _, c := range label {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// wildcard gets (and keeps renewing) the `*.<host>` certificate for the port subdomains. Best effort: a failure
+// only shows in Status.PortErr, the main site goes on as before.
+func (s *Service) wildcard(ctx context.Context, cfg config.Remote) {
+	am := acme.NewManager(acme.Config{
+		Dir: s.Dir, Domains: []string{"*." + cfg.Host}, Email: cfg.ACMEEmail,
+		DNS: cfg.ACMEDNS, Staging: cfg.ACMEStaging,
+	})
+	load := func() {
+		a := am.Ensure(false)
+		if ctx.Err() != nil {
+			return
+		}
+		if a.Err != "" {
+			s.log.Warn("remote: no wildcard certificate for the port subdomains", "host", cfg.Host, "err", a.Err)
+			s.mu.Lock()
+			if s.wild == nil {
+				s.portErr = a.Err
+			}
+			s.mu.Unlock()
+			return
+		}
+		if a.Renewed {
+			s.log.Info("remote: issued wildcard certificate", "host", "*."+cfg.Host)
+		}
+		cf, err := loadCert(am.Config().Files())
+		if err != nil {
+			s.mu.Lock()
+			s.portErr = err.Error()
+			s.mu.Unlock()
+			return
+		}
+		s.mu.Lock()
+		if ctx.Err() == nil {
+			s.wild, s.portErr = cf, ""
+		}
+		s.mu.Unlock()
+	}
+	load()
+	t := time.NewTicker(12 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		load()
+	}
+}
+
+// PortDomain is where local ports show up (`8765.<it>`, internal/portproxy): the address phones open, once a
+// certificate covers its subdomains (the wildcard one, or files / a main certificate that cover them anyway).
+// "" = not available.
+func (s *Service) PortDomain() string {
+	s.mu.Lock()
+	cfg, certs, wild := s.cfg, s.certs, s.wild
+	s.mu.Unlock()
+	if !cfg.Enabled() || certs == nil {
+		return ""
+	}
+	if wild == nil {
+		leaf := certs.leaf()
+		if leaf == nil || leaf.VerifyHostname("1024."+cfg.Host) != nil {
+			return ""
+		}
+	}
+	return cfg.PublicHost()
+}
 
 // renewLoop 半天看一次要不要续。续完不用重启：certFile 按 mtime 热重载。
 func (s *Service) renewLoop(ctx context.Context, am *acme.Manager) {
@@ -353,6 +458,10 @@ type Status struct {
 	Direct       bool     `json:"direct,omitempty"`
 	TailnetAddrs []string `json:"tailnetAddrs,omitempty"`
 	DirectPort   int      `json:"directPort,omitempty"`
+	// PortDomain: local ports are reachable at `<port>.<it>` (internal/portproxy); PortErr: why not, when the
+	// wildcard certificate for that failed.
+	PortDomain string `json:"portDomain,omitempty"`
+	PortErr    string `json:"portErr,omitempty"`
 }
 
 func (s *Service) Status() Status {
@@ -375,7 +484,9 @@ func (s *Service) Status() Status {
 		st.State = i18n.S("正在准备证书", "Preparing certificate")
 	}
 	certs := s.certs
+	st.PortErr = s.portErr
 	s.mu.Unlock()
+	st.PortDomain = s.PortDomain()
 	if certs != nil {
 		if leaf := certs.leaf(); leaf != nil {
 			t := leaf.NotAfter

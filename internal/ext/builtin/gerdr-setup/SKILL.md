@@ -237,3 +237,8 @@ Opening this Gerdr from a phone or another computer (the same is in Settings →
 
 These aren't auto-approved, and a pairing code (`gerdr remote pair`) lets a new device in: leave issuing one to the user.
 
+With a domain and a DNS provider, local ports come along: a server you start on `http://localhost:8765` opens on a
+paired phone at `https://8765.<host>/` (Gerdr signs the phone in, then proxies; ports 1024–65535). Links like
+`http://localhost:8765/x` in your replies switch to it by themselves, so just write the full local URL.
+`gerdr remote status` shows whether it's on ("Local ports"); it needs DNS for `*.<host>` pointing where `<host>` does.
+

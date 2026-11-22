@@ -347,6 +347,27 @@ func (s *Store) Authenticate(r *http.Request) *Ident {
 		Active: !prev.IsZero() && s.now().Sub(prev) < ReauthIdle}
 }
 
+// IdentByID is Authenticate's result for a device id (nil when the device is gone or expired). For places whose
+// credential isn't on this origin: a port subdomain's session (internal/portproxy) only remembers which device it
+// came from and checks here on every request, so revoking the device, or it falling due to verify again, ends
+// the subdomains at once instead of when their own session runs out.
+func (s *Store) IdentByID(id string) *Ident {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	for _, d := range s.devs {
+		if d.ID == id {
+			if d.Expired(now) {
+				return nil
+			}
+			c := *d
+			return &Ident{Label: c.Label, Device: &c, VerifiedAt: c.VerifiedAt, PasskeyAt: c.PasskeyAt,
+				Active: !c.LastSeen.IsZero() && now.Sub(c.LastSeen) < ReauthIdle}
+		}
+	}
+	return nil
+}
+
 // Touch marks a device as just used: the remote UI's /ws closing (the page goes away or the phone sleeps), so a
 // break is counted from then, not from its last HTTP request, which may be long before while it sat open.
 func (s *Store) Touch(id string) {

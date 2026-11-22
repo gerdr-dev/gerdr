@@ -9,7 +9,7 @@ shells before it are in git history, why Chromium at all in docs/dev/WHY-ELECTRO
 使用说明见 README.md 和 docs/guide/（README 只放简介和安装，细节按主题分在 guide 里，中英各一份），设计理由和协议的坑见 docs/dev/ARCHITECTURE.md —— **改适配器 / hub / uisite 之前先读它**，
 里面每一条都是实测踩出来、会静默出错的。
 
-- 远程访问（中继 / 配对码 / passkey，`internal/auth` `relay` `acme` `remote`）的设计和坑在 docs/dev/REMOTE.md，动之前先读。
+- 远程访问（中继 / 配对码 / passkey，`internal/auth` `relay` `acme` `remote`；手机上打开本机端口 `https://<port>.<host>`：`internal/portproxy`）的设计和坑在 docs/dev/REMOTE.md，动之前先读。
 - Driving other computers' Gerdr from this one (hosts: `internal/peer`, `server/hosts.go`, session ids `<host>:<id>`):
   docs/dev/MULTIHOST.md. The `/h/<host>/…` proxy must stay behind the same guard as `/api/`.
 - 安卓 App（android/：局域网直连、App 里的 passkey、后台通知，`internal/lan`、`remote/lan.go`、`server/appapi.go` `appwatch.go`）：

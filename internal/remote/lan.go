@@ -44,7 +44,7 @@ import (
 // without it everything through frp is one client, 127.0.0.1. Optional, and only believed from loopback: anyone
 // else could write any address into it.
 
-func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile, h http.Handler) {
+func (s *Service) startLan(ctx context.Context, cfg config.Remote, cert func(*tls.ClientHelloInfo) (*tls.Certificate, error), h http.Handler) {
 	if cfg.LanPort <= 0 {
 		return
 	}
@@ -71,7 +71,7 @@ func (s *Service) startLan(ctx context.Context, cfg config.Remote, cf *certFile,
 	s.lanHS, s.lanErr = hs, ""
 	s.mu.Unlock()
 	pl := &proxyproto.Listener{Listener: ln, ConnPolicy: proxyFromLoopback, ReadHeaderTimeout: 10 * time.Second}
-	tl := tls.NewListener(pl, &tls.Config{GetCertificate: cf.get, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
+	tl := tls.NewListener(pl, &tls.Config{GetCertificate: cert, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}})
 	go func() {
 		if err := hs.Serve(tl); err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
 			s.mu.Lock()

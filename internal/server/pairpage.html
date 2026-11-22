@@ -104,7 +104,11 @@
   // 进去用 replace + 同源导航：SameSite=Strict 的 cookie 在「从别的 app 点链接进来」那一下不会带，
   // 一次同源发起的导航才带得上（reload 在有的浏览器上保留原来那个跨站的发起方）。
   // `?cli`（安卓 App 让人来批准登录的那一页）要带着进去，不然登录完落在首页、批准页没了
-  var enter = function () { location.replace(new URLSearchParams(location.search).has("cli") ? "/?cli" : "/"); };
+  // A link into a local port (/_port/<port>?to=…, server/portapi.go) comes back to it, which goes on to that port
+  var enter = function () {
+    if (location.pathname.indexOf("/_port/") === 0) return location.replace(location.pathname + location.search);
+    location.replace(new URLSearchParams(location.search).has("cli") ? "/?cli" : "/");
+  };
 
   /* ---------------- 安卓 App（android/ 的壳，桥的另一半在 Bridge.kt，格式见 ui/src/lib/android.ts） ---------------- */
   // 壳只对这台服务器的 origin 注入 gerdrAndroid。App 的 WebView 能自己刷 passkey 时（hello 回信里 webauthn=true），

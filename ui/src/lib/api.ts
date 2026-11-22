@@ -628,6 +628,8 @@ export const api = {
   remoteConnectTailscale: () => req("POST", "/api/remote/connect", { tailscale: true }),
   /** A one-time link (2 min) that signs the phone's browser in as this device: no second pairing there */
   remoteHandoff: () => req<{ url: string }>("POST", "/api/remote/handoff", {}),
+  /** A local port's subdomain with a sign-in ticket in it, for a browser without the device cookie (lib/portlink.ts). */
+  portLink: (port: number, to: string) => req<{ url: string }>("POST", "/api/port-link", { port, to }),
   remoteDisconnect: () => req<{ revoked: number; passkeys: number }>("POST", "/api/remote/disconnect", {}),
   remoteLogout: () => req("POST", "/api/remote/logout", {}),
   // 批准安卓 App 的登录（passkey 的退路，device flow：App 显示码，这边手输）

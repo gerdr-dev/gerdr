@@ -106,6 +106,8 @@ export type Hello = {
   remoteConns?: RemoteConn[];
   /** Other computers this one drives (server/hosts.go); missing from older backends. */
   hosts?: HostInfo[];
+  /** Through the relay: local ports show up at `<port>.<this>` (lib/portlink.ts). Missing on this computer. */
+  portDomain?: string;
 };
 
 /** A paired computer (internal/peer Info). online: the last request to it went through. */

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"github.com/gerdr-dev/gerdr/internal/portproxy"
 	"github.com/gerdr-dev/gerdr/internal/remote"
 	"github.com/gerdr-dev/gerdr/internal/tailscale"
 )
@@ -110,7 +111,8 @@ func (s *Server) remoteGuard(w http.ResponseWriter, r *http.Request, next http.H
 		need = "passkey"
 	}
 	if need != "" {
-		if strings.HasPrefix(p, "/api/") || p == "/ws" || strings.HasPrefix(p, "/_") || (path0Ext(p) && !strings.HasSuffix(p, ".html")) {
+		// /_port/<port> is a page (a link into a port subdomain, portapi.go): the pairing page, which comes back to it
+		if strings.HasPrefix(p, "/api/") || p == "/ws" || (strings.HasPrefix(p, "/_") && !strings.HasPrefix(p, portproxy.EntryPath)) || (path0Ext(p) && !strings.HasSuffix(p, ".html")) {
 			// need 让前端区分「没配对」和「配过但要重新验一次」：一个要配对码，一个只要点一下 Face ID
 			msg := i18n.S("这台设备还没配对", "This device isn't paired yet")
 			if need == "passkey" {

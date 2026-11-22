@@ -14,6 +14,7 @@ import { isCoarse } from "@/lib/phone";
 import { get } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { openPortLink } from "@/lib/portlink";
 
 type State = "connecting" | "live" | "exited" | "gone";
 
@@ -58,7 +59,8 @@ export function TerminalView({
     xt.current = term;
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon((_e, uri) => window.open(uri, "_blank", "noopener")));
+    // A localhost link on a phone through the relay opens that port on the computer (lib/portlink.ts)
+    term.loadAddon(new WebLinksAddon((_e, uri) => openPortLink(uri) || window.open(uri, "_blank", "noopener")));
     term.open(el);
 
     let ws: WebSocket | null = null;

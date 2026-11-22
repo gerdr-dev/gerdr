@@ -70,6 +70,12 @@ func remoteCmd() *cobra.Command {
 			if st.CertExpires != nil {
 				fmt.Printf(i18n.S("  证书：%s 到期\n", "  Certificate: expires %s\n"), st.CertExpires.Format("2006-01-02"))
 			}
+			// Local ports through the relay (internal/portproxy): http://localhost:8765 in a reply opens there on a phone
+			if st.PortDomain != "" {
+				fmt.Printf(i18n.S("  本机端口：https://<端口>.%s（对话里的 localhost 链接在手机上自动换成它）\n", "  Local ports: https://<port>.%s (localhost links in replies open there on a phone)\n"), st.PortDomain)
+			} else if st.PortErr != "" {
+				fmt.Printf(i18n.S("  ⚠️  本机端口代理没开（*.%s 的证书签不下来）：%s\n", "  ⚠️  Local port proxy off (no certificate for *.%s): %s\n"), st.Host, st.PortErr)
+			}
 			if a := remote.AccountURI(config.FromEnv().Dir); a != "" {
 				fmt.Printf(i18n.S("  ACME 账户（CAA 的 accounturi）：%s\n", "  ACME account (CAA accounturi): %s\n"), a)
 			}

@@ -262,6 +262,61 @@ there. The page first gets a link from `POST /api/fs/link` (normal auth), and th
 Whoever gets the URL in that window can read that one file, which is why the page never shows or copies it. Don't
 widen it: no directory links, no reuse across files, no extending the life.
 
+## Local ports through the relay
+
+An agent starts a dev server and says "open http://localhost:8765"; on a phone that is the phone's own localhost.
+With remote access on, that port is at `https://8765.<host>/`, behind Gerdr's sign-in (`internal/portproxy`,
+`server/portapi.go`, `ui/src/lib/portlink.ts`). Ported from herdr-web's port proxy (its docs/dev/PORT-PROXY.md has
+the original reasoning), which has run since 2026-10.
+
+```
+phone ──TLS, SNI 8765.gerdr.example.com──▶ dialhome (portParent: digits.<host> → <host>'s tunnel)
+      ──▶ gerdr: wildcard cert by SNI → withPorts (before guard) → portproxy → http://127.0.0.1:8765, Host localhost:8765
+```
+
+- **One subdomain per port, never the main origin.** The proxied page is the agent's, running any JS; on Gerdr's
+  origin it could call /api/ with the device cookie. A path prefix (`/_p/8765/`) is rejected for that, and because
+  dev servers' absolute paths and HMR sockets don't work under a prefix.
+- **Sign-in is borrowed from the main site.** Not signed in on the subdomain → `https://<host>/_port/8765?to=…` →
+  remoteGuard as usual (pairing page if needed, which comes back to `/_port/` once in: pairpage.html `enter`) → a
+  60 s, single-use, port-bound ticket → `https://8765.<host>/_gerdr/auth?t=…` → a `__Host-gerdr_port` cookie for
+  that subdomain only, in memory only. Every request checks the device again (`auth.IdentByID` + `reauthNeeded`), so
+  revoking a device or it falling due to verify ends its subdomains at once. Tickets don't make devices (the
+  handoff link would add a device row per port).
+- **The phone Apps open links in the system browser**, which has no device cookie, so the redirect would end on the
+  pairing page. There the page mints the ticket itself (`POST /api/port-link`, the App's cookie + X-Gerdr) and
+  hands the ticketed address to the browser. In a plain browser the link goes to `/_port/` in a new tab instead.
+- **Links switch only on remote pages**: hello carries `portDomain` only through the remote listeners. Chat links
+  (`ChatHost.onLink`), a whole URL in backticks (the chat package makes those links), terminal links. A session on
+  another computer (multi-host) keeps its links: its localhost is that computer's.
+- **The certificate**: `*.<host>` is a second ACME certificate, issued after the main one (both answer the same
+  `_acme-challenge` name) and kept apart from it: failing to get it (an `issuewild` CAA that forbids it, DNS) only
+  shows in `gerdr remote status` and leaves the main site alone. Adding it to the main certificate instead would
+  reissue everyone's and make the main site depend on it. Certificate files or a Tailscale certificate: the proxy is
+  on only when that certificate already covers `<digits>.<host>`. The CAA record the settings button writes is an
+  `issue`, which also covers wildcards when there is no `issuewild`.
+- **DNS and the relay**: `*.<host>` has to point where `<host>` does (no button for it yet), and a relay with
+  Traefik in front needs `HostSNIRegexp(^[0-9]+\.<host>$)` beside the host's rule. The relay itself routes these
+  names since dialhome's `portParent`.
+- **Ports**: 1024–65535, minus Gerdr's own (`Server.Port`, the LAN port). Not "only ports a session listens on": the
+  device is past Gerdr's sign-in, and behind that is a shell.
+
+Things that fail silently (from herdr-web):
+
+- Dev servers refuse unknown Hosts (Vite 5: "Blocked request") and Vite's HMR checks Origin: both go out as
+  `localhost:<port>`. A redirect to `http://localhost:<port>/…` comes back as the subdomain.
+- The subdomain cookie is never passed to the proxied server (`stripCookie`): it is a credential, the server is the agent's.
+- The proxied page is same-site with Gerdr (another subdomain): same-site requests carry the main site's
+  SameSite=Strict cookie. What stops them is load-bearing: writes need `X-Gerdr` + same Origin (remoteGuard), and the
+  WebSocket upgraders check Origin. Don't loosen either.
+- Passkey phishing: a subdomain page may ask for a passkey with RP ID `<host>` and the prompt looks normal. The
+  server checks clientData's origin against `relyingParty`'s list, which must never include port subdomains.
+- Other same-site sites reading a dev server with credentialed CORS: requests with an Origin that isn't one of
+  our port subdomains are refused (`ownOrigin`).
+- Not closed (as in herdr-web): JS on a subdomain can set a `Domain=<host>` cookie named `gerdr_dev` that shadows the
+  real one, signing the main site out (mischief, nothing read). The fix is a `__Host-` name for the device cookie,
+  which needs a migration with the Apps.
+
 ## Remote screen
 
 Settings → Remote access → "Control this computer remotely" (`config.remoteScreen`, off by default): a phone sees the Mac's
