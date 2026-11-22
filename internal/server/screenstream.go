@@ -210,6 +210,21 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 	// seconds of old pictures. Now a slow link gets fewer, always the newest. Input acknowledgements still go at once.
 	var gotSeq, picSeq int64 // the newest seq the page drew / the newest seq that carried a picture
 	flow, held := false, false
+	// Over the relay (not raw) one picture at a time, and after each is drawn a pause of half the time it took to get
+	// there. The tunnel is one TCP connection for everything (yamux): with two pictures always on their way, a page
+	// that never stops moving (a WebGL demo, 60–115 KB a frame) kept it full, the app's own /ws queued behind them,
+	// and the whole UI stopped answering on a tablet; a size picked waited seconds behind old pictures (user
+	// recording, 2026-11-22). The pause leaves the link idle a third of the time or more, so everything else gets
+	// through; on a fast link it costs little (a 30 ms delivery = a 15 ms pause).
+	inFlight := int64(2)
+	if !raw {
+		inFlight = 1
+	}
+	sentAt := map[int64]time.Time{} // when each picture went out (pictures in flight only)
+	var notBefore time.Time         // no new picture before this (the pause)
+	pace := time.NewTimer(time.Hour)
+	pace.Stop()
+	defer pace.Stop()
 	var lastPage screen.Page
 	rs, _ := src.(rawSource)
 	var rawSeq int64 = -1
@@ -236,6 +251,9 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 		if fresh || h.Full {
 			h.Rects, payload = []screen.Rect{{0, 0, w, hh, len(jpg)}}, jpg
 			picSeq = seq
+			if flow { // a viewer that never says got (the remote screen) would only grow it
+				sentAt[seq] = time.Now()
+			}
 		}
 		rawSeq, rawW, rawH, sentAck = fseq, w, hh, ack
 		return send(screen.Message(h, payload))
@@ -246,8 +264,13 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 	capture := func() bool {
 		// Only pictures count: an input's acknowledgement or a page update carries none, and counting them held the
 		// stream for good after a tap (the page acks pictures as it draws them, which never came again)
-		if flow && picSeq-gotSeq >= 2 {
+		if flow && picSeq-gotSeq >= inFlight {
 			held = true // after the page catches up (gots)
+			return true
+		}
+		if flow && time.Now().Before(notBefore) {
+			held = true
+			pace.Reset(time.Until(notBefore))
 			return true
 		}
 		if off := src.Off(); off != "" {
@@ -294,6 +317,9 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 		h.Seq, h.W, h.H, h.Full, h.Rects = seq, m.Bounds().Dx(), m.Bounds().Dy(), full, rects
 		if len(rects) > 0 {
 			picSeq = seq
+			if flow { // a viewer that never says got (the remote screen) would only grow it
+				sentAt[seq] = time.Now()
+			}
 		}
 		lastCur, sentAck = h.Cur, ack
 		return send(screen.Message(h, payload))
@@ -338,6 +364,21 @@ func streamPictures(conn *websocket.Conn, r *http.Request, src pictureSource, ra
 			if g > gotSeq {
 				gotSeq = g
 			}
+			if at, ok := sentAt[g]; ok && !raw {
+				notBefore = time.Now().Add(min(time.Since(at)/2, time.Second))
+			}
+			for k := range sentAt {
+				if k <= gotSeq {
+					delete(sentAt, k)
+				}
+			}
+			if held {
+				held = false
+				if !capture() {
+					return
+				}
+			}
+		case <-pace.C:
 			if held {
 				held = false
 				if !capture() {
