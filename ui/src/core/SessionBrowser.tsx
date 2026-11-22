@@ -2,13 +2,14 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "rea
 import { create } from "zustand";
 import { Check, Globe, Monitor, PanelRight, PanelRightClose, PictureInPicture2, Smartphone, Tablet, Undo2 } from "lucide-react";
 import { BrowserScreen } from "@/components/browser/BrowserScreen";
+import { FloatEdges } from "@/components/FloatEdges";
 import { BrowserOutCard, PopOutButton } from "@/components/browser/BrowserOut";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { FLOAT_EDGES, FLOAT_FITS, FLOAT_OPERABLE, type FloatEdge, type FloatFit } from "@/lib/layout";
+import { FLOAT_FITS, FLOAT_OPERABLE, type FloatEdge, type FloatFit } from "@/lib/layout";
 import { isNative, nativeBrowserWindowTab, nativeFitWindow } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
@@ -455,9 +456,7 @@ function PanelFloat({
       style={{ right: s.r, top: s.t, width: s.w, height: floatH(s.w, fit) }}
     >
       {children((e) => gesture(e), onFitDrawn, viewOnly)}
-      {FLOAT_EDGES.map(({ e: g, cls }, i) => (
-        <div key={i} className={cn("absolute touch-none", cls)} onPointerDown={(e) => gesture(e, g, getComputedStyle(e.currentTarget).cursor)} />
-      ))}
+      <FloatEdges onDown={gesture} />
     </div>
   );
 }

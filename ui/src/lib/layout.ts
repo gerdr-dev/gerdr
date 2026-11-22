@@ -59,16 +59,19 @@ export const FLOAT_FITS: Record<FloatFit, { w: number; h: number; mobile: boolea
 export const FLOAT_OPERABLE = 0.6;
 /** A floating box's edges and corners, each resizing it at its shape. */
 export type FloatEdge = { l?: boolean; r?: boolean; t?: boolean; b?: boolean };
+// On a touch screen (pointer-coarse) the sides, bottom and bottom corners are a finger wide (asked for: 6px couldn't be
+// hit on a tablet). The top stays thin and the sides start below the title bar, so its buttons (⋯, close) and its drag
+// keep their room; the bar's move covers what a top edge would do.
 // prettier-ignore
 export const FLOAT_EDGES: { e: FloatEdge; cls: string }[] = [
-  { e: { l: true }, cls: "inset-y-2 left-0 w-1.5 cursor-ew-resize" },
-  { e: { r: true }, cls: "inset-y-2 right-0 w-1.5 cursor-ew-resize" },
+  { e: { l: true }, cls: "inset-y-2 left-0 w-1.5 cursor-ew-resize pointer-coarse:top-12 pointer-coarse:bottom-8 pointer-coarse:w-4" },
+  { e: { r: true }, cls: "inset-y-2 right-0 w-1.5 cursor-ew-resize pointer-coarse:top-12 pointer-coarse:bottom-8 pointer-coarse:w-4" },
   { e: { t: true }, cls: "inset-x-2 top-0 h-1.5 cursor-ns-resize" },
-  { e: { b: true }, cls: "inset-x-2 bottom-0 h-1.5 cursor-ns-resize" },
+  { e: { b: true }, cls: "inset-x-2 bottom-0 h-1.5 cursor-ns-resize pointer-coarse:inset-x-8 pointer-coarse:h-4" },
   { e: { l: true, t: true }, cls: "left-0 top-0 size-3 cursor-nwse-resize" },
-  { e: { r: true, b: true }, cls: "right-0 bottom-0 size-3 cursor-nwse-resize" },
+  { e: { r: true, b: true }, cls: "right-0 bottom-0 size-3 cursor-nwse-resize pointer-coarse:size-8" },
   { e: { r: true, t: true }, cls: "right-0 top-0 size-3 cursor-nesw-resize" },
-  { e: { l: true, b: true }, cls: "left-0 bottom-0 size-3 cursor-nesw-resize" },
+  { e: { l: true, b: true }, cls: "left-0 bottom-0 size-3 cursor-nesw-resize pointer-coarse:size-8" },
 ];
 
 export const fitOf = (b: FloatBox): FloatFit => (b.fit && b.fit in FLOAT_FITS ? b.fit : "pc");

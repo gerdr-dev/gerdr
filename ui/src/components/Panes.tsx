@@ -71,7 +71,6 @@ import {
   phoneRoot,
   setFloatBox,
   setFloatFit,
-  FLOAT_EDGES as EDGES,
   FLOAT_OPERABLE,
   type FloatEdge as Edge,
   type FloatFit,
@@ -91,6 +90,7 @@ import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { useCaughtUp } from "@/lib/catchup";
 import { cn } from "@/lib/utils";
+import { FloatEdges } from "@/components/FloatEdges";
 import { FadeText } from "./FadeText";
 import { ActionKeys, keyText } from "./KeyCaps";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
@@ -404,9 +404,7 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
             </FloatFitDrawn.Provider>
           </FloatMove.Provider>
         </div>
-        {EDGES.map(({ e: g, cls }, i) => (
-          <div key={i} className={cn("absolute touch-none", cls)} onPointerDown={(e) => onResize(e, g, getComputedStyle(e.currentTarget).cursor)} />
-        ))}
+        <FloatEdges onDown={onResize} />
       </div>
     </>
   );
