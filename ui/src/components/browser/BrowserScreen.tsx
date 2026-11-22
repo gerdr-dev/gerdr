@@ -1010,7 +1010,13 @@ export function BrowserScreen({
           not the window's — back / forward first, then the globe, so the address keeps room to read */}
       <div
         onPointerDown={onHeadPointerDown}
-        className={cn("@container/bar relative flex shrink-0 items-center gap-1 border-b px-3 text-[12px] max-md:pl-4", headClassName)}
+        // touch-none while floating: the bar moves the box, and on a touch screen (a tablet) a finger's drag otherwise
+        // turned into a pan after a few pixels (pointercancel) and the box stopped following (user report)
+        className={cn(
+          "@container/bar relative flex shrink-0 items-center gap-1 border-b px-3 text-[12px] max-md:pl-4",
+          floating && "touch-none",
+          headClassName,
+        )}
       >
         {busy && <div className="page-loading pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden" />}
         <Globe className="mr-1 size-4 shrink-0 text-muted-foreground @max-[20rem]/bar:hidden" />
