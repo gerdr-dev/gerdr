@@ -19,6 +19,8 @@ import {
   split,
   swap,
   toggleFloat,
+  minimizeFloat,
+  restoreFloat,
   updateTab,
   updateWs,
   type PaneLeaf,
@@ -307,6 +309,14 @@ export function toggleFloatPane(paneId: string) {
   setLayout((l) => {
     const hit = allLeaves(l).find((x) => x.pane.id === paneId);
     return hit ? updateTab(l, hit.tab.id, (t) => toggleFloat(t, paneId)) : l;
+  });
+}
+
+/** Fold a Browser pane to a chip in its tab's corner (layout.minimizeFloat), or open it again (restoreFloat). */
+export function minimizePane(paneId: string, on = true) {
+  setLayout((l) => {
+    const hit = allLeaves(l).find((x) => x.pane.id === paneId);
+    return hit ? updateTab(l, hit.tab.id, (t) => (on ? minimizeFloat(t, paneId) : restoreFloat(t, paneId))) : l;
   });
 }
 

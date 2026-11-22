@@ -37,7 +37,9 @@ export type PaneNode = PaneLeaf | PaneSplit;
  */
 /** pw: the shown page's width in CSS px (the box's size; its height follows from the fit's shape), unset = the fit's
  *  default. x / y / w / h stay fractions of the tab (where it is; the backend's pane rect reads w / h). */
-export type FloatBox = { x: number; y: number; w: number; h: number; fit?: FloatFit; pw?: number };
+/** min: folded to a chip at the box's corner (minimizePane); docked: it was a docked pane when minimized, so the chip
+ *  puts it back in the split rather than opening a floating box (asked for) */
+export type FloatBox = { x: number; y: number; w: number; h: number; fit?: FloatFit; pw?: number; min?: boolean; docked?: boolean };
 /**
  * A floating Browser pane's page is laid out at a fixed size, one of these (picked in its ⋯ menu, a desktop by default),
  * and the box keeps that shape: shrunk to the box's size, sites switched to their phone layout. The box's h follows
@@ -297,6 +299,29 @@ export function toggleFloat(tab: Tab, paneId: string): Tab {
   const right = !r || r.x + r.w / 2 >= 0.5;
   const box = { ...clampBox({ w: 0.4, h: 0.45, x: 0, y: n * 0.04 }), x: right ? 1 : 0 };
   return { ...tab, float: { ...tab.float, [paneId]: box }, focus: paneId, zoom: tab.zoom === paneId ? undefined : tab.zoom };
+}
+
+/**
+ * Fold a Browser pane to a chip in its tab's corner: floated first when docked (the split closes over it), so the same
+ * rules apply (floatable). The backend's pane.minimize does the same (server/layoutapi.go).
+ */
+export function minimizeFloat(tab: Tab, paneId: string): Tab {
+  const wasDocked = !tab.float?.[paneId];
+  const t = wasDocked ? toggleFloat(tab, paneId) : tab;
+  const b = t.float?.[paneId];
+  if (!b) return tab;
+  // the keys go to a pane that shows: the first docked one
+  const focus = t.focus === paneId ? (leaves(dockedRoot(t) ?? t.root).find((p) => !t.float?.[p.id])?.id ?? t.focus) : t.focus;
+  return { ...t, focus, float: { ...t.float, [paneId]: { ...b, min: true, ...(wasDocked && { docked: true }) } } };
+}
+
+/** Unfold a minimized pane: back in the split if it was docked, else its floating box again, where it was. */
+export function restoreFloat(tab: Tab, paneId: string): Tab {
+  const b = tab.float?.[paneId];
+  if (!b?.min) return tab;
+  if (b.docked) return toggleFloat(tab, paneId);
+  const { min: _, docked: __, ...rest } = b;
+  return { ...tab, float: { ...tab.float, [paneId]: rest }, focus: paneId };
 }
 
 export function setFloatFit(tab: Tab, paneId: string, fit: FloatFit): Tab {

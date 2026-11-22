@@ -306,6 +306,23 @@ func paneCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
+		Use: "minimize <pane>",
+		Short: "Fold a Browser pane to a small chip in its tab's corner (floated first when docked; its page keeps running, " +
+			"its picture stops). Needs another pane left in the split. restore puts it back where it was (docked, or floating), dock always in the split",
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, a []string) error {
+			return layoutCall("pane.minimize", server.LayoutParams{ID: a[0]})
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "restore <pane>",
+		Short: "Open a minimized Browser pane again where it was: back in the split if it was docked, else floating",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, a []string) error {
+			return layoutCall("pane.restore", server.LayoutParams{ID: a[0]})
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
 		Use:   "dock <pane>",
 		Short: "Put a floating pane back in its place in the split",
 		Args:  cobra.ExactArgs(1),

@@ -11,6 +11,7 @@ import {
   leaves,
   locateSession,
   rects,
+  restoreFloat,
   rid,
   setPane,
   setRatio,
@@ -146,7 +147,8 @@ export async function loadBrowserTabs() {
 
 /**
  * A Browser pane beside the focused one, in the active project. Shows the project's newest page when it has one;
- * otherwise an address bar to open one. A tab that already has a Browser pane focuses it instead of adding another.
+ * otherwise an address bar to open one. A tab that already has a Browser pane focuses it instead of adding another,
+ * opening it again when it is minimized.
  */
 export async function openBrowserPane(dir: "right" | "down" = "right") {
   if (!useBrowserTabs.getState().loaded) await loadBrowserTabs();
@@ -154,7 +156,8 @@ export async function openBrowserPane(dir: "right" | "down" = "right") {
     const project = spaceOf(activeWs(l));
     const t = activeTab(l);
     const old = leaves(t.root).find((p) => p.browser);
-    if (old) return updateTab(l, t.id, (tab) => ({ ...tab, zoom: undefined, focus: old.id }));
+    // a minimized one is put back where it was (docked / floating): focused but folded it showed nothing (asked for)
+    if (old) return updateTab(l, t.id, (tab) => ({ ...restoreFloat(tab, old.id), zoom: undefined, focus: old.id }));
     const newest = useBrowserTabs
       .getState()
       .tabs.filter((x) => x.project === project && !x.gone && !shown(l).has(x.tab))

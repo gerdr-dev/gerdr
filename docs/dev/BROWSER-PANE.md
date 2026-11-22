@@ -118,6 +118,13 @@ All on Chrome 157, macOS.
   (`TestLiveInputLatency`), at ~290 KB a frame, free on loopback. Remote viewers keep the tile diff: a keystroke
   is a few KB there instead of a whole frame. A raw frame is "full" only when its size changes, since resizing the
   canvas clears it.
+- **Over the relay, one picture at a time and a pause after each** (`inFlight`, `notBefore` in screenstream.go;
+  2026-11-22, user recording on a tablet). The tunnel is one TCP connection for all of the app's traffic (yamux), and
+  a page that never stops moving (a WebGL demo: 60–115 KB a frame after the tile diff, measured on its real frames)
+  kept two pictures on their way all the time: the link stayed full, the app's /ws queued behind them and the whole UI
+  froze, and a size picked waited 8–10 s behind old pictures. Now the next picture waits until the last one is drawn
+  plus half the time it took to arrive (at most 1 s), so the link is idle a third of the time or more. A viewer on
+  this computer (raw) keeps two in flight and no pause. `TestStreamPacesARemoteViewer`.
 - **Page numbers differ from run to run** (`Bridge.New`: the first adopted id depends on the clock): a pane stores
   its page's number in the layout, and after a restart a new page with the same number appeared in an old pane.
 - `--use-mock-keychain`: cookies are encrypted with a key of the profile's own instead of the macOS keychain's. The
@@ -197,6 +204,11 @@ projbrowser.Open: the App connected → OpenNative in the project's profile; els
   size): parked at another size, it came back drawn at that size for a frame or two. Tried first and dropped: cutting their shapes out of the window
   (Lightron's `View.Mask`) kept the page live, but clicks in the holes and the keyboard had to be handed between the
   two windows by hand, and each case was a bug of its own (a rename dialog's text box that took no typing).
+- **Minimized: a chip at the tab's top right** (`FloatBox.min`, layout.ts `minimizeFloat`, `gerdr pane minimize /
+  restore`; asked for). From the ⋯ menu (a docked pane floats first, so the same rules as floating) or by pulling a
+  floating box's edge 40 px past its smallest size: a "release to minimize" hint covers it and letting go minimizes
+  (`SHRINK_TO_MIN`). Nothing draws the page meanwhile, so its stream is closed. The chip puts it back where it was:
+  in the split when it was docked (`FloatBox.docked`, asked for), else its floating box.
 - **A floating pane shows the stream, of a page at a fixed size.** A Browser pane floated over the others
   (picture-in-picture, `Tab.float`) doesn't place the App's page: it shows the stream's pictures and sends clicks and
   keys through it, as a phone does (`nativeView` is off while floating). Stills every second came first and couldn't

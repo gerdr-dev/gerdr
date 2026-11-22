@@ -193,7 +193,7 @@ function paneLabel(p: PaneLeaf, s: SessionSummary | undefined): { title: string;
   if (p.file?.folder) return { title: p.file.session ? t("folder.open") : basename(p.file.path), sub: basename(p.file.path) };
   if (p.file) return { title: basename(p.file.path), sub: t("unifiedSidebar.file") };
   if (p.sub) return { title: p.sub.title || t("unifiedSidebar.subagent"), sub: t("unifiedSidebar.subagent") };
-  if (p.browser) return { title: p.browser.url ? hostOf(p.browser.url) : t("browser.empty"), sub: t("browser.empty") };
+  if (p.browser) return { title: p.browser.url ? hostOf(p.browser.url) : t("browser.tag"), sub: t("browser.tag") };
   return { title: t("unifiedSidebar.newSession"), sub: p.draft?.cwd ? basename(p.draft.cwd) : "" };
 }
 

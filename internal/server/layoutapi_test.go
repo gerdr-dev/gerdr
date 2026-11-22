@@ -221,6 +221,41 @@ func TestPaneFloatDockAndCleanup(t *testing.T) {
 	}
 }
 
+// Minimize floats a docked Browser pane and folds it; restore puts it back where it was: docked in the split, or
+// floating when it floated before.
+func TestPaneMinimizeRestore(t *testing.T) {
+	box := func(raw string) node {
+		var l node
+		_ = json.Unmarshal([]byte(raw), &l)
+		return asNode(asNode(tabsOf(nodes(l["workspaces"])[0])[0]["float"])["p2"])
+	}
+	if _, _, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", "default", "pane.minimize", LayoutParams{ID: "p2"}); err == nil {
+		t.Fatal("minimized a conversation pane: only Browser panes float")
+	}
+	browser := strings.Replace(opsLayout, `"id":"p2","sessionId":"B"`, `"id":"p2","browser":{"project":"default"}`, 1)
+	if _, _, err := ApplyLayout(json.RawMessage(browser), opsSessions, "A", "default", "pane.restore", LayoutParams{ID: "p2"}); err == nil {
+		t.Fatal("restored a pane that wasn't minimized")
+	}
+	min, _ := apply(t, browser, call("pane.minimize", LayoutParams{ID: "p2"}))
+	if b := box(min); b["min"] != true || b["w"] == nil {
+		t.Fatalf("not floating and folded: %v", b)
+	}
+	back, _ := apply(t, min, call("pane.restore", LayoutParams{ID: "p2"}))
+	if b := box(back); b != nil {
+		t.Fatalf("minimized from docked: restore should dock it again, got %v", b)
+	}
+	floated, _ := apply(t, browser, call("pane.float", LayoutParams{ID: "p2"}))
+	fmin, _ := apply(t, floated, call("pane.minimize", LayoutParams{ID: "p2"}))
+	fback, _ := apply(t, fmin, call("pane.restore", LayoutParams{ID: "p2"}))
+	if b := box(fback); b == nil || b["min"] != nil || b["docked"] != nil {
+		t.Fatalf("minimized from floating: restore should leave it floating, unfolded: %v", b)
+	}
+	docked, _ := apply(t, min, call("pane.dock", LayoutParams{ID: "p2"}))
+	if b := box(docked); b != nil {
+		t.Fatalf("still floating after dock: %v", b)
+	}
+}
+
 // A floating Browser pane is docked once a docked one comes into its tab (the docked one's page would cover it), and
 // one can't float over a docked one. Two docked ones in a tab are fine.
 func TestFloatDocksUnderBrowser(t *testing.T) {

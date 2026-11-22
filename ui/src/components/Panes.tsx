@@ -18,6 +18,7 @@ import {
   Tablet,
   Check,
   Minimize2,
+  Minus,
   MoreHorizontal,
   PanelTopOpen,
   Pencil,
@@ -55,6 +56,7 @@ import {
   runAction,
   splitFocused,
   toggleFloatPane,
+  minimizePane,
   toggleZoom,
   setBrowserFit,
   fitPaneWidth,
@@ -143,6 +145,9 @@ export function TabView({ tab }: { tab: Tab }) {
   // shows one pane at a time anyway
   const docked = phone ? null : dockedRoot(tab);
   const floats = docked ? floating(tab) : [];
+  // minimized ones are chips in the tab's corner (MinChips), their box not drawn: the stream closes with it
+  const open = floats.filter((p) => !tab.float![p.id].min);
+  const mins = floats.filter((p) => tab.float![p.id].min);
   const root = phone ? phoneRoot(tab) : (docked ?? tab.root);
   const panes: { pane: PaneLeaf; box: Box }[] = [];
   const seams: { split: PaneSplit; box: Box }[] = [];
@@ -260,11 +265,48 @@ export function TabView({ tab }: { tab: Tab }) {
               />
             );
           })}
-        {floats.map((pane) => (
+        {open.map((pane) => (
           <FloatPane key={pane.id} pane={pane} tab={tab} box={tab.float![pane.id]} area={box} />
         ))}
+        {mins.length > 0 && <MinChips panes={mins} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * Minimized Browser panes (layout.minimizeFloat): a chip each at the tab's top right, just under the panes' title bars
+ * (at the bottom it covered the composer's send button); a click puts it back where it was (layout.restoreFloat).
+ */
+function MinChips({ panes }: { panes: PaneLeaf[] }) {
+  return (
+    <div className="absolute top-12 right-3 z-30 flex max-w-[60%] flex-wrap justify-end gap-1.5">
+      {panes.map((p) => (
+        <MinChip key={p.id} pane={p} />
+      ))}
+    </div>
+  );
+}
+
+function MinChip({ pane }: { pane: PaneLeaf }) {
+  const b = pane.browser!;
+  const url = useBrowserTabs((s) => s.tabs.find((x) => x.tab === b.tab)?.url) ?? b.url;
+  let name = t("browser.tag"); // no page yet: the short word, as the sidebar tag (asked for)
+  try {
+    if (url) name = new URL(url).host || url;
+  } catch {
+    name = url!;
+  }
+  return (
+    <button
+      type="button"
+      title={t("panes.restoreMin", { name })}
+      onClick={() => minimizePane(pane.id, false)}
+      className="flex h-8 max-w-56 items-center gap-1.5 rounded-full border bg-background px-3 text-xs shadow-lg hover:bg-accent"
+    >
+      <Globe className="size-3.5 shrink-0 text-brand" />
+      <span className="truncate">{name}</span>
+    </button>
   );
 }
 
@@ -325,7 +367,7 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
   const geom = drawn === cur || !lastGeom.current ? fresh : lastGeom.current;
   if (drawn === cur) lastGeom.current = fresh;
   // One gesture: pointer moves turn into box changes, at most one layout update a frame (as the seams do)
-  const gesture = (e: React.PointerEvent, cursor: string, next: (dx: number, dy: number) => FloatBox) => {
+  const gesture = (e: React.PointerEvent, cursor: string, next: (dx: number, dy: number) => FloatBox, end?: () => void) => {
     const el = area.current;
     if (!el || e.button !== 0) return;
     e.preventDefault();
@@ -350,6 +392,7 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
       window.removeEventListener("pointercancel", up);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      end?.();
     };
     document.body.style.cursor = cursor;
     document.body.style.userSelect = "none";
@@ -369,22 +412,36 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
   };
   // Any edge resizes the box at its shape: a side's move is the width's, a top / bottom's turns into the width that
   // gives that height. The edges across from the one held stay put.
+  // Shrunk past its smallest size and still pulled in: a hint over the box, and letting go minimizes it (asked for)
+  const [toMin, setToMin] = useState(false);
   const onResize = (e: React.PointerEvent, g: Edge, cursor: string) => {
     if (!size || !geom) return;
-    gesture(e, cursor, (dx, dy) => {
-      const px = dx * size.w,
-        py = dy * size.h;
-      const dw = g.l ? -px : g.r ? px : (g.t ? -py : py) * ratio;
-      const right = geom.left + geom.w,
-        bottom = geom.top + geom.h;
-      // the room on the side that moves
-      const roomW = g.l ? right : size.w - geom.left;
-      const roomH = g.t ? bottom - size.top : size.h - geom.top;
-      const next = floatGeom(0, 0, geom.w + dw, ratio, { w: roomW, h: roomH }, span);
-      const left = g.l ? right - next.w : geom.left;
-      const top = g.t ? bottom - next.h : geom.top;
-      return { ...fb, x: left / size.w, y: top / size.h, w: next.w / size.w, h: next.h / size.h, pw: next.w - FLOAT_CHROME_W };
-    });
+    let min = false;
+    const end = () => {
+      setToMin(false);
+      if (min) minimizePane(pane.id);
+    };
+    gesture(
+      e,
+      cursor,
+      (dx, dy) => {
+        const px = dx * size.w,
+          py = dy * size.h;
+        const dw = g.l ? -px : g.r ? px : (g.t ? -py : py) * ratio;
+        const right = geom.left + geom.w,
+          bottom = geom.top + geom.h;
+        // the room on the side that moves
+        const roomW = g.l ? right : size.w - geom.left;
+        const roomH = g.t ? bottom - size.top : size.h - geom.top;
+        const next = floatGeom(0, 0, geom.w + dw, ratio, { w: roomW, h: roomH }, span);
+        const over = geom.w + dw < span.min - SHRINK_TO_MIN;
+        if (over !== min) setToMin((min = over));
+        const left = g.l ? right - next.w : geom.left;
+        const top = g.t ? bottom - next.h : geom.top;
+        return { ...fb, x: left / size.w, y: top / size.h, w: next.w / size.w, h: next.h / size.h, pw: next.w - FLOAT_CHROME_W };
+      },
+      end,
+    );
   };
   const meterEl = <div ref={meter} aria-hidden className="pointer-events-none invisible absolute inset-0" />;
   if (!geom) return meterEl;
@@ -404,11 +461,21 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
             </FloatFitDrawn.Provider>
           </FloatMove.Provider>
         </div>
+        {toMin && (
+          <div className="pointer-events-none absolute inset-[3px] z-10 flex flex-col items-center justify-center gap-1.5 rounded-md bg-background/95 text-sm font-medium">
+            <Minus className="size-5 text-brand" />
+            {t("panes.releaseToMin")}
+          </div>
+        )}
         <FloatEdges onDown={onResize} />
       </div>
     </>
   );
 }
+
+// How far (px) past its smallest width a floating box has to be pulled before letting go minimizes it: a little
+// overshoot at the smallest size is just the drag ending there
+const SHRINK_TO_MIN = 40;
 
 // Around a floating pane's page: its wrapper's 3px padding and the pane's 1px border each side, and the title bar
 // (h-8) above. The page's own box is what has the shape.
@@ -767,7 +834,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                   In the menu with the pane moves, not on the bar: the bar's ↗ read as the same thing as "open in your
                   browser" beside it (user report) */}
               {b.tab && canPopOut && !floats && <PopOutItem project={b.project} tab={b.tab} />}
-              <PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} noFloat />
+              <PaneMoveItems pane={pane} tab={tab} zoomed={zoomed} count={count} />
             </>
           }
           Body={PaneBody}
@@ -790,7 +857,18 @@ function FloatItem({ pane, tab }: { pane: PaneLeaf; tab: Tab; count?: Count }) {
   );
 }
 
-/** The same as a button on the pane's bar (the Browser pane's, asked for there instead of in its ⋯). */
+/** Fold this Browser pane to a chip in the tab's corner (floated first when docked); same rules as floating. */
+function MinimizeItem({ pane, tab }: { pane: PaneLeaf; tab: Tab }) {
+  if (usePhone()) return null;
+  if (!tab.float?.[pane.id] && !floatable(tab, pane.id)) return null;
+  return (
+    <DropdownMenuItem onClick={() => minimizePane(pane.id)}>
+      <Minus /> {t("panes.minimize")}
+    </DropdownMenuItem>
+  );
+}
+
+/** The same as a button on the Browser pane's bar (asked for there, and later in its ⋯ too, beside Minimize). */
 function FloatButton({ pane, tab }: { pane: PaneLeaf; tab: Tab }) {
   if (usePhone()) return null;
   const on = !!tab.float?.[pane.id];
@@ -814,19 +892,7 @@ function FloatButton({ pane, tab }: { pane: PaneLeaf; tab: Tab }) {
  * The ⋯ menu's part every pane has, in the session pane's order and words: split, new tab, zoom, to its own tab, close.
  * A pane's own items go above it (the Browser pane's pages).
  */
-function PaneMoveItems({
-  pane,
-  tab,
-  zoomed,
-  count,
-  noFloat,
-}: {
-  pane: PaneLeaf;
-  tab: Tab;
-  zoomed?: boolean;
-  count?: Count;
-  noFloat?: boolean; // the pane's bar has it as a button (FloatButton)
-}) {
+function PaneMoveItems({ pane, tab, zoomed, count }: { pane: PaneLeaf; tab: Tab; zoomed?: boolean; count?: Count }) {
   // A floating pane isn't in the split: splitting it or opening a tab from it means nothing there (asked to drop them)
   // the layout's own: a floated pane isn't in the split on any device, a phone included
   const floating = !!tab.float?.[pane.id];
@@ -848,7 +914,8 @@ function PaneMoveItems({
           </DropdownMenuItem>
         </>
       )}
-      {!noFloat && <FloatItem pane={pane} tab={tab} count={count} />}
+      <FloatItem pane={pane} tab={tab} count={count} />
+      {pane.browser && <MinimizeItem pane={pane} tab={tab} />}
       <FitItems pane={pane} tab={tab} />
       {!zoomed && !count && !tab.float?.[pane.id] && leaves(dockedRoot(tab) ?? tab.root).length > 1 && (
         <DropdownMenuItem onClick={() => (focusPane(pane.id), toggleZoom())}>

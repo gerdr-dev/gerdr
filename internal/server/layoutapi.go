@@ -285,6 +285,42 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 			return nil, errors.New("fit is pc, pad or mobile")
 		}
 		return c.setFloat(t, str(pn, "id"), method == "pane.float", p.Fit)
+	case "pane.minimize", "pane.restore":
+		// A Browser pane folded to a chip in its tab's corner (its ⋯ menu): floated first when docked, so the split
+		// closes over it, and marked docked so restore puts it back in the split; one that floated opens its floating
+		// box again. Its stream stops meanwhile: nothing draws it (ui/src/lib/layout.ts minimizeFloat / restoreFloat)
+		_, t, pn, err := c.pane(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		id := str(pn, "id")
+		f := asNode(t["float"])
+		if method == "pane.restore" {
+			b := asNode(f[id])
+			if b == nil || b["min"] == nil {
+				return nil, errors.New("that pane isn't minimized")
+			}
+			if b["docked"] == true {
+				return c.setFloat(t, id, false, "")
+			}
+			delete(b, "min")
+			t["focus"] = id
+			c.changed = true
+			return node{"ok": true}, nil
+		}
+		docked := f[id] == nil
+		if docked {
+			if _, err := c.setFloat(t, id, true, ""); err != nil {
+				return nil, err
+			}
+		}
+		b := asNode(asNode(t["float"])[id])
+		b["min"] = true
+		if docked {
+			b["docked"] = true
+		}
+		c.changed = true
+		return node{"ok": true}, nil
 	case "pane.fit":
 		// A Browser pane's page size on every device (its ⋯ menu): auto follows the pane (a phone gets its own
 		// layout), the others lay the page out at that size. A floating pane's is its box's (pane.float --fit)
