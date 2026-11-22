@@ -1,6 +1,7 @@
 import { AppWindow, Check, Copy, Download, ExternalLink, FolderOpen } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { defaultRehypePlugins, type StreamdownProps } from "streamdown";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -204,24 +205,94 @@ function TextBody({ stat, url }: { stat: FileStat; url: string }) {
   }, [url, stat.size]);
   if (why) return <NoPreview stat={stat} why={why} />;
   if (text === null) return <div className="p-10 text-center text-[13px] text-muted-foreground">{t("fileViewer.reading")}</div>;
-  if (stat.mime === "text/markdown") return <MdFile text={text} />;
+  if (stat.mime === "text/markdown") return <MdFile stat={stat} text={text} />;
   return <pre className="min-w-max p-4 font-mono text-[12px] leading-relaxed whitespace-pre">{text}</pre>;
 }
 
 // Module level: Streamdown takes these as component types, a new object per render would remount the whole file
 const mdComponents = { code: MdCode };
 
-/** A .md file as Markdown: Mermaid diagrams and $$ math $$ drawn as in a reply (MermaidBlock, lib/markdownPlugins.ts). */
-function MdFile({ text }: { text: string }) {
+const EXTERNAL_OR_API = /^(?:https?:|data:|blob:|\/\/|\/api\/|\/h\/)/i;
+const MEDIA_TAGS = new Set(["img", "video", "audio", "source"]);
+
+function parentDir(p: string): string {
+  const s = p.replace(/\\/g, "/");
+  const i = s.lastIndexOf("/");
+  return i > 0 ? s.slice(0, i) : i === 0 ? "/" : "";
+}
+
+/** Resolve a Markdown image/media src relative to the viewed .md file's directory into a local path for fileRawURL. */
+function resolveLocalPath(baseDir: string, raw: string): string {
+  let s = raw.trim();
+  if (/^file:\/\//i.test(s)) {
+    s = s.replace(/^file:\/\//i, "");
+    if (/^\/[a-zA-Z]:/.test(s)) s = s.slice(1);
+  }
+  try {
+    s = decodeURI(s);
+  } catch {
+    // keep raw if malformed percent-encoding
+  }
+  s = s.replace(/\\/g, "/");
+  if (s.startsWith("/") || s.startsWith("~/") || /^[a-zA-Z]:\//.test(s)) return s;
+  const parts = (baseDir ? `${baseDir}/${s}` : s).split("/");
+  const out: string[] = [];
+  for (const part of parts) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (out.length && out[out.length - 1] !== "..") out.pop();
+    } else {
+      out.push(part);
+    }
+  }
+  const leading = baseDir.startsWith("/") ? "/" : "";
+  return leading + out.join("/");
+}
+
+/**
+ * Rewrite relative and local media `src` attributes to `/api/fs/raw?path=…` before Streamdown's `rehype-harden` runs;
+ * otherwise `rehype-harden` replaces relative paths like `图/1.png` with `[Image blocked: …]`.
+ */
+function rehypeLocalMedia({ dir, host }: { dir: string; host?: string }) {
+  return (tree: any) => {
+    const walk = (node: any) => {
+      if (!node || typeof node !== "object") return;
+      if (node.type === "element" && MEDIA_TAGS.has(node.tagName) && typeof node.properties?.src === "string") {
+        const src = node.properties.src.trim();
+        if (src && !EXTERNAL_OR_API.test(src)) {
+          node.properties.src = fileRawURL(resolveLocalPath(dir, src), false, host);
+        }
+      }
+      if (Array.isArray(node.children)) {
+        for (const child of node.children) walk(child);
+      }
+    };
+    walk(tree);
+  };
+}
+
+/** A .md file as Markdown: Mermaid diagrams, $$ math $$ and relative local images drawn inline. */
+function MdFile({ stat, text }: { stat: FileStat; text: string }) {
   const { meta, body } = splitFrontMatter(text);
   const plugins = useMarkdownPlugins(body);
   const codeBlocks = useCodeBlockVersion();
+  const dir = parentDir(stat.path);
+  const rehypePlugins = useMemo(
+    () =>
+      [
+        defaultRehypePlugins.raw,
+        defaultRehypePlugins.sanitize,
+        [rehypeLocalMedia, { dir, host: stat.host }],
+        defaultRehypePlugins.harden,
+      ] as StreamdownProps["rehypePlugins"],
+    [dir, stat.host],
+  );
   return (
     <div className="gerdr-md mx-auto max-w-[860px] px-5 py-4">
       {meta !== null && <FrontMatter raw={meta} />}
       {/* MessageResponse redraws only when the text changes: a plugin loaded afterwards, or an add-on's code block
           (g.codeBlock) coming or going, needs a new key */}
-      <MessageResponse key={`${pluginsKey(plugins)}:${codeBlocks}`} plugins={plugins} components={mdComponents}>
+      <MessageResponse key={`${pluginsKey(plugins)}:${codeBlocks}:${dir}`} plugins={plugins} rehypePlugins={rehypePlugins} components={mdComponents}>
         {body}
       </MessageResponse>
     </div>
