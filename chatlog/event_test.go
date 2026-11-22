@@ -54,6 +54,8 @@ func TestRetryable(t *testing.T) {
 		{"You've hit your usage limit", false},
 		{"rate limit exceeded", false},
 		{"Invalid model name", false},
+		{"the message was too large (over 10MB, likely an image), and the agent dropped the connection", false},
+		{"消息太大（超过 10MB，多半是图片太大），agent 断开了连接", false},
 		{"Failed to authenticate. API Error: 403 Request not allowed", true},
 		{"Failed to authenticate. API Error: 401 Invalid authentication credentials", false},
 	} {

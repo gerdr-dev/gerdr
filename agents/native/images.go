@@ -55,6 +55,12 @@ func (a *Agent) limitHistory(es []entry) {
 	}
 }
 
+// FitImage is limitImage for callers outside the agent (the hub shrinking a prompt's photos before any agent sees
+// them): each edge within maxEdge, then JPEG steps until it is within maxBytes. Undecodable formats pass through.
+func FitImage(mime string, data []byte, maxEdge, maxBytes int) (string, []byte) {
+	return limitImage(mime, data, ImageLimits{MaxEdge: maxEdge, MaxBytes: maxBytes})
+}
+
 // limitImage scales an image down to fitImage's size, then re-encodes it as JPEG if it is still over MaxBytes. Formats the standard library can't decode (webp) pass through as they are.
 func limitImage(mime string, data []byte, l ImageLimits) (string, []byte) {
 	if l == (ImageLimits{}) {

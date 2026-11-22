@@ -29,7 +29,9 @@ func Retryable(msg string) bool {
 	if strings.Contains(m, "request not allowed") {
 		return true
 	}
-	for _, k := range []string{"rate limit", "usage limit", "quota", "invalid", "unauthorized", "401", "403", "credit"} {
+	// "too large": a message over a size limit (agenthost's in-process pipe, an API's request size) fails the same way
+	// every time, and a retry's "continue" would reach an agent that never got the message.
+	for _, k := range []string{"rate limit", "usage limit", "quota", "invalid", "unauthorized", "401", "403", "credit", "too large", "太大"} {
 		if strings.Contains(m, k) {
 			return false
 		}

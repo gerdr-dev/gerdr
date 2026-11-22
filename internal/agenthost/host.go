@@ -6,6 +6,7 @@
 package agenthost
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,10 +15,12 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/gerdr-dev/gerdr/acpx"
+	"github.com/gerdr-dev/gerdr/internal/i18n"
 	"github.com/gerdr-dev/gerdr/sysenv"
 )
 
@@ -71,7 +74,8 @@ func (h *Host) SteerCommands() bool {
 func StartInProc(ctx context.Context, agent InProcAgent, handler Handler, log *slog.Logger) (*Host, error) {
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()
-	aconn := acp.NewAgentSideConnection(agent, a2cW, c2aR)
+	in := &lineWatch{r: c2aR}
+	aconn := acp.NewAgentSideConnection(agent, a2cW, in)
 	aconn.SetLogger(log)
 	agent.SetConn(aconn)
 	cconn := acp.NewClientSideConnection(&client{h: handler}, c2aW, a2cR)
@@ -81,6 +85,28 @@ func StartInProc(ctx context.Context, agent InProcAgent, handler Handler, log *s
 		_ = c2aW.Close()
 		_ = a2cW.Close()
 	}}
+	// When one side stops reading, the other must find out. io.Pipe has no buffer: once the agent side gives up (its
+	// reader refuses a line over the SDK's 10MB, as a prompt with a 13MB photo did on 2026-11-22), the hub's write of
+	// the rest of that line blocks for ever, every later write (a cancel, Escape) queues behind it, and the turn spins
+	// with no way to stop it. Closing both pipes with the cause makes those writes and the pending requests fail at
+	// once; the hub then sees Conn.Done and starts a fresh agent for the next turn (Hub.host).
+	go func() {
+		var cause error
+		select {
+		case <-aconn.Done():
+			cause = errors.New(i18n.S("agent 的连接断了", "the agent's connection closed"))
+			if in.long() {
+				cause = errors.New(i18n.S("消息太大（超过 10MB，多半是图片太大），agent 断开了连接", "the message was too large (over 10MB, likely an image), and the agent dropped the connection"))
+			}
+		case <-cconn.Done():
+			cause = errors.New(i18n.S("连接断了", "the connection closed"))
+		}
+		// The reading ends only: a writer blocked on a pipe gets the error its reader was closed with, while a closed
+		// writer end would hand it a bare io.ErrClosedPipe instead of the cause. Host.Close closes the writers.
+		_ = c2aR.CloseWithError(cause)
+		_ = a2cR.CloseWithError(cause)
+		log.Warn("in-process agent connection closed", "cause", cause)
+	}()
 	if err := h.initialize(ctx); err != nil {
 		h.Close()
 		return nil, err
@@ -203,3 +229,28 @@ func Call[T any](ctx context.Context, h *Host, method string, params any) (T, er
 	err = json.Unmarshal(raw, &out)
 	return out, err
 }
+
+// maxLine is the longest line acp-go-sdk reads (connection.go receive: maxBufSize, v0.13.5); a longer one closes the
+// connection with bufio.ErrTooLong, which the SDK doesn't hand out.
+const maxLine = 10 << 20
+
+// lineWatch counts the bytes of the line being read, so a connection that closes mid-line can be told apart: the
+// SDK only logs why.
+type lineWatch struct {
+	r   io.Reader
+	cur atomic.Int64 // bytes since the last newline
+}
+
+func (w *lineWatch) Read(p []byte) (int, error) {
+	n, err := w.r.Read(p)
+	if n > 0 {
+		if i := bytes.LastIndexByte(p[:n], '\n'); i >= 0 {
+			w.cur.Store(int64(n - i - 1))
+		} else {
+			w.cur.Add(int64(n))
+		}
+	}
+	return n, err
+}
+
+func (w *lineWatch) long() bool { return w.cur.Load() >= maxLine }

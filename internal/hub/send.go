@@ -181,6 +181,12 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 	}
 	// First message after taking over another agent's conversation: the earlier conversation goes in front (handoff.go)
 	content = withShell(s.pendingHandoff(), content)
+	// Photos straight off a phone camera would not get through to the agent at all (imagefit.go). Shrunk before the
+	// message is logged, so the log keeps what the agent got (CatchUp compares the two).
+	if fitted, saved := fitPromptImages(content); saved > 0 {
+		content = fitted
+		s.h.log.Info("prompt images shrunk", "session", s.ID(), "saved", saved)
+	}
 	raw := make([]json.RawMessage, 0, len(content))
 	for _, b := range content {
 		j, _ := json.Marshal(b)
