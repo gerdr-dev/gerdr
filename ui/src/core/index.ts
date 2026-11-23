@@ -33,6 +33,8 @@ export { Markdown } from "@gerdr/chat";
 // browser too, where a file:// link opens nothing. For links a panel draws to what agents produced.
 export { openPath } from "@/lib/actions/files";
 export { ArtifactsFolder } from "./ArtifactsFolder";
+// What the user has on screen, sent along with what they say to the panel's conversations (screen.ts)
+export { useScreenContext, type ScreenContext } from "./screen";
 export { SessionBrowser, useSessionBrowser } from "./SessionBrowser";
 // The chat's "working" dots, for a page's own row saying something runs (a FeedChat's last line)
 export { PixelLoader } from "@gerdr/chat";

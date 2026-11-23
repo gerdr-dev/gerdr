@@ -31,3 +31,6 @@ export function usePanelVisible(): boolean {
   const key = useContext(PanelKeyContext);
   return useSyncExternalStore(subscribe, () => document.visibilityState === "visible" && (key == null || shown.get(key) !== false));
 }
+
+/** Whether panel `key` is the one on screen (WorkView's state; unknown counts as not). */
+export const isPanelShown = (key: string) => shown.get(key) === true && document.visibilityState === "visible";

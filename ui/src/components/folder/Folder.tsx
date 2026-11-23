@@ -23,6 +23,7 @@ import {
 import {
   Component,
   lazy,
+  useContext,
   Suspense,
   type ErrorInfo,
   useCallback,
@@ -44,6 +45,8 @@ import { isNative, nativeOpenPath } from "@/lib/native";
 import { cn } from "@/lib/utils";
 import { FileContent } from "../FileViewer";
 import { Records } from "./Records";
+import { PanelKeyContext } from "@/core/visible";
+import { setScreenFile } from "@/core/screen";
 
 const MdEditor = lazy(() => import("./MdEditor"));
 
@@ -101,6 +104,16 @@ export function Folder({ by, host }: { by: { session: string } | { dir: string }
   const selEntry = sel ? entryOf(sel) : undefined;
   const selIsDir = !sel || !!selEntry?.dir;
   const targetDir = selPath ? (selIsDir ? selPath : parentOf(selPath)) : null;
+
+  // On a panel's page: the file open here is part of what the user has on screen, sent along with what they say to the
+  // panel's conversations (core/screen.ts), so "this file" needs no path pasted
+  const panel = useContext(PanelKeyContext);
+  const openFile = sel && selEntry && !selEntry.dir ? sel : null;
+  useEffect(() => {
+    if (!panel) return;
+    setScreenFile(panel, openFile);
+    return () => setScreenFile(panel, null);
+  }, [panel, openFile]);
 
   // What to keep listed: the root, every open folder and the selected one
   const want = useRef<string[]>([]);

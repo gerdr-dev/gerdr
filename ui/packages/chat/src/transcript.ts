@@ -126,6 +126,10 @@ const LATE_ANSWER = /^\s*<gerdr-answer req="([^"]*)">([\s\S]*?)<\/gerdr-answer>\
 // Skill files changed since the last message (hub/skillnote.go): rides in front of a message, "- <name>: <path>" lines
 const SKILLS_CHANGED = /^<gerdr-skills-changed>\n[^\n]*\n([\s\S]*?)<\/gerdr-skills-changed>\s*$/;
 export const isSkillsChanged = (text: string) => SKILLS_CHANGED.test(text);
+// What the user had on screen in a panel (gerdr's core/screen.ts): rides in front of a message, drawn as a notice
+// line with its summary; the rest is for the agent
+const SCREEN = /^<gerdr-screen summary="([^"]*)">/;
+export const isScreenContext = (text: string) => SCREEN.test(text);
 
 /** 多行压成一行、剥掉 ANSI（这些都只占一行小字，长了也读不了）；太长截断。 */
 function squash(s: string, max = 300) {
@@ -169,6 +173,7 @@ export function machineBlock(text: string): { notice?: { level: string; text: st
     });
     return { notice: { level: "info", text: t("notice.skillsChanged", { files: names.join(t("list.sep")) }) } };
   }
+  if ((m = SCREEN.exec(text))) return { notice: { level: "info", text: t("notice.screen", { summary: m[1] }) } };
   if (ALLOWED_OLD.test(text)) return { notice: { level: "info", text: t("notice.allowedRetry") } };
   if ((m = ALLOWED.exec(text))) {
     const rules = m[1].split("\n").flatMap((l) => (l.startsWith("- ") ? [l.slice(2).trim()] : []));
@@ -229,7 +234,7 @@ export const isHandoffContext = (text: string) => HANDOFF.test(text);
 
 /** 消息内容里去掉 `!命令` 带的那几块和换 agent 时带上的之前的对话（撤回、回退放回输入框时用：命令还在对话里，下一条照样会带上） */
 export const dropShellContext = (blocks: ContentBlock[]) =>
-  blocks.filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text) || isSkillsChanged(c.text))));
+  blocks.filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text) || isSkillsChanged(c.text) || isScreenContext(c.text))));
 
 /**
  * Whether a row's text is the command itself rather than a description of it. Only command text is drawn
@@ -297,7 +302,7 @@ export class Transcript {
     if (content.length === 1 && content[0].type === "text" && machineBlock(content[0].text)?.notice) return;
     const parts: GPart[] = [];
     for (const c of content) {
-      if (c.type === "text" && isImageLabel(c.text)) continue;
+      if (c.type === "text" && (isImageLabel(c.text) || isScreenContext(c.text))) continue;
       if (c.type === "text") parts.push({ type: "text", text: c.text });
       else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });
       else if (c.type === "resource_link") parts.push(linkPart(c, this.sessionId));
@@ -470,14 +475,16 @@ export class Transcript {
       case "user": {
         // `!` output / handoff / changed-skills blocks ride in front of whatever is sent next, "allow and retry"
         // included: look past them
-        const own = (e.content ?? []).filter((c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text) || isSkillsChanged(c.text))));
+        const own = (e.content ?? []).filter(
+          (c) => !(c.type === "text" && (isShellContext(c.text) || isHandoffContext(c.text) || isSkillsChanged(c.text) || isScreenContext(c.text))),
+        );
         const only = own.length === 1 && own[0].type === "text" ? own[0].text : undefined;
         const mb = only !== undefined ? machineBlock(only) : undefined;
         // Before the notice branch: it breaks early, and a sending bubble left behind stays on screen for good
         if (e.messageId) this.dropSending(e.messageId);
         // Skills changed since the last message: a notice line above it, like a compaction's
         for (const c of e.content ?? []) {
-          const sk = c.type === "text" && isSkillsChanged(c.text) ? machineBlock(c.text)?.notice : undefined;
+          const sk = c.type === "text" && (isSkillsChanged(c.text) || isScreenContext(c.text)) ? machineBlock(c.text)?.notice : undefined;
           if (sk) {
             this.messages = [...this.messages];
             this.pushPart(this.assistant(e.ts), { type: "data-notice", data: sk });
@@ -520,7 +527,7 @@ export class Transcript {
         for (const c of e.content ?? []) {
           if (c.type === "text" && isShellContext(c.text)) continue; // `!命令` 带过去的输出：上面已经有那张命令卡片了
           if (c.type === "text" && isHandoffContext(c.text)) continue; // the earlier conversation: it's on screen above
-          if (c.type === "text" && isSkillsChanged(c.text)) continue; // drawn as the notice above
+          if (c.type === "text" && (isSkillsChanged(c.text) || isScreenContext(c.text))) continue; // drawn as the notice above
           if (c.type === "text" && isImageLabel(c.text)) continue;
           if (c.type === "text") parts.push({ type: "text", text: mb?.text ?? c.text });
           else if (c.type === "image") parts.push({ type: "file", mediaType: c.mimeType, url: imageURL(c) });

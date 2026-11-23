@@ -32,6 +32,9 @@ import { locale, t } from "./i18n";
 import { UsagePanel } from "@/components/UsageMeter";
 import { RunButton } from "@/components/chat/RunButton";
 import { LoginChip } from "@/components/chat/LoginChip";
+import { ScreenChip } from "@/components/chat/ScreenChip";
+import type { ContentBlock } from "./types";
+import { screenBlockFor } from "@/core/screen";
 import { timedEscape } from "./escTiming";
 import { useMarkdownPlugins } from "./markdownPlugins";
 import { openPortLink } from "./portlink";
@@ -319,6 +322,16 @@ function codeBlocks(): Record<string, (code: string) => ReactNode> {
   return out;
 }
 
+/**
+ * What the user has on screen in a panel goes in front of what they send to its conversations (core/screen.ts), when
+ * it changed since the last message. Not on what gerdr sends for them ("allow and retry", a late answer: <gerdr-…>).
+ */
+function withScreen(id: string, content: ContentBlock[]): ContentBlock[] {
+  if (content.some((c) => c.type === "text" && c.text.trimStart().startsWith("<gerdr-"))) return content;
+  const block = screenBlockFor(id);
+  return block ? [{ type: "text", text: block }, ...content] : content;
+}
+
 export function GerdrChatProvider({ children }: { children: ReactNode }) {
   const config = useStore((s) => s.config);
   const device = useStore((s) => s.device);
@@ -348,7 +361,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
           const card = cardOf(part);
           return card ? <ToolCard card={card} session={ctx.sessionId} /> : undefined;
         },
-        send: (id, content, o) => sendShown(id, content, o?.onRetry, o?.now || sendsNow(id)).then(() => {}),
+        send: (id, content, o) => sendShown(id, withScreen(id, content), o?.onRetry, o?.now || sendsNow(id)).then(() => {}),
         stop: (id) => timedEscape(id),
         withdrawLast: (id) => api.withdrawLast(id),
         withdraw: (id, msg, now) => withdrawSteer(id, msg, !!now),
@@ -396,7 +409,12 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
         codeBlocks: codeBlocks(),
         useMarkdownPlugins,
         composerOverlay: (session) => <Overlay session={session} />,
-        composerTop: (session) => <LoginChip sessionId={session.id} />,
+        composerTop: (session) => (
+          <>
+            <ScreenChip sessionId={session.id} />
+            <LoginChip sessionId={session.id} />
+          </>
+        ),
         useTurnStat: useAddonTurnStat,
         composerBar: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} />,
         composerStart: (session, { paneId }) => <AddonComposerActions sessionId={session.id} paneId={paneId} start />,

@@ -773,6 +773,19 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   not in the layout; `watchedSessions` adds it while in Work mode. `gerdr panel run|status` find the project from the cwd.
   `ctx.sessions.start({ reportTo: "work" })` resolves "work" to that conversation (`config.workSessions`), so a function
   can hand a task out and have the result come back to the Work agent.
+- **Screen context** (`ui/src/core/screen.ts`): what the user has on screen in a panel goes in front of what they send
+  to its conversations, so "this paragraph" / "the file I have open" reaches the agent with no path pasted (the content
+  panel's user asked whether the AI knew which content was open; it knew the content, not the file or the selection).
+  Three sources per panel: the page's `useScreenContext({ title, text })`, the file open in a `Folder` (ArtifactsFolder)
+  inside that panel (`PanelKeyContext`), and the text selected in the panel's mount (`selectionchange`, kept when focus
+  moves to the composer, which collapses it; cleared by a collapsed selection inside the page). chatHost's `send` adds
+  a `<gerdr-screen summary="…">` block (English for the agent) to a conversation that is the panel's (tags.panel, or its
+  agent column's `workSessions`) while that panel is shown, only when the block differs from the last one that
+  conversation got: the same context on every message is noise and tokens. The chat draws the block as a notice line
+  (transcript.ts `SCREEN`, like the changed-skills block), and the composer's `ScreenChip` says beforehand what goes
+  along, × to leave it out; sending nothing out of sight is the point. Not added to what gerdr sends for the user
+  (`<gerdr-…>` texts). Delivered on send only: an agent mid-turn doesn't see the user switch files (a pull, e.g. a CLI
+  reading the current context, is the planned next step).
 - Secrets from a page: `secret(name)` in the bridge posts `gerdr:secret`; Gerdr (WorkView `SecretDialog`) asks in its
   own dialog and saves through `/api/work/secrets`. The value never passes through the page: its code is written by an
   agent, and a value in page state is one log line away from a transcript.
