@@ -605,8 +605,8 @@ export const api = {
   /** force (apply): the person agreed to cut off what is running; without it a busy computer answers 409 code "busy" */
   appUpdateOp: (op: "check" | "apply" | "auto", on?: boolean, force?: boolean) => req<{}>("POST", "/api/app-update/op", { op, on: !!on, force: !!force }),
   uiStatus: () => req<UIStatus>("GET", "/api/ui/status"),
-  /** Settings → Labs → Production React: build its packages before reloading onto them; state "" = ready */
-  prepareProdReact: () => req<{ ready: boolean; state: string }>("POST", "/api/ui/prod-react"),
+  /** Settings → Labs → Production React (off): build the development packages before reloading onto them; state "" = ready */
+  prepareDevReact: () => req<{ ready: boolean; state: string }>("POST", "/api/ui/dev-react"),
   setService: (on: boolean) => req("POST", "/api/service", { on }),
   /** Settings → "Restart Gerdr": can = something brings it back (service / App), busy = what a restart cuts off */
   restartInfo: () => req<{ can: boolean; busy: Busy }>("GET", "/api/restart"),

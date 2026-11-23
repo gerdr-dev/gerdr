@@ -116,7 +116,7 @@ func (e *ESM) vendor(entries, deps map[string]string, prod bool) *vendorBuild {
 		vb.at = time.Now()
 		if vb.err == nil {
 			e.pruneVendors(key)
-			slog.Info("ui vendor bundle built", "key", key, "entries", len(entries), "took", time.Since(start).Round(time.Millisecond))
+			slog.Info("ui vendor bundle built", "key", key, "prod", prod, "entries", len(entries), "took", time.Since(start).Round(time.Millisecond))
 		} else {
 			slog.Warn("ui vendor bundle failed, loading packages per file", "key", key, "err", vb.err)
 		}

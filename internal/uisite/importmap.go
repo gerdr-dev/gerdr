@@ -18,7 +18,7 @@ import (
 // 的 dependencies（写死精确版本：CDN 按版本缓存，范围版本会今天明天拿到不一样的包）。
 //
 // 几条规矩，都是为了「全页面只有一份 React」：
-//   - react / react-dom 用开发版（?dev）：React Refresh 要它，报错也全；
+//   - 默认用生产版（不带 ?dev）；只在某台设备主动切到开发版（prod.go）时才带 ?dev 并加载 React Refresh；
 //   - 别的包一律 external=react,react-dom：它们 import 的 react 走 importMap，不让 esm.sh 自己再塞一份；
 //   - react-dom 自己也 external=react（不然 esm.sh 按它的 peer 范围挑一个 react 版本，和我们的可能不是同一个）。
 
@@ -112,14 +112,15 @@ func esmURL(pkg, ver, sub string, prod bool) string {
 // runtimeBare: what the page runtime (runtime.go) and the generated entry (routes.go) import, whatever the UI's code does.
 var runtimeBare = []string{"react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom", "react-dom/client", "react-refresh/runtime", "react-router"}
 
-// buildImportMap：bare 是代码里用到的第三方 specifier。缺版本的（package.json 里没写）报出来。
-// prod: the production builds (prod.go). React Refresh is left out there: production React has no hooks for it.
+// buildImportMap maps every third-party specifier the UI uses to its /_esm/ URL and reports any package missing from
+// package.json. prod (the default) uses esm.sh's production builds and omits react-refresh (no production build) and
+// react/jsx-dev-runtime (served via the local @jsx-dev-prod.js shim instead).
 func buildImportMap(deps map[string]string, bare []string, prod bool) (map[string]string, []string) {
 	im := map[string]string{}
 	var missing []string
 	add := func(spec string) {
 		pkg, sub := packageName(spec)
-		if prod && pkg == "react-refresh" {
+		if prod && (pkg == "react-refresh" || spec == "react/jsx-dev-runtime") {
 			return
 		}
 		ver, ok := deps[pkg]

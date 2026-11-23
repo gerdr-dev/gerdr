@@ -97,8 +97,8 @@ const settingsZh = {
   "settings.labs.prodReact.hint":
     "默认打开，切 tab、滚动都快好几倍。代价：改界面后整页重新渲染（滚动位置、打开的菜单会丢）；界面报错看不到出错的文件。调试或让 agent 修界面时可以先关掉",
   "settings.labs.prodReact.switching": "切换中…",
-  "settings.labs.prodReact.preparing": "生产版的包还没准备好（第一次要下载），这次先用的开发版；过一会儿刷新页面就是生产版",
-  "settings.labs.prodReact.unavailable": "这台电脑上用不了（第三方包没有打成 vendor 包，或者界面编译出错）",
+  "settings.labs.prodReact.preparing": "开发版的包还没准备好（第一次要下载），这次先用的生产版；过一会儿刷新页面就是开发版",
+  "settings.labs.prodReact.unavailable": "开发版在这台电脑上用不了（第三方包没打成 vendor 包，或者界面编译出错）",
   "settings.labs.keepAwake": "远程连着时不休眠",
   "settings.labs.keepAwake.hint":
     "手机等远程设备连着时电脑不睡，合上盖子也醒着（和 Amphetamine 一样），断开 15 分钟后恢复。合盖要在下面授权一次（下面的手动时段也用它），用电池且电量 ≤ 20% 时自动放手，塞包里会发热。仅 macOS",
@@ -215,8 +215,8 @@ const settingsEn: Record<keyof typeof settingsZh, string> = {
     "On by default: switching tabs and scrolling are several times faster. The cost: a UI edit re-renders the whole page (scroll positions and open menus are lost), and UI errors don't say which file. Turn it off while debugging the UI or having an agent fix it",
   "settings.labs.prodReact.switching": "Switching…",
   "settings.labs.prodReact.preparing":
-    "The production packages aren't ready yet (the first time downloads them), so this page runs development React; reload in a moment for production",
-  "settings.labs.prodReact.unavailable": "Not available on this computer (packages aren't bundled, or the UI doesn't compile)",
+    "The development packages aren't ready yet (the first time downloads them), so this page runs production React; reload in a moment for development",
+  "settings.labs.prodReact.unavailable": "Development React isn't available on this computer (packages couldn't be bundled, or the UI doesn't compile)",
   "settings.labs.keepAwake": "Stay awake while remote",
   "settings.labs.keepAwake.hint":
     "While a phone or another remote device is connected the computer doesn't sleep, even with the lid closed (like Amphetamine), until 15 minutes after it disconnects. The lid needs a one-time permission, given below (the manual periods below use it too); on battery at 20% or less it lets go. It gets warm in a bag. macOS only",

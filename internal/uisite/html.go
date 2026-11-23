@@ -87,16 +87,10 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 		r.servePreparing(w, b, n)
 		return
 	}
-	im, preload, react := b.importMap, b.preload, "development"
-	if choice := reactChoice(req); choice != "development" {
-		// Asked for explicitly, the page waits for the production packages; by default it doesn't (the first start
-		// downloads them, seconds to tens of seconds: Watch starts that in the background) and loads development meanwhile
-		wait := time.Duration(0)
-		if choice == "production" {
-			wait = 20 * time.Second
-		}
-		if p, st := r.prodFor(b, wait); p != nil {
-			im, preload, react = p.importMap, p.preload, "production"
+	im, preload, react := b.importMap, b.preload, "production"
+	if reactChoice(req) == "development" {
+		if p, st := r.devFor(b, 20*time.Second); p != nil {
+			im, preload, react = p.importMap, p.preload, "development"
 		} else {
 			react = st
 		}
@@ -120,8 +114,8 @@ func (r *Renderer) ServePage(w http.ResponseWriter, req *http.Request, nonce str
 		"modules": b.manifest,
 		"error":   b.fatal,
 		"mounts":  b.mounts,
-		// Which React this page runs on (prod.go): "development", "production", or, when production was asked for,
-		// "preparing" (its packages are still being bundled) / "unavailable"
+		// Which React this page runs on (prod.go): "production" (the default), "development" (per-device opt-in), or,
+		// when development was asked for, "preparing" (its packages are still being bundled) / "unavailable"
 		"react": react,
 	})) + ";</script>\n")
 	s.WriteString(`<script type="module" src="` + r.base + `/_ui/m/@runtime.js?v=` + runtimeVersion + `"></script>` + "\n")

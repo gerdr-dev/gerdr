@@ -518,21 +518,21 @@ function LocalTag({ className }: { className?: string }) {
 }
 
 /**
- * Production React, on unless this device asked for development (internal/uisite/prod.go): a cookie the backend reads
- * when it serves the page, so the switch is a reload. The page says which React it got (window.__GERDR_UI__.react).
+ * Production React, on by default (internal/uisite/prod.go): a cookie the backend reads when it serves the page, so
+ * the switch is a reload. The page says which React it got (window.__GERDR_UI__.react).
  */
 function ProdReactRow() {
   const asked = !/(?:^|;\s*)gerdr_react=development(?:;|$)/.test(document.cookie);
   const got = (window as { __GERDR_UI__?: { react?: string } }).__GERDR_UI__?.react;
-  // Switching takes seconds (packages built the first time, then the whole page reloads): the switch says so from
-  // the tap until the page goes, instead of sitting still (reported)
+  // Switching to development takes seconds the first time (its packages are bundled on demand), then reloads: the
+  // switch says so from the tap until the page goes, instead of sitting still (reported)
   const [busy, setBusy] = useState<boolean | null>(null);
   const [failed, setFailed] = useState<"preparing" | "unavailable" | "">("");
   const toggle = async (on: boolean) => {
     setBusy(on);
     setFailed("");
-    if (on) {
-      const r = await api.prepareProdReact().catch(() => ({ ready: false, state: "unavailable" }));
+    if (!on) {
+      const r = await api.prepareDevReact().catch(() => ({ ready: false, state: "unavailable" }));
       if (!r.ready) {
         setBusy(null);
         setFailed(r.state === "preparing" ? "preparing" : "unavailable");
@@ -543,7 +543,7 @@ function ProdReactRow() {
     document.cookie = on ? "gerdr_react=; path=/; max-age=0; samesite=lax" : "gerdr_react=development; path=/; max-age=315360000; samesite=lax";
     location.reload();
   };
-  const state: "preparing" | "unavailable" | "" = failed || (asked && (got === "preparing" || got === "unavailable") ? got : "");
+  const state: "preparing" | "unavailable" | "" = failed || (!asked && (got === "preparing" || got === "unavailable") ? got : "");
   return (
     <div className="space-y-1">
       <Row label={t("settings.labs.prodReact")} hint={t("settings.labs.prodReact.hint")} local>

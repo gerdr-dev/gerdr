@@ -20,7 +20,12 @@ func (s *Server) uiRoutes(mux *http.ServeMux) {
 		fatal, issues := s.UI.Status()
 		writeJSON(w, map[string]any{"dir": s.UI.Dir(), "build_error": fatal, "warnings": issues, "runtime_errors": s.UI.ClientErrors(), "git": webui.Status(s.UI.Dir())})
 	})
-	// Settings → Labs → Production React: get its packages ready before the page reloads onto them (uisite/prod.go)
+	// Settings → Labs → Production React: switching off builds the development packages before the page reloads onto
+	// them (uisite/prod.go). /api/ui/prod-react is kept for older UI tabs.
+	mux.HandleFunc("POST /api/ui/dev-react", func(w http.ResponseWriter, r *http.Request) {
+		st := s.UI.PrepareDev(60 * time.Second)
+		writeJSON(w, map[string]any{"ready": st == "", "state": st})
+	})
 	mux.HandleFunc("POST /api/ui/prod-react", func(w http.ResponseWriter, r *http.Request) {
 		st := s.UI.PrepareProd(60 * time.Second)
 		writeJSON(w, map[string]any{"ready": st == "", "state": st})

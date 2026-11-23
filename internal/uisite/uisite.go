@@ -134,13 +134,13 @@ type build struct {
 	// Everything the first render loads statically, for <link rel="modulepreload"> (html.go): the browser fetches it
 	// all at once instead of discovering it one import level at a time.
 	preload []string
-	// For production React (prod.go): what its import map is built from, the UI's own preloads without the vendor
-	// files, and the result once built.
+	// For development React (prod.go, per-device opt-in via cookie): what its import map is built from, the UI's
+	// own preloads without the production vendor files or jsxShim, and the result once built.
 	deps       map[string]string
 	bare       []string
 	staticBare []string
 	ownPreload []string
-	prod       *prodPage
+	dev        *devPage
 }
 
 type moduleInfo struct {
@@ -355,16 +355,20 @@ func (r *Renderer) build(files []string, sig string) *build {
 		r.finishMount(b, m, g, uniq(missing))
 	}
 	bare = uniq(bare)
-	im, missing := buildImportMap(deps, bare, false)
+	im, missing := buildImportMap(deps, bare, true)
 	b.importMap = im
 	b.deps, b.bare, b.staticBare = deps, bare, append(append([]string(nil), staticBare...), runtimeBare...)
 	b.ownPreload = append([]string(nil), b.preload...)
-	b.served[jsxShim] = served{ver: shortHash(jsxShimJS), code: jsxShimJS}
+	jsxShimVer := shortHash(jsxShimJS)
+	b.served[jsxShim] = served{ver: jsxShimVer, code: jsxShimJS}
+	jsxShimURL := moduleURL(r.base, jsxShim, jsxShimVer)
 	if len(missing) > 0 {
 		fatal = append(fatal, i18n.S("代码里用到了这些包，但 package.json 的 dependencies 里没写版本：", "These packages are used in code but have no version in package.json dependencies: ")+strings.Join(missing, ", "))
 	} else if r.esm != nil {
-		r.useVendor(b, deps, append(staticBare, runtimeBare...))
+		r.useVendor(b, deps, b.staticBare)
 	}
+	b.importMap["react/jsx-dev-runtime"] = jsxShimURL
+	b.preload = append(b.preload, jsxShimURL)
 	sort.Strings(b.preload)
 	entry := entrySource(b.routes, b.layout, r.base, func(f string) string { return moduleURL(r.base, f, g.version[f]) }, false)
 	ev := shortHash(entry)
@@ -377,16 +381,16 @@ func (r *Renderer) build(files []string, sig string) *build {
 	return b
 }
 
-// useVendor points the import map at the vendor bundle, or marks the build as waiting for it. Prefix entries
-// ("react/") stay on esm.sh: they are only a fallback for subpaths nobody imports directly. Called with r.mu held.
+// useVendor points the import map at the production vendor bundle, or marks the build as waiting for it. Prefix
+// entries ("react/") stay on esm.sh: they are only a fallback for subpaths nobody imports directly. Called with r.mu held.
 func (r *Renderer) useVendor(b *build, deps map[string]string, staticBare []string) {
 	entries := map[string]string{}
 	for spec, u := range b.importMap {
-		if !strings.HasSuffix(spec, "/") {
+		if !strings.HasSuffix(spec, "/") && strings.HasPrefix(u, "/_esm/") {
 			entries[spec] = u
 		}
 	}
-	vb := r.esm.vendor(entries, deps, false)
+	vb := r.esm.vendor(entries, deps, true)
 	select {
 	case <-vb.done:
 		if vb.err != nil {
@@ -551,11 +555,6 @@ func (r *Renderer) Watch(stop <-chan struct{}) {
 	defer t.Stop()
 	r.ensure()
 	go r.pruneCache(stop)
-	// Production React is the default (prod.go) and pages don't wait for its packages: have them ready (from the disk
-	// cache after the first time; downloaded and bundled the first time)
-	if r.esm != nil {
-		go r.PrepareProd(10 * time.Minute)
-	}
 	pending := ""
 	changed := time.Now()
 	for {
