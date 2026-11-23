@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { Check, Globe, Monitor, PanelRight, PictureInPicture2, Smartphone, SquareArrowOutUpRight, Tablet, Undo2, X } from "lucide-react";
+import { Check, Globe, Minus, Monitor, PanelRight, PictureInPicture2, Smartphone, SquareArrowOutUpRight, Tablet, Undo2, X } from "lucide-react";
 import { BrowserScreen } from "@/components/browser/BrowserScreen";
 import { FloatEdges } from "@/components/FloatEdges";
 import { BrowserOutCard } from "@/components/browser/BrowserOut";
@@ -168,6 +168,8 @@ type Column = {
   tab?: number;
   closed: boolean;
   open?: boolean;
+  // floating, minimized to a chip at the panel's top right (pulled smaller than its smallest size and let go)
+  min?: boolean;
   seen: number;
   out?: number;
   outSeen?: boolean;
@@ -221,7 +223,7 @@ export function PanelBrowserButton({ panel, sessions, className }: { panel: stri
       size="icon"
       className={cn("size-7", className)}
       title={t("browser.showColumn")}
-      onClick={() => save({ ...st, closed: false, open: true })}
+      onClick={() => save({ ...st, closed: false, open: true, min: false })}
     >
       <Globe className="size-3.5" />
     </Button>
@@ -280,7 +282,7 @@ export function PanelBrowser({
   // one of its agents opened a page: show it, the column coming back if it was closed
   useEffect(() => {
     // floating while the agent works alone, docked when it wants the user in it (`gerdr browser show`), as in Code
-    if (last && last.at > st.seen) save({ ...st, tab: last.tab, closed: false, seen: last.at, float: !last.show, out: undefined, outSeen: false });
+    if (last && last.at > st.seen) save({ ...st, tab: last.tab, closed: false, min: false, seen: last.at, float: !last.show, out: undefined, outSeen: false });
   }, [last?.at]); // eslint-disable-line react-hooks/exhaustive-deps
   // not shown: its way back is a PanelBrowserButton in the row beside it (WorkView); a phone's tab (only there with a
   // page) shows it anyway
@@ -352,8 +354,14 @@ export function PanelBrowser({
         })}
       </>
     );
+    if (st.min) return <MinChip tab={tab} onRestore={() => save({ ...st, min: false })} />;
     return (
-      <PanelFloat fit={fit} spot={st.box} onSpot={(b) => save({ ...useColumns.getState()[panel], box: b })}>
+      <PanelFloat
+        fit={fit}
+        spot={st.box}
+        onSpot={(b) => save({ ...useColumns.getState()[panel], box: b })}
+        onMin={() => save({ ...useColumns.getState()[panel], min: true })}
+      >
         {(onMove, onFitDrawn, viewOnly) => (
           <PageBrowser
             project={project}
@@ -409,11 +417,14 @@ function PanelFloat({
   fit: want,
   spot,
   onSpot,
+  onMin,
   children,
 }: {
   fit: FloatFit;
   spot?: FloatSpot;
   onSpot: (s: FloatSpot) => void;
+  /** pulled smaller than its smallest size and let go: minimized, as a floating Browser pane in Code (Panes.tsx FloatPane) */
+  onMin: () => void;
   children: (onMove: (e: React.PointerEvent<HTMLElement>) => void, onFitDrawn: (f: FloatFit) => void, viewOnly: boolean) => ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -436,6 +447,8 @@ function PanelFloat({
   const { w: PW, h: PH } = FLOAT_FITS[fit];
   // edge: resizing from that edge / corner at the page's shape (a side's move is the width's, a top / bottom's turns
   // into the width giving that height), the edges across from it staying put; none: a move
+  // Shrunk past its smallest size and still pulled in: a hint over the box, and letting go minimizes it
+  const [toMin, setToMin] = useState(false);
   const gesture = (e: React.PointerEvent<HTMLElement>, edge?: FloatEdge, cursor = "grabbing") => {
     if (e.button !== 0) return;
     // the title bar's own buttons and address bar keep their clicks
@@ -447,6 +460,7 @@ function PanelFloat({
     const x0 = e.clientX,
       y0 = e.clientY;
     const h0 = floatH(s.w, fit);
+    let min = false;
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - x0,
         dy = ev.clientY - y0;
@@ -463,6 +477,8 @@ function PanelFloat({
         bottom = room.height - s.t - h0;
       const maxW = edge.r ? s.w + right : s.w + left;
       const maxH = edge.t ? h0 + top : h0 + bottom;
+      const over = s.w + dw < FLOAT_W.min - SHRINK_TO_MIN;
+      if (over !== min) setToMin((min = over));
       const w = Math.max(FLOAT_W.min, Math.min(s.w + dw, FLOAT_W.max, maxW, ((maxH - FLOAT_HEAD) * PW) / PH + 2));
       const h = floatH(w, fit);
       onSpot({ w, r: edge.r ? s.r - (w - s.w) : s.r, t: edge.t ? s.t - (h - h0) : s.t });
@@ -473,6 +489,8 @@ function PanelFloat({
       window.removeEventListener("pointercancel", up);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      setToMin(false);
+      if (min) onMin();
     };
     document.body.style.cursor = cursor;
     document.body.style.userSelect = "none";
@@ -489,8 +507,39 @@ function PanelFloat({
       style={{ right: s.r, top: s.t, width: s.w, height: floatH(s.w, fit) }}
     >
       {children((e) => gesture(e), onFitDrawn, viewOnly)}
+      {toMin && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-background/95 text-sm font-medium">
+          <Minus className="size-5 text-brand" />
+          {t("panes.releaseToMin")}
+        </div>
+      )}
       <FloatEdges onDown={gesture} />
     </div>
+  );
+}
+
+// How far (px) past its smallest width the box has to be pulled before letting go minimizes it (Panes.tsx's too)
+const SHRINK_TO_MIN = 40;
+
+/** A minimized floating browser: a chip at the panel's top right with the page's host; a click puts the box back. */
+function MinChip({ tab, onRestore }: { tab?: number; onRestore: () => void }) {
+  const url = useBrowserTabs((s) => s.tabs.find((x) => x.tab === tab)?.url);
+  let name = t("browser.tag");
+  try {
+    if (url) name = new URL(url).host || url;
+  } catch {
+    name = url!;
+  }
+  return (
+    <button
+      type="button"
+      title={t("panes.restoreMin", { name })}
+      onClick={onRestore}
+      className="absolute top-3 right-3 z-30 flex h-8 max-w-56 items-center gap-1.5 rounded-full border bg-background px-3 text-xs shadow-lg hover:bg-accent"
+    >
+      <Globe className="size-3.5 shrink-0 text-brand" />
+      <span className="truncate">{name}</span>
+    </button>
   );
 }
 
