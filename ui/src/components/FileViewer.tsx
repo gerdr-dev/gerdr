@@ -17,6 +17,7 @@ import { useCopied } from "@/lib/useCopied";
 import { pluginsKey, useMarkdownPlugins } from "@/lib/markdownPlugins";
 import { useCodeBlockVersion } from "@/lib/addons";
 import { MdCode } from "./chat/MermaidBlock";
+import { MdCarousel } from "./MdCarousel";
 
 /** 文本最多读这么多：再大的多半是日志 / 数据文件，整个塞进 DOM 手机上会卡死，给下载。 */
 const TEXT_MAX = 2 << 20;
@@ -209,8 +210,8 @@ function TextBody({ stat, url }: { stat: FileStat; url: string }) {
   return <pre className="min-w-max p-4 font-mono text-[12px] leading-relaxed whitespace-pre">{text}</pre>;
 }
 
-// Module level: Streamdown takes these as component types, a new object per render would remount the whole file
-const mdComponents = { code: MdCode };
+/** A hast node's text: a code block's source, as the carousel needs it raw. */
+const hastText = (n: any): string => (n?.type === "text" ? n.value : (n?.children ?? []).map(hastText).join(""));
 
 const EXTERNAL_OR_API = /^(?:https?:|data:|blob:|\/\/|\/api\/|\/h\/)/i;
 const MEDIA_TAGS = new Set(["img", "video", "audio", "source"]);
@@ -287,6 +288,27 @@ function MdFile({ stat, text }: { stat: FileStat; text: string }) {
       ] as StreamdownProps["rehypePlugins"],
     [dir, stat.host],
   );
+  // ```carousel (Antigravity's slides): each slide is Markdown drawn by this same renderer, so local images and
+  // diagrams inside it work as in the rest of the file. Memoized: Streamdown takes these as component types, a new
+  // object per render would remount the whole file.
+  const mdComponents = useMemo(() => {
+    const components = {
+      code: (props: any) =>
+        /\blanguage-carousel\b/.test(String(props.className ?? props.node?.properties?.className ?? "")) ? (
+          <MdCarousel
+            code={hastText(props.node)}
+            render={(md) => (
+              <MessageResponse plugins={plugins} rehypePlugins={rehypePlugins} components={components}>
+                {md}
+              </MessageResponse>
+            )}
+          />
+        ) : (
+          <MdCode {...props} />
+        ),
+    };
+    return components;
+  }, [plugins, rehypePlugins]);
   return (
     <div className="gerdr-md mx-auto max-w-[860px] px-5 py-4">
       {meta !== null && <FrontMatter raw={meta} />}

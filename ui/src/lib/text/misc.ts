@@ -67,6 +67,8 @@ export const zh = {
   // MermaidBlock
   "mermaidBlock.zoom": "点开放大",
   "mermaidBlock.failed": "图没画出来：{error}",
+  "mdCarousel.prev": "上一页",
+  "mdCarousel.next": "下一页",
   "fileViewer.downloadSize": "下载（{size}）",
 
   // NameDialogs
@@ -251,6 +253,8 @@ export const en: Record<keyof typeof zh, string> = {
   // MermaidBlock
   "mermaidBlock.zoom": "Open to zoom",
   "mermaidBlock.failed": "Couldn't draw the diagram: {error}",
+  "mdCarousel.prev": "Previous",
+  "mdCarousel.next": "Next",
   "fileViewer.downloadSize": "Download ({size})",
 
   // NameDialogs
