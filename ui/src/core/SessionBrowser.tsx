@@ -1,12 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { Check, Globe, Monitor, PanelRight, PanelRightClose, PictureInPicture2, Smartphone, Tablet, Undo2 } from "lucide-react";
+import { Check, Globe, Monitor, PanelRight, PictureInPicture2, Smartphone, SquareArrowOutUpRight, Tablet, Undo2, X } from "lucide-react";
 import { BrowserScreen } from "@/components/browser/BrowserScreen";
 import { FloatEdges } from "@/components/FloatEdges";
-import { BrowserOutCard, PopOutButton } from "@/components/browser/BrowserOut";
+import { BrowserOutCard } from "@/components/browser/BrowserOut";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { loadBrowserTabs, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
+import { loadBrowserTabs, openBrowserWindow, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { FLOAT_FITS, FLOAT_OPERABLE, type FloatEdge, type FloatFit } from "@/lib/layout";
@@ -57,12 +57,15 @@ function PageBrowser({
   onPicked,
   viewOnly,
   lead,
+  compact,
 }: {
   project: string;
   tab?: number;
   onTab: (tab?: number) => void;
   extra?: ReactNode;
   lead?: ReactNode;
+  /** BrowserScreen compact: the page's own buttons only */
+  compact?: boolean;
   /** floating (PanelFloat): the page's pictures, laid out at this size */
   fit?: FloatFit;
   onHeadPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
@@ -120,6 +123,7 @@ function PageBrowser({
       onHeadPointerDown={onHeadPointerDown}
       extra={extra}
       lead={lead}
+      compact={compact}
       Body={Body}
     />
   );
@@ -281,23 +285,35 @@ export function PanelBrowser({
   // not shown: its way back is a PanelBrowserButton in the row beside it (WorkView); a phone's tab (only there with a
   // page) shows it anyway
   if (width ? !shown : !has) return null;
+  // an ×, not the agent column's fold icon: side by side the two read as one (asked for: too many symbols)
   const hide = width && (
     <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.hideColumn")} onClick={() => save({ ...st, closed: true, open: false })}>
-      <PanelRightClose className="size-3.5" />
+      <X className="size-3.5" />
     </Button>
   );
   // a phone's tab (no width) is always the whole space
   const floating = !!width && !!st.float;
-  const toggle = width && (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="size-6 shrink-0"
-      title={floating ? t("browser.dockColumn") : t("browser.floatColumn")}
-      onClick={() => save({ ...st, float: !floating })}
-    >
-      {floating ? <PanelRight className="size-3.5" /> : <PictureInPicture2 className="size-3.5" />}
-    </Button>
+  // the column's own moves go in the ⋯ menu, as a Code Browser pane's do: the bar keeps the page's buttons (asked for:
+  // a row of eight icons read as clutter)
+  const out = () => save({ ...st, closed: true, ...(useBrowserWindows.getState().known ? { out: tab, outSeen: false } : {}) });
+  const moves = width && (
+    <>
+      <DropdownMenuSeparator />
+      {tab && (
+        <DropdownMenuItem
+          onClick={() => {
+            openBrowserWindow(project, tab);
+            // folded while the page is out (an older core can't say when it's back: then just folded)
+            out();
+          }}
+        >
+          <SquareArrowOutUpRight /> {t("browser.newWindow")}
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem onClick={() => save({ ...st, float: !floating })}>
+        {floating ? <PanelRight /> : <PictureInPicture2 />} {floating ? t("browser.dockColumn") : t("browser.floatColumn")}
+      </DropdownMenuItem>
+    </>
   );
   const box = cn("relative flex min-w-0 flex-col", width ? "max-w-[60%] shrink-0 border-l" : "min-h-0 flex-1");
   // The page moved to a window of its own: a page is in one place, so the column holds a card for it instead of a
@@ -309,20 +325,7 @@ export function PanelBrowser({
         <BrowserOutCard project={project} tab={tab} url={cur?.url} end={hide} />
       </div>
     );
-  const extra = (
-    <>
-      {tab && (
-        <PopOutButton
-          project={project}
-          tab={tab}
-          // folded while the page is out (an older core can't say when it's back: then just folded)
-          onOut={() => save({ ...st, closed: true, ...(useBrowserWindows.getState().known ? { out: tab, outSeen: false } : {}) })}
-        />
-      )}
-      {toggle}
-      {hide}
-    </>
-  );
+  const extra = hide;
   if (floating) {
     const fit = st.fit ?? "pc";
     // another size: the box takes its shape at its default width (a phone's box at a desktop's width ran off the panel)
@@ -333,6 +336,7 @@ export function PanelBrowser({
     };
     const items = (
       <>
+        {moves}
         <DropdownMenuSeparator />
         {(Object.keys(FLOAT_FITS) as FloatFit[]).map((f) => {
           const Icon = FIT_ICONS[f];
@@ -361,6 +365,7 @@ export function PanelBrowser({
             items={items}
             onFitDrawn={onFitDrawn}
             viewOnly={viewOnly}
+            compact
           />
         )}
       </PanelFloat>
@@ -378,20 +383,9 @@ export function PanelBrowser({
         // chat's and the panel's room), as a docked Browser pane in Code (lib/actions/browser.ts fitPaneWidth)
         onPicked={(f, over) => width && onWidth && (f === "mobile" || f === "pad") && over > 2 && onWidth(width - over)}
         lead={lead}
-        extra={
-          <>
-            {tab && (
-              <PopOutButton
-                project={project}
-                tab={tab}
-                // folded while the page is out (an older core can't say when it's back: then just folded)
-                onOut={() => save({ ...st, closed: true, ...(useBrowserWindows.getState().known ? { out: tab, outSeen: false } : {}) })}
-              />
-            )}
-            {toggle}
-            {hide}
-          </>
-        }
+        compact={!!width}
+        items={moves || undefined}
+        extra={hide}
       />
     </div>
   );

@@ -5,8 +5,6 @@ import {
   Bell,
   Bot,
   Brain,
-  ChevronLeft,
-  ChevronRight,
   CircleArrowUp,
   FlaskConical,
   Globe,
@@ -21,15 +19,17 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { lightboxOpen } from "@/components/Lightbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { androidCan, isApp } from "@/lib/android";
 import { api } from "@/lib/api";
 import { usePhone } from "@/lib/phone";
+import { GAP, pageX, useSwipePager } from "@/lib/swipePager";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, setPref, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LoaderSelect } from "./LoaderSelect";
@@ -96,6 +96,8 @@ const NAV: { group?: MessageKey; items: { id: Page; icon: LucideIcon; label: () 
   },
 ];
 const ITEMS = NAV.flatMap((g) => g.items);
+// The pages in the sidebar's order: on a phone the tab row's order, and a sideways swipe goes to the next / previous one
+const PAGES = ITEMS.map((i) => i.id);
 const itemOf = (p: Page) => ITEMS.find((i) => i.id === p)!;
 
 // Where an opener's tab lands (store dialog.tab: the rail, the inbox's 设置, a panel's openSettings, ?settings=remote).
@@ -148,7 +150,8 @@ function search(q: string): Hit[] {
 }
 
 // Settings (prefix+s / ⌘,). A large dialog: groups of pages down the left with a search over them, the page on the
-// right; Esc closes it. On a phone the list and the page take the dialog in turn (back returns to the list). The
+// right; Esc closes it. On a phone a row of tabs over pages that a sideways swipe turns, the search behind a button
+// (a list to go into and back out of meant tapping back and forth to look through the pages, user report). The
 // general / notification / labs pages live here; every other page is its own component file.
 export function SettingsDialog({ open }: { open: boolean }) {
   const cfg = useStore((s) => s.config);
@@ -163,8 +166,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
   const phone = usePhone();
   const [page, setPage] = useState<Page>("general");
-  // Phone only: the list of pages is showing instead of a page
-  const [listing, setListing] = useState(true);
+  // Phone only: the search is showing instead of the tabs and pages
+  const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const hits = useMemo(() => search(query), [query]);
   const body = useRef<HTMLDivElement>(null);
@@ -173,7 +176,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
 
   const go = (p: Page, row?: string) => {
     setPage(p);
-    setListing(false);
+    setSearching(false);
     setTarget(row ?? null);
     if (!row) body.current?.scrollTo({ top: 0 });
   };
@@ -183,11 +186,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    if (!wantTab) {
-      // A phone opens on the list; a wider screen on the page last looked at
-      setListing(true);
-      return;
-    }
+    setSearching(false);
+    // Otherwise on the page last looked at
+    if (!wantTab) return;
     // The inbox's 设置 button: its section, not the top of a page with other things on it
     go(pageOf(wantTab), wantTab === "inbox" ? "#settings-inbox" : undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,7 +199,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
     const id = requestAnimationFrame(() => {
       const el = target.startsWith("#")
         ? document.getElementById(target.slice(1))
-        : body.current?.querySelector<HTMLElement>(`[data-setting="${CSS.escape(target)}"]`);
+        : document.querySelector<HTMLElement>(`[data-settings-page="${page}"] [data-setting="${CSS.escape(target)}"]`);
       if (!el) return;
       el.scrollIntoView({ block: target.startsWith("#") ? "start" : "center" });
       if (!target.startsWith("#"))
@@ -248,80 +249,71 @@ export function SettingsDialog({ open }: { open: boolean }) {
           <span className="min-w-0 flex-1 truncate">{it.label()}</span>
         )}
         {!sub && badge(id)}
-        {phone && !sub && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
       </button>
     );
   };
 
+  const searchBox = (
+    <>
+      <Search className="pointer-events-none absolute top-1/2 left-5.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <input
+        // First in the dialog, so it takes the focus on opening (desktop): type to find a setting
+        value={query}
+        autoFocus={phone}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && hits[0]) go(hits[0].page, hits[0].label);
+        }}
+        placeholder={t("settings.search")}
+        className="h-8 w-full rounded-md border border-input bg-background pr-2 pl-7 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:border-ring max-md:text-base dark:bg-input/30"
+      />
+    </>
+  );
+  const results = hits.length ? (
+    <div className="space-y-0.5">{hits.map((h) => navButton(h.page, h.label))}</div>
+  ) : query ? (
+    <div className="px-2.5 py-2 text-[12px] text-muted-foreground">{t("settings.noResults")}</div>
+  ) : null;
+
   const nav = (
-    <div className={cn("flex min-h-0 flex-col", phone ? "flex-1" : "w-56 shrink-0 border-r bg-sidebar")}>
-      <div className={cn(phone ? "px-4 pt-4 pb-2" : "px-4 pt-5 pb-3")}>
-        <DialogTitle className={phone ? "text-[17px]" : "text-[15px]"}>{t("settings.title")}</DialogTitle>
+    <div className="flex min-h-0 w-56 shrink-0 flex-col border-r bg-sidebar">
+      <div className="px-4 pt-5 pb-3">
+        <DialogTitle className="text-[15px]">{t("settings.title")}</DialogTitle>
       </div>
-      <div className={cn("relative", phone ? "px-4 pb-2" : "px-3 pb-2")}>
-        <Search className={cn("pointer-events-none absolute top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground", phone ? "left-6.5" : "left-5.5")} />
-        <input
-          // First in the dialog, so it takes the focus on opening (desktop): type to find a setting
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && hits[0]) go(hits[0].page, hits[0].label);
-          }}
-          placeholder={t("settings.search")}
-          className="h-8 w-full rounded-md border border-input bg-background pr-2 pl-7 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:border-ring max-md:text-base dark:bg-input/30"
-        />
-      </div>
+      <div className="relative px-3 pb-2">{searchBox}</div>
       <div className={"min-h-0 flex-1 overflow-auto px-2 pb-3"}>
-        {query ? (
-          hits.length ? (
-            <div className="space-y-0.5">{hits.map((h) => navButton(h.page, h.label))}</div>
-          ) : (
-            <div className="px-2.5 py-2 text-[12px] text-muted-foreground">{t("settings.noResults")}</div>
-          )
-        ) : (
-          NAV.map((g, i) => (
-            <div key={i} className={cn(i > 0 && "mt-3")}>
-              {g.group && <div className="px-2.5 pb-1 text-[11px] font-medium text-muted-foreground">{t(g.group)}</div>}
-              <div className="space-y-0.5">{g.items.map((it) => navButton(it.id))}</div>
-            </div>
-          ))
-        )}
+        {query
+          ? results
+          : NAV.map((g, i) => (
+              <div key={i} className={cn(i > 0 && "mt-3")}>
+                {g.group && <div className="px-2.5 pb-1 text-[11px] font-medium text-muted-foreground">{t(g.group)}</div>}
+                <div className="space-y-0.5">{g.items.map((it) => navButton(it.id))}</div>
+              </div>
+            ))}
       </div>
     </div>
   );
 
   const content = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className={cn("flex shrink-0 items-center gap-1", phone ? "px-2 pt-3 pb-2" : "px-8 pt-5 pb-3")}>
-        {phone && (
-          <Button variant="ghost" size="icon" className="size-8" aria-label={t("common.back")} onClick={() => setListing(true)}>
-            <ChevronLeft className="size-5" />
-          </Button>
-        )}
-        <div className={cn("text-[15px] font-medium", !phone && "mx-auto w-full max-w-3xl")}>{itemOf(page).label()}</div>
+      <div className="flex shrink-0 items-center px-8 pt-5 pb-3">
+        <div className="mx-auto w-full max-w-3xl text-[15px] font-medium">{itemOf(page).label()}</div>
       </div>
-      {/* One size for the whole panel. Text nobody sized is 13px (section titles are 13px, descriptions 12px); shadcn's controls
-        default to 14px text and 36px height (Input also sets md:text-sm), which looked oversized next to that, so on desktop
-        every button / input / textarea / select here is 12px and the default-sized ones 32px tall, like size="sm". Pages can
-        still size a control themselves; icon buttons keep their size. On a phone buttons are 28px with 13px text, and inputs /
-        selects are 28px too so a button next to an input lines up (inputs keep 16px text there). */}
-      <div
-        ref={body}
-        className={cn(
-          "min-h-0 flex-1 overflow-auto text-[13px] max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px] max-md:[&_[data-slot=input]]:h-7 max-md:[&_[data-slot=input]]:py-0 max-md:[&_[data-slot=select-trigger][data-size=default]]:h-7 md:[&_[data-slot=button]]:text-[12px] md:[&_[data-slot=button][data-size=default]]:h-8 md:[&_[data-slot=button][data-size=default]]:px-3 md:[&_[data-slot=input]]:h-8 md:[&_[data-slot=input]]:text-[12px] md:[&_[data-slot=textarea]]:text-[12px] md:[&_[data-slot=select-trigger]]:text-[12px] md:[&_[data-slot=select-trigger][data-size=default]]:h-8",
-          phone ? "px-4 pb-6" : "px-8 pb-8",
-        )}
-      >
+      {/* SIZING: one size for the whole panel */}
+      <div ref={body} className={cn("min-h-0 flex-1 overflow-auto", SIZING, "px-8 pb-8")}>
         {/* key: a page's own state (scroll inside lists, half-filled forms) starts fresh on each visit, as the tabs did */}
-        <div key={page} className="mx-auto max-w-3xl">
-          {renderPage()}
+        <div key={page} data-settings-page={page} className="mx-auto max-w-3xl">
+          {renderPage(page)}
         </div>
       </div>
     </div>
   );
 
-  function renderPage() {
-    switch (page) {
+  // p: the page to draw (a phone draws the ones either side too); `shown`: it is the one on screen, for the pages
+  // that load things while open
+  function renderPage(p: Page) {
+    const shown = open && p === page;
+    switch (p) {
       case "general":
         return (
           <div className="space-y-6 pt-1">
@@ -525,29 +517,29 @@ export function SettingsDialog({ open }: { open: boolean }) {
             <Row label={t("settings.skillUpdates")} hint={t("settings.skillUpdates.hint")}>
               <Switch checked={cfg.skillUpdates !== false} onCheckedChange={(v) => setConfig({ skillUpdates: v })} />
             </Row>
-            <SkillSettings open={open} />
+            <SkillSettings open={shown} />
           </div>
         );
       case "mcp":
-        return <MCPSettings open={open} />;
+        return <MCPSettings open={shown} />;
       case "memory":
-        return <MemorySettings open={open} />;
+        return <MemorySettings open={shown} />;
       case "panels":
         return <PanelSettings />;
       case "browser":
-        return <BrowserSettings open={open} />;
+        return <BrowserSettings open={shown} />;
       case "addons":
-        return <AddonSettings open={open} />;
+        return <AddonSettings open={shown} />;
       case "remote":
         return (
           <div className="space-y-4">
-            <RemoteSettings open={open} />
+            <RemoteSettings open={shown} />
             {/* Staying awake is for being reached from elsewhere: it sits with remote access (asked for; was in Labs) */}
             <div className="space-y-4 border-t pt-4">
               <Row label={t("settings.labs.keepAwake")} hint={t("settings.labs.keepAwake.hint")}>
                 <Switch checked={!!cfg.keepAwakeRemote} onCheckedChange={(v) => setConfig({ keepAwakeRemote: v })} />
               </Row>
-              <AwakeSetting open={open} />
+              <AwakeSetting open={shown} />
             </div>
           </div>
         );
@@ -562,7 +554,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
           </div>
         );
       case "resources":
-        return <ResourceStats open={open} />;
+        return <ResourceStats open={shown} />;
       case "labs":
         return (
           <div className="space-y-4">
@@ -602,21 +594,26 @@ export function SettingsDialog({ open }: { open: boolean }) {
         onPointerDownOutside={(e) => lightboxOpen() && e.preventDefault()}
         onEscapeKeyDown={(e) => {
           if (lightboxOpen()) return e.preventDefault();
-          // A phone's back (Android's key, lib/android.ts closeTop, sends Esc): from a page back to the list first
-          if (phone && !listing) {
+          // A phone's back (Android's key, lib/android.ts closeTop, sends Esc): out of the search first
+          if (phone && searching) {
             e.preventDefault();
-            setListing(true);
+            setSearching(false);
           }
         }}
-        // A phone has no keyboard: focusing the search would pop the soft keyboard up over the list
+        // A phone has no keyboard to move through the tabs with: focusing one left its focus ring behind
         onOpenAutoFocus={(e) => phone && e.preventDefault()}
       >
         {phone ? (
-          listing ? (
-            nav
-          ) : (
-            content
-          )
+          <PhoneSettings
+            page={page}
+            go={go}
+            searching={searching}
+            setSearching={setSearching}
+            searchBox={searchBox}
+            results={results}
+            badge={badge}
+            render={renderPage}
+          />
         ) : (
           <>
             {nav}
@@ -625,6 +622,234 @@ export function SettingsDialog({ open }: { open: boolean }) {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// The size of everything on the pages. Text nobody sized is 13px (section titles are 13px, descriptions 12px); shadcn's
+// controls default to 14px text and 36px height (Input also sets md:text-sm), which looked oversized next to that, so on
+// desktop every button / input / textarea / select here is 12px and the default-sized ones 32px tall, like size="sm".
+// Pages can still size a control themselves; icon buttons keep their size. On a phone buttons are 28px with 13px text,
+// and inputs / selects are 28px too so a button next to an input lines up (inputs keep 16px text there).
+const SIZING =
+  "text-[13px] max-md:[&_[data-slot=button]:not([data-size^=icon])]:h-7 max-md:[&_[data-slot=button]:not([data-size^=icon])]:px-2.5 max-md:[&_[data-slot=button]]:text-[13px] max-md:[&_[data-slot=input]]:h-7 max-md:[&_[data-slot=input]]:py-0 max-md:[&_[data-slot=select-trigger][data-size=default]]:h-7 md:[&_[data-slot=button]]:text-[12px] md:[&_[data-slot=button][data-size=default]]:h-8 md:[&_[data-slot=button][data-size=default]]:px-3 md:[&_[data-slot=input]]:h-8 md:[&_[data-slot=input]]:text-[12px] md:[&_[data-slot=textarea]]:text-[12px] md:[&_[data-slot=select-trigger]]:text-[12px] md:[&_[data-slot=select-trigger][data-size=default]]:h-8";
+
+/**
+ * Settings on a phone: the title with a search button, a row of every page's tab (scrolls sideways, no wrapping), and
+ * the pages side by side, turned by a sideways swipe like the overview. The search takes the place of the tabs and
+ * pages while it is open; picking a hit goes to its page.
+ */
+function PhoneSettings({
+  page,
+  go,
+  searching,
+  setSearching,
+  searchBox,
+  results,
+  badge,
+  render,
+}: {
+  page: Page;
+  go: (p: Page, row?: string) => void;
+  searching: boolean;
+  setSearching: (v: boolean) => void;
+  searchBox: React.ReactNode;
+  results: React.ReactNode;
+  badge: (p: Page) => React.ReactNode;
+  render: (p: Page) => React.ReactNode;
+}) {
+  // Keep the current tab in view as swipes walk through them. The strip itself is scrolled (scrollIntoView would also
+  // move the dialog)
+  const tabStrip = useRef<HTMLDivElement>(null);
+  const tabBox = useRef<HTMLDivElement>(null);
+  // While a page is dragged or slides on, the tab row shows how far, as the overview's chip strip does: the selection
+  // moves from the current tab towards the one coming in, the texts brighten / dim, the row scrolls along. Plain DOM
+  // writes every frame from the track's real offset (a render per frame would cost the drag its smoothness).
+  const moving = useRef<{ s0: number; styled: Set<HTMLElement> } | null>(null);
+  const tabProgress = (x: number | null, width: number) => {
+    const strip = tabStrip.current;
+    const box = tabBox.current;
+    if (!strip || !box) return;
+    const tabs = [...strip.querySelectorAll<HTMLElement>('[role="tab"]')];
+    const clear = (el: HTMLElement) => (el.style.background = el.style.boxShadow = el.style.borderColor = el.style.color = el.style.transition = "");
+    const m = moving.current;
+    if (x === null) {
+      // The tab's own selected look back in the same frame the box goes, not faded in: its classes have transition-all,
+      // and fading from the transparent we set showed no highlight at all for a moment, then the tab's (user report:
+      // "active, inactive, active again"). The transition comes back once that frame is drawn.
+      const styled = [...(m?.styled ?? [])];
+      for (const el of styled) (clear(el), (el.style.transition = "none"));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => !moving.current && styled.forEach((el) => el.style.transition === "none" && (el.style.transition = ""))),
+      );
+      moving.current = null;
+      box.style.display = "";
+      return;
+    }
+    const cur = PAGES.indexOf(page);
+    if (!tabs[cur]) return;
+    const mv = m ?? (moving.current = { s0: strip.scrollLeft, styled: new Set() });
+    // Where the track is, in tabs (quick swipes run ahead of the page shown): between tab `ai` and the next by `k`
+    const pos = Math.max(0, Math.min(tabs.length - 1, cur - x / width));
+    const ai = Math.floor(pos);
+    const a = tabs[ai];
+    const b = ai + 1 < tabs.length && pos > ai ? tabs[ai + 1] : undefined;
+    const k = b ? pos - ai : 0;
+    const to = b ?? a;
+    const mix = (u: number, v: number) => u + (v - u) * k;
+    Object.assign(box.style, {
+      display: "block",
+      left: `${mix(a.offsetLeft, to.offsetLeft)}px`,
+      width: `${mix(a.offsetWidth, to.offsetWidth)}px`,
+      top: `${a.offsetTop}px`,
+      height: `${a.offsetHeight}px`,
+    });
+    const view = (el: HTMLElement) =>
+      el.offsetLeft < mv.s0
+        ? el.offsetLeft
+        : el.offsetLeft + el.offsetWidth > mv.s0 + strip.clientWidth
+          ? el.offsetLeft + el.offsetWidth - strip.clientWidth
+          : mv.s0;
+    strip.scrollLeft = mix(view(a), view(to));
+    // The current tab too, when the track has run past it (quick swipes): its own selected look would be a second box
+    const c = tabs[cur];
+    for (const el of mv.styled) if (el !== a && el !== b && el !== c) (clear(el), mv.styled.delete(el));
+    for (const [el, v] of [
+      [c, 0],
+      [a, 1 - k],
+      [b, k],
+    ] as const) {
+      if (!el) continue;
+      // The box stands in for the tab's own selected look meanwhile
+      Object.assign(el.style, { transition: "none", background: "transparent", boxShadow: "none", borderColor: "transparent" });
+      el.style.color = `color-mix(in oklab, var(--foreground) ${Math.round(v * 100)}%, color-mix(in oklab, var(--foreground) 60%, transparent))`;
+      mv.styled.add(el);
+    }
+  };
+  // The row as state too: Radix's portal mounts the dialog's content a commit after `open` turns true, so an effect keyed on
+  // `open` alone ran before the row existed and a dialog opened on a later tab (e.g. Remote) left it half off screen
+  // until a swipe scrolled it (user report)
+  const [stripEl, setStripEl] = useState<HTMLDivElement | null>(null);
+  const stripRef = useCallback((el: HTMLDivElement | null) => {
+    tabStrip.current = el;
+    setStripEl(el);
+  }, []);
+  useLayoutEffect(() => {
+    const strip = stripEl;
+    const tab = strip?.querySelector<HTMLElement>('[role="tab"][data-state="active"]');
+    // Not while a drag / slide runs: tabProgress scrolls the row then
+    if (!strip || !tab || moving.current) return;
+    if (tab.offsetLeft < strip.scrollLeft) strip.scrollLeft = tab.offsetLeft;
+    else if (tab.offsetLeft + tab.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = tab.offsetLeft + tab.offsetWidth - strip.clientWidth;
+  }, [page, stripEl]);
+
+  return (
+    <Tabs value={page} onValueChange={(v) => go(v as Page)} className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
+      {/* pr-12: room for the dialog's close button */}
+      <div className="flex min-w-0 items-center gap-1 px-4 pt-3 pr-12">
+        <DialogTitle className="text-[15px]">{t("settings.title")}</DialogTitle>
+        {searching ? (
+          <Button variant="ghost" size="sm" className="ml-auto h-8 px-2 text-[13px]" onClick={() => setSearching(false)}>
+            {t("common.cancel")}
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" className="ml-auto size-8" aria-label={t("settings.search")} onClick={() => setSearching(true)}>
+            <Search className="size-4" />
+          </Button>
+        )}
+      </div>
+      {searching ? (
+        <>
+          <div className="relative px-3 pt-2 pb-2">{searchBox}</div>
+          <div className="min-h-0 flex-1 overflow-auto px-2 pb-3">{results}</div>
+        </>
+      ) : (
+        <>
+          {/* overflow-x-auto makes y auto too, and Android's WebView ignores scrollbar-width, so it drew both scrollbars
+            (a bar under the tabs, a white corner square) */}
+          <div className="px-4">
+            <TabsList
+              ref={stripRef}
+              className="relative mt-1 h-8 max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:text-[13px]"
+            >
+              {/* The selection while a page is dragged (tabProgress); first, so the tabs draw over it */}
+              <div ref={tabBox} aria-hidden className="pointer-events-none absolute hidden rounded-md bg-background shadow-sm dark:bg-input/30" />
+              {ITEMS.map((it) => (
+                <TabsTrigger key={it.id} value={it.id} className="gap-1">
+                  {it.label()}
+                  {badge(it.id)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <SwipePages cur={page} go={(p) => go(p)} progress={tabProgress}>
+            <PageCtx.Provider value={page}>
+              {ITEMS.map((it) => (
+                <PhonePage key={it.id} value={it.id}>
+                  {render(it.id)}
+                </PhonePage>
+              ))}
+            </PageCtx.Provider>
+          </SwipePages>
+        </>
+      )}
+    </Tabs>
+  );
+}
+
+/**
+ * The pages' swipe pager, mounted with the dialog's content so the pager's touch listeners find it (the dialog itself
+ * stays mounted while closed).
+ */
+function SwipePages({
+  cur,
+  go,
+  progress,
+  children,
+}: {
+  cur: Page;
+  go: (p: Page) => void;
+  progress: (x: number | null, width: number) => void;
+  children: React.ReactNode;
+}) {
+  const body = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
+  const at = PAGES.indexOf(cur);
+  useSwipePager(
+    body,
+    track,
+    cur,
+    Math.max(0, at),
+    (step) => PAGES[at + step],
+    (x) => progress(x, (body.current?.clientWidth ?? 1) + GAP),
+    (p) => go(p as Page),
+  );
+  return (
+    <div ref={body} className={cn(SIZING, "relative mt-2 min-h-0 min-w-0 flex-1 overflow-hidden bg-muted")}>
+      <div ref={track} className="absolute inset-0 will-change-transform">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** The page on screen, for the phone's pages. */
+const PageCtx = createContext<Page>("general");
+
+/**
+ * One page on a phone: the shown page and two either side are mounted side by side, each its own scroll, so a swipe
+ * drags the next one in under the finger; the rest aren't mounted.
+ */
+function PhonePage({ value, children }: { value: Page; children: React.ReactNode }) {
+  const cur = useContext(PageCtx);
+  const i = PAGES.indexOf(value);
+  const at = i - PAGES.indexOf(cur);
+  // Two either side, not one: quick swipes in a row run ahead of the page shown (it switches where they stop), and a
+  // page two steps on was blank until then
+  if (Math.abs(at) > 2) return null;
+  return (
+    <div role="tabpanel" className="absolute inset-0 overflow-auto bg-background px-4 pt-1 pb-6" style={{ transform: pageX(i) }} inert={at !== 0}>
+      <div data-settings-page={value}>{children}</div>
+    </div>
   );
 }
 

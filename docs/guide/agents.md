@@ -2,7 +2,7 @@
 
 <sub>[简体中文](agents.zh-CN.md)</sub>
 
-Settings → Agents → *Add a Claude*: give it a name (say "Claude 2") and an environment. For a second subscription
+Settings → Agent → Roles → *Add a Claude*: give it a name (say "Claude 2") and an environment. For a second subscription
 use its own `CLAUDE_CONFIG_DIR=~/.claude-2` (then `CLAUDE_CONFIG_DIR=~/.claude-2 claude` in a terminal and `/login`
 once); for an API key set `ANTHROPIC_API_KEY=…`. You can also swap the executable or append arguments. It shows up
 next to the original when starting a session, with its own process and transcript directory. Codex works the same
@@ -35,11 +35,11 @@ terminals. A model id is usually enough; protocol, reasoning
 levels and context window are guessed from it (the levels and the default one are taken from the provider's model list
 instead when it gives them, as `"reasoning": {"efforts": […], "default": "…"}` per model — subhub does), and you can override with `api` (chat / responses), `efforts`,
 `window`, `compactAt` (tokens at which the context is auto-compacted; default 90% of `window`), `images`,
-`maxOutput`, and on Claude `thinking` (`updates`: the model's short progress notes, the default on Opus/Sonnet 5.5 and Fable 5+; `adaptive`: a summary of its reasoning). The bottom of Settings → Agents can do this too (fetch the model list, test a model, and the brain button on a model shows its thinking levels, where they come from, and sets your own).
+`maxOutput`, and on Claude `thinking` (`updates`: the model's short progress notes, the default on Opus/Sonnet 5.5 and Fable 5+; `adaptive`: a summary of its reasoning). The bottom of Settings → Agent → Roles can do this too (fetch the model list, test a model, and the brain button on a model shows its thinking levels, where they come from, and sets your own).
 
 **Images**: models such as `gemini-2.5-flash-image` / `gemini-3-pro-image-preview` (Nano Banana) or `gpt-image-1`
 are image models: they don't show up as a session's model; they make images. Add one in the *Image models* section of
-Settings → Agent (under the engines: pick a provider you have, or make a new one there), and star the default, or set
+Settings → Agent → Roles (under the engines: pick a provider you have, or make a new one there), and star the default, or set
 `"imageModel": "provider/model"` in `llm`; left on automatic it takes the first, Gemini first. Gerdr Agent then has a `generate_image` tool, and every agent (Claude Code and Codex too) can run
 `gerdr image gen "prompt" [-i image-to-edit.png] [-o out.png] [--aspect 16:9]`; `gerdr image models` lists them.
 The request goes out from Gerdr with your key, so agents never see it. A model whose id doesn't give it away can be

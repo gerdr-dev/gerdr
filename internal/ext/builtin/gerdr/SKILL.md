@@ -271,8 +271,7 @@ session mute <session>` is the same). A whole group of tabs is muted from the UI
 
 `--skill-updates`: by default every session is told when a file of its skills (a panel's, a project's) changes: its
 next message starts with the changed files and asks it to read them again, a one-line notice in the chat. That keeps
-work running for days or weeks on the current rules. It's the global setting `skillUpdates` (Settings → Agent →
-Skill; `gerdr config set skillUpdates false` turns it off for all); `set` overrides it for one session.
+work running for days or weeks on the current rules. It's the global setting `skillUpdates` (Settings → Skill; `gerdr config set skillUpdates false` turns it off for all); `set` overrides it for one session.
 
 ## 给已有的会话发消息
 

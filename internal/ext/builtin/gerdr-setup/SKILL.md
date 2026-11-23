@@ -69,7 +69,7 @@ gerdr workspace close <ws>;  gerdr tab close <tab>             # only empty ones
 ## Changing Gerdr's settings
 
 When the user asks to change a Gerdr setting (theme, send key, default agent / mode / model, shortcuts, agents
-in Settings → Agent, Gerdr Agent's model providers…), use `gerdr config`, not an editor on config.json:
+in Settings → Agent → Roles, Gerdr Agent's model providers…), use `gerdr config`, not an editor on config.json:
 it changes one field, checks the value, and open windows update within seconds.
 
 ```bash
@@ -104,7 +104,7 @@ user gives you, `gerdr config set llm.providers.<id>.apiKey <key>`.
 
 ## Setting up an agent (role)
 
-An agent in Settings → Agent is an engine (claude / codex / native) plus its own prompt, skills, MCP servers and
+An agent in Settings → Agent → Roles is an engine (claude / codex / native) plus its own prompt, skills, MCP servers and
 new-session defaults. Skills and MCP servers live in one shared pool; an agent lists the names it gets.
 
 1. Read what exists: `gerdr config keys agents` (every field), `gerdr skill list`, `gerdr mcp list`, `gerdr session agents`.

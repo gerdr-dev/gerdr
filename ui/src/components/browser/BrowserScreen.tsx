@@ -102,6 +102,8 @@ type Props = {
   extra?: React.ReactNode;
   /** first in the title bar (a panel's folded agent column's way back: core/SessionBrowser.tsx PanelBrowser) */
   lead?: React.ReactNode;
+  /** a bar of the page's own buttons only (a panel's column): no globe, "open in your browser" in the ⋯ menu */
+  compact?: boolean;
   /** the ⋯ menu's items every pane has (Panes.tsx PaneMoveItems), below this pane's own */
   paneItems?: React.ReactNode;
   /** wraps the picture (Panes.tsx PaneBody: the zoom animation's pinned size) */
@@ -153,6 +155,7 @@ export function BrowserScreen({
   onHeadPointerDown,
   extra,
   lead,
+  compact,
   paneItems,
   Body,
 }: Props) {
@@ -1023,7 +1026,7 @@ export function BrowserScreen({
       >
         {busy && <div className="page-loading pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden" />}
         {lead}
-        <Globe className="mr-1 size-4 shrink-0 text-muted-foreground @max-[20rem]/bar:hidden" />
+        {!compact && <Globe className="mr-1 size-4 shrink-0 text-muted-foreground @max-[20rem]/bar:hidden" />}
         <Button
           variant="ghost"
           size="icon"
@@ -1096,16 +1099,18 @@ export function BrowserScreen({
         </form>
         {/* The same address in the person's own browser (the App hands it to the system; a web page opens a tab). A compass, not
             an arrow out of a box: that is "open in new window" (PopOutButton), and the two read as one */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6 shrink-0"
-          disabled={!live || !page?.url}
-          title={t("browser.openSystem")}
-          onClick={() => page?.url && nativeOpenURL(page.url)}
-        >
-          <Compass className="size-3.5" />
-        </Button>
+        {!compact && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0"
+            disabled={!live || !page?.url}
+            title={t("browser.openSystem")}
+            onClick={() => page?.url && nativeOpenURL(page.url)}
+          >
+            <Compass className="size-3.5" />
+          </Button>
+        )}
         {extra}
         {/* One ⋯ like every pane's: this pane's pages first, then the pane moves (split, new tab, close…). The other
             pages' names come from the page list, which their navigations don't refresh: read again as it opens (a page
@@ -1143,6 +1148,11 @@ export function BrowserScreen({
                 }}
               >
                 <XCircle /> {t("browser.closePage")}
+              </DropdownMenuItem>
+            )}
+            {compact && live && page?.url && (
+              <DropdownMenuItem onClick={() => nativeOpenURL(page.url!)}>
+                <Compass /> {t("browser.openSystem")}
               </DropdownMenuItem>
             )}
             {/* The page's size, on every device showing this pane (a floating pane's is in its own items below) */}

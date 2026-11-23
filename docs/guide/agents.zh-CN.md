@@ -2,7 +2,7 @@
 
 <sub>[English](agents.md)</sub>
 
-设置 → Agent →「加一个 Claude」，起个名字（比如「Claude 2」），给它一套环境变量：
+设置 → Agent → 角色 →「加一个 Claude」，起个名字（比如「Claude 2」），给它一套环境变量：
 订阅账号用一个单独的 `CLAUDE_CONFIG_DIR=~/.claude-2`（然后在终端里 `CLAUDE_CONFIG_DIR=~/.claude-2 claude` 进去 `/login` 一次），
 API key 就写 `ANTHROPIC_API_KEY=…`。还能换可执行文件、追加命令行参数。新建会话时它和原版并排出现在 agent 里，
 每个是单独的进程和会话记录目录。Codex 同理（`CODEX_HOME` / `OPENAI_API_KEY`）。
@@ -27,9 +27,9 @@ Gerdr 自带一个 agent，不经过 Claude Code / Codex，直接调 OpenAI 兼�
 
 写进 `apiKey` 的 key（设置里填的、`gerdr config set` 写的、手改的）会挪到 `~/.gerdr/secrets.json`（0600），`config.json` 里只留 `"<hidden>"`，这样 agent 读你的设置时不会把 key 带进对话记录。
 也可以用 `"apiKeyEnv": "环境变量名"` 从 Gerdr 的环境变量里取，这个变量不会传给 agent 和终端。模型只写 id 就行，协议、思考档位、上下文窗口按 id 猜（服务商的模型列表里给了档位的，比如 subhub 每个模型带的 `"reasoning": {"efforts": […], "default": "…"}`，就用列表里的档位和默认档）；猜错了在模型上写
-`api`（chat / responses）、`efforts`、`window`、`compactAt`（上下文到多少 token 自动压缩，默认 `window` 的 90%）、`images`、`maxOutput`，Claude 还可以写 `thinking`（`updates`：只显示模型自己写的简短进度说明，Opus/Sonnet 5.5、Fable 5 及以后默认用它；`adaptive`：显示推理摘要）。也可以在设置 → Agent 最下面配（能从接口拉模型列表、单个试一下；模型上的 🧠 按钮能看它的思考档位从哪来、自己改档位和默认档）。
+`api`（chat / responses）、`efforts`、`window`、`compactAt`（上下文到多少 token 自动压缩，默认 `window` 的 90%）、`images`、`maxOutput`，Claude 还可以写 `thinking`（`updates`：只显示模型自己写的简短进度说明，Opus/Sonnet 5.5、Fable 5 及以后默认用它；`adaptive`：显示推理摘要）。也可以在设置 → Agent → 角色 最下面配（能从接口拉模型列表、单个试一下；模型上的 🧠 按钮能看它的思考档位从哪来、自己改档位和默认档）。
 **生图**：`gemini-2.5-flash-image` / `gemini-3-pro-image-preview`（Nano Banana）、`gpt-image-1` 这类是生图模型：不出现在会话的模型列表里，专门用来出图。
-在设置 → Agent「引擎」下面的「生图模型」里添加（选一个已有的服务商，或当场新建一个），点星标设为默认，或在 `llm` 里写 `"imageModel": "provider/model"`；不设就自动用第一个（优先 Gemini）。
+在设置 → Agent → 角色「引擎」下面的「生图模型」里添加（选一个已有的服务商，或当场新建一个），点星标设为默认，或在 `llm` 里写 `"imageModel": "provider/model"`；不设就自动用第一个（优先 Gemini）。
 之后 Gerdr Agent 多一个 `generate_image` 工具，所有 agent（包括 Claude Code、Codex）都能跑
 `gerdr image gen "描述" [-i 要改的图.png] [-o 存到.png] [--aspect 16:9]`，`gerdr image models` 列出能用的。请求由 Gerdr 带着你的 key 发出去，agent 拿不到 key。
 id 看不出是生图模型的，在模型上写 `"kind": "image"`。

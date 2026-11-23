@@ -49,7 +49,7 @@ export function PhoneBar() {
     set({ drawer: true });
   };
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
+    <div data-phone-titlebar className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
       <DrawerButton>
         {waiting > 0 && (
           <span className="absolute top-1 right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bad px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums">
@@ -57,7 +57,8 @@ export function PhoneBar() {
           </span>
         )}
       </DrawerButton>
-      <button className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openDrawer}>
+      {/* data-titlebar-drag: in a narrow App window the title drags the window instead (index.css); ☰ opens the drawer */}
+      <button data-titlebar-drag className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openDrawer}>
         <FadeText className="min-w-0 text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</FadeText>
         {/* With a single pane its title bar shows the path instead of the title and dot (Panes.tsx PhonePath), so the dot
             is this session's; with several it sums up the tab */}

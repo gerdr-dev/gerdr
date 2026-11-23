@@ -185,13 +185,17 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
       <div data-phone-overview className="flex h-full flex-col bg-background">
         {/* No text selection: a long-press on PhoneBar's overview button opens this with the finger still down on this
         bar, and Android then turned that long-press into selecting a chip's title */}
-        <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5 select-none [-webkit-touch-callout:none]">
+        <div data-phone-titlebar className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5 select-none [-webkit-touch-callout:none]">
           {/* ☰ like the main view's (asked for), same size and spot as PhoneBar's: the drawer is the way out too (its rows
           leave the overview) */}
           <DrawerButton />
           {/* Both scrollbar hiders: Android's WebView ignores scrollbar-width and drew a bar under the chips */}
           {/* relative: the chips' offsetLeft is then measured in the strip's own scrolled coordinates (inView, the box) */}
-          <div ref={chips} className="relative flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div
+            ref={chips}
+            data-titlebar-no-drag
+            className="relative flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             {sorted.map((id) => (
               <TileChip key={id} id={id} current={id === focus} className="h-8 max-w-36" onClick={() => focusTile(id)} />
             ))}

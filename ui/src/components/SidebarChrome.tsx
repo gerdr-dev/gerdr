@@ -55,10 +55,11 @@ export function SidebarHeader({ className, style }: { className?: string; style?
   const phone = usePhone();
   return (
     <div
+      // data-phone-titlebar: in a narrow App window it starts after the traffic lights, as the bar beside it (index.css)
+      data-phone-titlebar={phone || undefined}
       className={cn("flex shrink-0 items-center gap-1 border-b px-1.5", phone ? "h-11" : "h-10", className)}
       style={{ WebkitAppRegion: "drag", ...style } as any}
     >
-      <div className="native-traffic-light-gap" />
       {/* The session switcher takes the title's place (asked for). Only the button is no-drag, so the rest of the bar still moves the window */}
       <div className="flex min-w-16 flex-1">
         <SpaceSwitcher />

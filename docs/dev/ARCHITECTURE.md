@@ -754,7 +754,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   (`WorkSourceDialog`): `git clone` of a published one (`o/r`, a GitHub URL, `file://`), or the built-in blank one.
   Adding never replaces: the first version replaced the project's Work and moved the old one to the trash, and the
   user's own page was gone from view. A panel's face is `icon` / `color` in its `ui.json`, the same kinds as an
-  agent's icon (`IconPicker` / `StoredIcon`, shared with Settings → Agent: a glyph, a line icon, an add-on's sprite,
+  agent's icon (`IconPicker` / `StoredIcon`, shared with Settings → Agent → Roles: a glyph, a line icon, an add-on's sprite,
   a palette colour), set from its right-click "change icon" (`/api/work/panels/icon` writes the site's own file, so it
   travels with the panel); a value it doesn't know, or a sprite whose add-on isn't loaded, draws the default. The agent column folds away per Work
   (`gerdr.workChatHidden`) to a strip with the way back and the agent's status; the chat stays mounted. Settings → Panels (`PanelSettings`, `GET /api/work/panels`) has them all per project: add,
@@ -789,9 +789,9 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 - Secrets from a page: `secret(name)` in the bridge posts `gerdr:secret`; Gerdr (WorkView `SecretDialog`) asks in its
   own dialog and saves through `/api/work/secrets`. The value never passes through the page: its code is written by an
   agent, and a value in page state is one log line away from a transcript.
-  New conversations use an engine or a role from Settings → Agent (prompt, skills, MCP, default model).
+  New conversations use an engine or a role from Settings → Agent → Roles (prompt, skills, MCP, default model).
 
-## 角色和新会话默认（设置 → Agent）
+## 角色和新会话默认（设置 → Agent → 角色）
 
 - **角色** = config.json `agents` 里一条带 base（claude / codex / native）的定义：追加的系统提示（`prompt`）、只给哪些 skill / MCP
   （`skills` / `mcp`，按名字；**不写 = 照全局，空数组 = 一个不给**，所以 hub.AgentDef 的这两项不能加 omitempty）、换账号用的 bin / args / env。
@@ -852,7 +852,7 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   - An edit is live on disk but not in what a running agent read days ago. So each message gets a
     `<gerdr-skills-changed>` block in front naming the session's skill files changed since the last one (hub
     `skillnote.go`); the chat draws it as a notice. A global setting, on by default (config.json `skillUpdates`,
-    Settings → Agent → Skill), not something to turn on per session: nobody would (the user, 2026-11-18). One
+    Settings → Skill), not something to turn on per session: nobody would (the user, 2026-11-18). One
     session can override it: `gerdr session set <s> --skill-updates on|off|default`. Not left to Claude Code's own "file changed" note: that only covers files still in its
     read cache, which compaction empties, and codex / native have none (2026-11-17, a panel task that ran for weeks).
   - Memory is the same format as Claude Code's auto memory (one .md per fact, MEMORY.md index). The index goes into

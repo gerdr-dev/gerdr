@@ -877,7 +877,7 @@ function WorkViewBody() {
   if (phone) {
     return (
       <div className="flex h-full flex-col bg-background">
-        <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
+        <div data-phone-titlebar className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
           {/* The drawer, as in Code (PhoneBar): projects, the Code / panel switch, settings, and the panel's own items
               (core/phoneMenu.ts). It used to be a Code button, which left a phone no way to anything else */}
           <DrawerButton />

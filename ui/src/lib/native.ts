@@ -86,6 +86,8 @@ export const nativeTitleBar = (): { height: number; right: number } | null => (w
     // the rail is w-12; an App from before `right` said `left` (how wide it wanted the rail): same reach
     const right = Number((tb as any).right ?? (tb as any).left) || 72;
     root.style.setProperty("--titlebar-inset", `${Math.max(0, right - 48)}px`);
+    // from the window's left edge: the phone layout (a window under PHONE_MAX wide) has no rail, its top bar starts there
+    root.style.setProperty("--titlebar-right", `${right}px`);
   }
 }
 

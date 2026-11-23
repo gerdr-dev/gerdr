@@ -201,6 +201,18 @@
   .native-titlebar [data-titlebar-inset] {
     padding-left: calc(var(--titlebar-inset) + 1.25rem) !important;
   }
+  /* A narrow App window (under PHONE_MAX) gets the phone layout: no rail, so the lights sit over the top bar's left end
+     (PhoneBar, a panel's phone bar, the phone overview's bar, the drawer's top row). That bar starts after them, is as tall as the row they're
+     centred in, and drags the window; what's clickable in it doesn't (a drag region takes the clicks), except what is
+     marked [data-titlebar-drag] (PhoneBar's title: it would cover most of the bar, leaving nothing to drag by). */
+  .native-titlebar [data-phone-titlebar] {
+    height: var(--titlebar-h) !important;
+    padding-left: var(--titlebar-right) !important;
+    -webkit-app-region: drag;
+  }
+  .native-titlebar [data-phone-titlebar] :is(button, a, input, [role="button"], [data-titlebar-no-drag]):not([data-titlebar-drag]) {
+    -webkit-app-region: no-drag;
+  }
 
   /* The stretch of a message an add-on's action is on (ctx.highlight: the paragraph being read aloud), lib/readingHighlight.ts.
      A highlight pseudo-element takes only colors, so no padding / radius: a tint of the brand behind the words. */

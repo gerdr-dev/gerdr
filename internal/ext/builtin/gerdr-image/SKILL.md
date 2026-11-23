@@ -11,7 +11,7 @@ Only inside Gerdr (the GUI you run in). Check first; if not, say so and stop:
 test "${GERDR_ENV:-}" = 1
 ```
 
-Gerdr makes the request with the image model set up in Settings → Agent ("Image models", under the engines), with the
+Gerdr makes the request with the image model set up in Settings → Agent → Roles ("Image models", under the engines), with the
 person's own keys; you never need a key. Gerdr Agent has the same thing as its `generate_image` tool: use the tool
 there, the command anywhere else.
 
