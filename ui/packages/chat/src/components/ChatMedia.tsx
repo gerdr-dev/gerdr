@@ -385,10 +385,68 @@ export function MediaGrid({ items }: { items: { src: string; alt: string }[] }) 
             }
             className="size-28 cursor-zoom-in overflow-hidden rounded-md border border-border/60"
           >
-            <img src={url} alt={it.alt} loading="lazy" className="size-full object-cover" />
+            <GridThumb url={url} alt={it.alt} name={it.alt || nameOf(path ?? it.src)} />
           </button>
         );
       })}
     </div>
+  );
+}
+
+// Failed grid thumbnails by URL, kept across remounts (virtual list) like mediaFail. A plain <img> left a broken-image
+// icon with the alt text wrapped beside it, which read as a corrupt picture; the usual cause is a screenshot in the
+// system temp folder that has since been cleaned. Same as ChatMedia: retry a few times with backoff (the file may still
+// be being written), then show "can't open" inside the same fixed tile, so the grid never changes shape. The probe
+// <img> stays invisible, so a retry never flashes the broken icon either.
+const gridFail = new Map<string, number>();
+
+function GridThumb({ url, alt, name }: { url: string; alt: string; name: string }) {
+  const [tries, setTriesState] = useState(() => gridFail.get(url));
+  const [probe, setProbe] = useState<string | null>(null);
+  const setTries = (n: number | undefined) => {
+    if (n === undefined) gridFail.delete(url);
+    else gridFail.set(url, n);
+    setTriesState(n);
+  };
+  const done = tries !== undefined && tries >= RETRY_DELAYS.length;
+  useEffect(() => {
+    if (tries === undefined || done) return;
+    const t = setTimeout(() => setProbe(`${url}${url.includes("?") ? "&" : "?"}r=${Date.now()}`), RETRY_DELAYS[tries]);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-armed by tries only
+  }, [tries]);
+  if (tries === undefined) {
+    return <img src={url} alt={alt} loading="lazy" onError={() => setTries(0)} className="size-full object-cover" />;
+  }
+  return (
+    <span
+      title={done ? `${name}\n${t("media.clickRetry")}` : name}
+      onClick={(e) => {
+        // A failed tile doesn't open the lightbox (it would only show the same broken file); once given up, it retries.
+        e.stopPropagation();
+        if (done) setTries(RETRY_DELAYS.length - 1);
+      }}
+      className="relative flex size-full cursor-default flex-col items-center justify-center gap-1 p-2 text-[11px] text-muted-foreground"
+    >
+      {done ? <AlertCircle className="size-4 shrink-0 text-bad" /> : <Loader2 className="size-4 shrink-0 animate-spin" />}
+      <span className="line-clamp-3 break-all text-center">{done ? t("media.cantOpen", { src: name }) : name}</span>
+      {done && <RotateCw className="size-3 shrink-0" />}
+      {probe && (
+        <img
+          key={probe}
+          src={probe}
+          alt=""
+          className="absolute size-0 opacity-0"
+          onLoad={() => {
+            setProbe(null);
+            setTries(undefined);
+          }}
+          onError={() => {
+            setProbe(null);
+            setTries((tries ?? 0) + 1);
+          }}
+        />
+      )}
+    </span>
   );
 }
