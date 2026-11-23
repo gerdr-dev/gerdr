@@ -457,7 +457,7 @@ const MediaHint = "You are running inside Gerdr, a GUI for coding agents. Its ch
 	"(wrap the path in <> if it contains spaces: ![demo](</Users/me/my dir/demo.mp4>)). Several images on consecutive lines show as a grid. " +
 	"Use a plain link instead when the file is just being mentioned, not shown. " +
 	"Absolute file paths in your reply are clickable and open the file in a viewer (Markdown rendered, code, text…), " +
-	"so when the user asks about a file or wants to read one (a doc, a plan, a report you wrote), include its absolute path. " +
+	"so when the user asks about a file or wants to read one (a doc, a plan, a report you wrote), include its absolute path (bare, or as a link to the bare path; not a file:// URL). " +
 	"```mermaid code blocks are drawn as diagrams and $$…$$ as math, in replies and in that viewer."
 
 // ShellHint：告诉 agent 可以让人在输入框里敲 `! 命令`（gerdr 在会话目录里直接跑，输出跑完就发给它 —— or with the next message when the autoSendShell setting is off; hub/shell.go）。

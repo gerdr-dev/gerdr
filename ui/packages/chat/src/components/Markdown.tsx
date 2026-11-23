@@ -250,7 +250,12 @@ const winDest = /\]\((<?)(?:file:\/\/\/?)?\/?([a-zA-Z]:[\\/][^)>\n]*)(>?)\)/g;
 // there, so it goes in as /~/… (localPath drops the leading /, the server expands ~). Written from home is how a path
 // is the same on every computer (a Mac's /Users/x, a Windows C:\Users\x): what agents write for shared folders.
 const homeDest = /\]\((<?)~\//g;
+// A file URL (`](file:///Users/x/a.go#L10-L20)`, how some agents link every file they mention): rehype-harden blocks
+// the file: protocol outright, whatever allowedProtocols says, so each one came out as grey "a.go [blocked]". It goes
+// in as the bare path; localHref / localPath read that as a local file (a Windows one is then fixed by winDest below).
+const fileDest = /\]\((<?)file:\/\/(?=\/)/g;
 export const fixWindowsPaths = (md: string) => {
+  if (md.includes("](file://") || md.includes("](<file://")) md = md.replace(fileDest, "]($1");
   if (md.includes("](~/") || md.includes("](<~/")) md = md.replace(homeDest, (_m, a: string) => `](${a}/~/`);
   return md.includes(":\\") || md.includes(":/") ? md.replace(winDest, (_m, a: string, p: string, b: string) => `](${a}/${p.replace(/\\/g, "/")}${b})`) : md;
 };
