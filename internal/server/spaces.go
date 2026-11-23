@@ -181,6 +181,24 @@ func (s *Server) sessionSpace(panes map[string]string, id string) (string, bool)
 	return "", false
 }
 
+// panelSpace: the project of the panel session works for (panelOf: it started it, or one of its workers handed it work). It is in
+// no pane and runs in a repo, not the panel's Work directory, so ResolveSpace doesn't place it: its pages went into
+// the default project's browser (its logins, and Code's Browser pane there showed them; user report). Used for the
+// browser only: sessionSpace (crossSpace) leaves such a worker unplaced, which lets it call other projects' sessions.
+func (s *Server) panelSpace(id string) (string, bool) {
+	if id == "" || s.Hub == nil {
+		return "", false
+	}
+	sess, err := s.Hub.Session(id)
+	if err != nil {
+		return "", false
+	}
+	if k := s.panelOf(sess.Summary()); k != "" {
+		return spaceOr(k), true
+	}
+	return "", false
+}
+
 // workProject is ResolveSpace's step 3 (nil when this server has no Work).
 func (s *Server) workProject() func(string) (string, bool) {
 	if s.Work == nil {
