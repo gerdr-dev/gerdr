@@ -154,6 +154,13 @@ export default function App() {
     // Held add-on commands end on their key's keyup; switching away (⌘Tab) eats that keyup, so blur ends them too
     window.addEventListener("keyup", handleKeyup, true);
     window.addEventListener("blur", releaseHeld);
+    // The page itself never scrolls sideways (everything lives in its own boxes), but the browser scrolls it anyway to
+    // reveal an element focused while it is still off the right edge: a drawer that takes focus while it slides in
+    // (whose box counts as overflow once a transformed ancestor contains it, as the App's title-bar strip does in
+    // WorkView). Everything then jumps left and slides back as the drawer arrives. Undo it at once; vertical is left
+    // alone, as iOS scrolls the document for the keyboard.
+    const unscrollX = () => window.scrollX && window.scrollTo(0, window.scrollY);
+    window.addEventListener("scroll", unscrollX);
     const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
     const unwatchInbox = watchInbox(); // errors, questions / approvals, low battery → the inbox
     const unwatchBadges = watchBadges(); // panels' dots / numbers on their rail buttons
@@ -172,6 +179,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("keyup", handleKeyup, true);
       window.removeEventListener("blur", releaseHeld);
+      window.removeEventListener("scroll", unscrollX);
       unwatchCopy();
       unwatchInbox();
       unwatchBadges();
