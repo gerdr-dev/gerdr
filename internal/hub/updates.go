@@ -121,6 +121,9 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 	case u.UsageUpdate != nil:
 		return
 	}
+	if s.infersTurns() {
+		s.noteActivity(u)
+	}
 	s.emit(&Event{Kind: EvUpdate, Update: raw})
 }
 

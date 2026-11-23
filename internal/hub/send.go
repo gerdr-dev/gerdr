@@ -127,6 +127,9 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 			return SendResult{}, err
 		}
 	}
+	// An inferred turn (inferred.go) is our guess that the agent is still working, not a turn it takes steers in:
+	// close it and send this as a new prompt.
+	s.endInferred()
 	s.mu.Lock()
 	running := s.running
 	agentSID := s.rec.AgentSessionID

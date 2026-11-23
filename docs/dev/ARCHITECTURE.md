@@ -867,6 +867,13 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   停任务是 control `stop_task`，把前台的命令 / 子 agent 转后台是 `background_tasks {tool_use_id}`（= claude 里的 ctrl+b）。
 - **后台任务跑完后 CLI 会自己开一轮**（running → idle，前面没有 user 消息）。没有 session/prompt 对应，适配器用
   session_info_update 的 `_meta.gerdr.autoTurn` 告诉 hub；它可能比上一轮 Prompt 的响应先到，hub 用 `autoNext` 接上，不然那一轮在界面上是「闲着」。
+- **External ACP agents work on after their prompt answers and say nothing** (`agy acp`, measured 2026-11-23: end_turn
+  right after starting background subagents, then minutes of tool calls / messages as they come back). ACP has no
+  "auto turn" message, so for agents with a `command` the hub guesses one (`internal/hub/inferred.go`): a content
+  update while idle opens an auto turn, which ends after 60s with no update and no tool call / permission open. A
+  message sent during it ends the guessed turn and goes as a new prompt (it isn't a turn that takes steers);
+  session/load replays are bracketed by `loading` so history doesn't open one. Not for our adapters: they report
+  their own turns, and a stray late update from them must not start one.
 - **A background sub-agent keeps the turn open; a background Bash doesn't** (measured, 2.1.323). The CLI's own schema
   says idle "fires after heldBackResult flushes and the bg-agent do-while exits": while a background Agent runs, the
   CLI holds the result and stays running even after the model has finished talking, so Gerdr keeps spinning and later

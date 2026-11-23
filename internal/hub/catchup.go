@@ -298,7 +298,9 @@ func (s *Session) Reload(ctx context.Context) error {
 		meta["fork"] = rec.Fork
 	}
 	s.h.extMeta(rec, meta)
+	s.beginLoading()
 	res, err := c.Conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
+	s.endLoading()
 	if err != nil {
 		return err
 	}

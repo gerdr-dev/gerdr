@@ -176,6 +176,12 @@ type Session struct {
 	// runTurn 收尾时看到它就直接接上一个 auto 的轮次，不然这一轮在界面上是「闲着」。
 	autoNext bool
 	autoWake json.RawMessage // what woke that auto turn (acpx.AutoTurnWakeKey), for its turn_start
+	// infer: the running auto turn is a guess (inferred.go): an external agent kept sending work with no turn open.
+	infer      bool
+	inferLast  time.Time
+	inferOpen  map[string]bool // tool calls of the inferred turn not reported done yet
+	inferTimer *time.Timer
+	loading    int // a session/load is replaying the conversation: its updates are history (inferred.go)
 	// closeAfter：会话自己 `gerdr session close` 了自己（用户叫它「做完就关掉 pane」）。当场关会把它正在跑的这一轮
 	// （就是发出这条命令的这一轮）掐掉，收尾的话说不出来；所以记下来，这一轮跑完再关（Hub.CloseAfterTurn）
 	closeAfter  bool
@@ -610,7 +616,9 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 		meta["fork"] = rec.Fork
 	}
 	s.h.extMeta(rec, meta)
+	s.beginLoading()
 	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
+	s.endLoading()
 	if err != nil {
 		// 一句话都没说过的会话，agent 那边多半压根没落盘（claude / codex 都是第一条消息才写），
 		// 接不回来很正常：换一个新的 agent 会话顶上，人看不出区别。

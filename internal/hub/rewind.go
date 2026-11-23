@@ -101,6 +101,10 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	ev := &Event{Kind: EvTurnEnd, MessageID: turnMsg, StopReason: string(acp.StopReasonCancelled), Auto: auto,
 		DurationMs: now() - s.turnStarted, OutputTokens: s.turnTokens}
 	s.stopping, s.stopTurn = done, ending
+	if s.infer { // nothing will report this guessed turn over: it ends once the agent goes quiet (inferred.go)
+		s.inferLast = time.Now()
+		s.armInferLocked(inferStopQuiet)
+	}
 	s.mu.Unlock()
 	rollback := ""
 	if untouched {

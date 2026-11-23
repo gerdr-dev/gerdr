@@ -939,7 +939,9 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		s.rec = rec
 		// 先登记，LoadSession 重放的 update 才找得到主人。
 		h.register(s)
+		s.beginLoading()
 		res, err := c.Conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: acp.SessionId(o.Import), Cwd: cwd, McpServers: h.mcpFor(rec), Meta: acpx.Meta(meta)})
+		s.endLoading()
 		if err != nil {
 			h.unregister(s)
 			return nil, err
