@@ -14,6 +14,7 @@ import { holdSendNow } from "@/lib/chatHost";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { takeSubagents } from "@/lib/subagents";
+import { addShownChat } from "@/lib/shownChats";
 import { StatusDot } from "@/components/AgentIcon";
 
 /** Streams a conversation while a mounted page shows it (store mountWatch), like a pane on screen. */
@@ -62,6 +63,10 @@ export function SessionChat({
   sub?: string;
   onSub?: (toolCallId: string | null, title?: string) => void;
 }) {
+  // For the inbox: a question from this conversation while it's on screen here goes in quietly (lib/shownChats).
+  // Before useWatched: its mountWatch change is what has the inbox look again, and by then this must be registered.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => (box.current ? addShownChat(box.current, id) : undefined), [id]);
   useWatched(id);
   // The subagent shown instead of the main conversation: the page's choice (sub), or "查看对话" on a card here
   const [shownSub, setShownSub] = useState<{ id: string; title?: string } | null>(sub ? { id: sub } : null);
@@ -94,7 +99,7 @@ export function SessionChat({
     <TooltipProvider delayDuration={400}>
       <TabActive.Provider value>
         {/* data-composer-scope: copy-on-select puts the cursor back in this chat's composer (lib/copysel.ts) */}
-        <div className={cn("h-full min-h-0", className)} style={{ fontSize: "var(--gerdr-font, 14px)" }} data-composer-scope>
+        <div ref={box} className={cn("h-full min-h-0", className)} style={{ fontSize: "var(--gerdr-font, 14px)" }} data-composer-scope>
           {session && shownSub ? (
             <SubagentChat session={session} sub={shownSub} onBack={() => (onSub ? onSub(null) : setShownSub(null))} />
           ) : session ? (

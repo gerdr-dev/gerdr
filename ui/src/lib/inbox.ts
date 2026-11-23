@@ -10,6 +10,7 @@ import { get as getApp, useStore, visibleSessions, workViewSessions } from "./st
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
 import { cn } from "./utils";
+import { chatOnScreen } from "./shownChats";
 
 /**
  * The inbox: things that need the user. Approvals / questions (from GET /api/pending) leave by themselves once they're
@@ -303,6 +304,8 @@ function seen(id: string) {
   if (document.visibilityState !== "visible" || !document.hasFocus()) return false;
   // The Work view covers the tabs: what's on screen is its panel's chat and the conversation a page opened beside it
   // (a task's worker on a board). Without this, a question from the very task being read still popped a card.
+  // A page's own chat (a board drawing a task's conversation with SessionChat) isn't in either: asked of the element.
+  if (chatOnScreen(id)) return true;
   const l = getApp().layout;
   if (getApp().mode === "work") return workViewSessions(l).includes(id);
   return visibleSessions(l, isPhone()).includes(id);
@@ -442,11 +445,14 @@ export function watchInbox() {
   let shownLayout = getApp().layout;
   let shownMode = getApp().mode;
   let shownPeek = getApp().workPeek;
+  let shownMounts = getApp().mountWatch;
   const unsub = useStore.subscribe((s) => {
-    if (s.layout !== shownLayout || s.mode !== shownMode || s.workPeek !== shownPeek) {
+    // mountWatch: a page opened or closed a conversation of its own (SessionChat), e.g. a task on a board
+    if (s.layout !== shownLayout || s.mode !== shownMode || s.workPeek !== shownPeek || s.mountWatch !== shownMounts) {
       shownLayout = s.layout;
       shownMode = s.mode;
       shownPeek = s.workPeek;
+      shownMounts = s.mountWatch;
       dropSeenCards();
     }
     if (s.connected !== wasConnected) {
