@@ -256,6 +256,8 @@ export const api = {
       placeError?: string;
     }>("POST", "/api/import/claude-desktop", { ids, project }),
   hello: () => req<Hello>("GET", "/api/hello"),
+  /** Just the agent list (hello's other parts cost availability checks, sessions, hosts…). */
+  agents: () => req<Pick<Hello, "agents">>("GET", "/api/hello?only=agents"),
   /** A key for Work local functions' ctx.secrets.get ("" deletes it); the value is never served back. */
   setWorkSecret: (name: string, value: string) => req("POST", "/api/work/secrets", { name, value }),
   /** Where the project's Work came from (a git repository or not), and replacing it: work/source.go. */

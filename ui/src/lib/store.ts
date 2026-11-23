@@ -238,7 +238,22 @@ export const closeDialog = () => set({ dialog: null });
 export function setConfig(patch: Partial<Config>) {
   const next = { ...get().config, ...patch };
   set({ config: next });
-  api.putConfig(next, clientId).catch(() => {});
+  const put = api.putConfig(next, clientId);
+  put.catch(() => {});
+  // The agent list normally arrives as an "agents" frame right after the save; if that frame is lost (the socket
+  // reconnecting at that moment), Settings → Agent kept showing the old list although the agent was saved. The
+  // backend applies the new agents before it answers the PUT, so fetching the list then always gets the new one.
+  if ("agents" in patch) put.then(refreshAgents, () => {});
+}
+
+/** Fetch the agent list again: the fallback for a lost "agents" frame (setConfig above, Settings → Agent opening). */
+export function refreshAgents() {
+  return api
+    .agents()
+    .then((h) => {
+      if (Array.isArray(h.agents)) set({ agents: h.agents });
+    })
+    .catch(() => {});
 }
 
 export function upsertSession(s: SessionSummary) {

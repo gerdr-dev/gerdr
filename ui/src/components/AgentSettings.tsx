@@ -14,7 +14,7 @@ import { ImageModels, LLMSettings } from "@/components/LLMSettings";
 import { api } from "@/lib/api";
 import { MODE, defaultsOf, flatOptions, setDefaults, withoutDefaults } from "@/lib/defaults";
 import { t } from "@/lib/i18n";
-import { get, setConfig, showThinkingFor, useStore, type AgentDef, type LLMProvider, type ThinkingDisplay } from "@/lib/store";
+import { get, refreshAgents, setConfig, showThinkingFor, useStore, type AgentDef, type LLMProvider, type ThinkingDisplay } from "@/lib/store";
 import type { AgentInfo, ExtView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useCopied } from "@/lib/useCopied";
@@ -162,6 +162,8 @@ function defaultsSummary(agents: AgentInfo[], id: string, base: string, d: Recor
 
 export function AgentSettings() {
   const agents = useStore((s) => s.agents);
+  // Opening the page fetches the list once, so a missed "agents" frame can't leave it stale for good
+  useEffect(() => void refreshAgents(), []);
   const cfg = useStore((s) => s.config);
   const defs = cfg.agents ?? NONE;
   const providers = cfg.llm?.providers ?? NO_PROVIDERS;
