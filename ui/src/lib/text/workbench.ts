@@ -202,7 +202,9 @@ export const zh = {
   // lib/copysel.ts uses common.copied
 
   // lib/actions
-  "actionsFiles.isDir": "这是个目录：{path}",
+  "actionsFiles.isDir": "不支持查看目录：{path}",
+  "actionsFiles.openFinder": "在访达中打开",
+  "actionsFiles.openExplorer": "在资源管理器中打开",
   "actionsFiles.openFailed": "打不开这个路径",
   "actionsPanes.gridFull": "网格最多放 {n} 个，先从进行中移出几个",
   "actionsPanes.openingAgent": "正在开新 Agent…",
@@ -414,7 +416,9 @@ export const en: Record<keyof typeof zh, string> = {
   "layout.nameTaken": "There's already a project named “{name}”",
   "layout.nameTakenById": "“{name}” was created as “{id}”, so that name is taken",
 
-  "actionsFiles.isDir": "That's a directory: {path}",
+  "actionsFiles.isDir": "Can't open a directory: {path}",
+  "actionsFiles.openFinder": "Open in Finder",
+  "actionsFiles.openExplorer": "Open in File Explorer",
   "actionsFiles.openFailed": "Couldn't open this path",
   "actionsPanes.gridFull": "The grid holds up to {n}; remove some from Active first",
   "actionsPanes.openingAgent": "Starting a new agent…",

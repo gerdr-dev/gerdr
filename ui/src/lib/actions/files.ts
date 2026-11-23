@@ -5,6 +5,8 @@ import { isPhone } from "../phone";
 import { activeTab, leaves, rid, setPane, split, updateTab, type PaneLeaf } from "../layout";
 import { set, setLayout } from "../store";
 import { t } from "../i18n";
+import { IS_MAC } from "../keys";
+import { isNative, nativeOpenPath } from "../native";
 
 // ---- 文件 ----
 
@@ -32,7 +34,13 @@ export async function openPath(raw: string, cwd?: string, opts: { beside?: boole
       const stat = await api.fileStat(p, cwd, opts.host);
       if (seq !== openSeq) return;
       if (stat.dir) {
-        toast(t("actionsFiles.isDir", { path: stat.path }));
+        // In the App a folder on this computer can still be opened, just not here: offer the system's file manager.
+        const local = isNative() && !opts.host;
+        toast(t("actionsFiles.isDir", { path: stat.path }), {
+          action: local
+            ? { label: t(IS_MAC ? "actionsFiles.openFinder" : "actionsFiles.openExplorer"), onClick: () => nativeOpenPath(stat.path, undefined, false) }
+            : undefined,
+        });
         return;
       }
       if (beside) openFilePane(stat.path, opts.host);
