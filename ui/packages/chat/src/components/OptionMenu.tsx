@@ -50,14 +50,13 @@ export function OptionMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-80 w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
         <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{label}</DropdownMenuLabel>
-        {act && <ActualNote actual={act.name} chosen={cur?.name ?? value} />}
         {options.map((o) => (
           <DropdownMenuItem key={o.value || "__"} onClick={() => onChange(o.value)} className="items-start gap-2">
             <Check className={cn("mt-0.5 size-3.5 shrink-0", o.value === value ? "opacity-100" : "opacity-0")} />
             <div className="min-w-0">
               <div className="text-[13px]">
                 {o.name}
-                {act?.value === o.value && <ActualTag />}
+                {act && <ActualTag value={o.value} actual={act.value} chosen={value} />}
               </div>
               {o.description && <div className="text-[11px] leading-snug text-muted-foreground">{o.description}</div>}
             </div>
@@ -69,15 +68,18 @@ export function OptionMenu({
   );
 }
 
-// The value in effect isn't the one chosen (OptGroup.actual): said under the menu's title, and tagged on its item.
-function ActualNote({ actual, chosen }: { actual: string; chosen: string }) {
-  return <div className="px-2 pb-1.5 text-[11px] leading-snug text-warn">{t("options.actualNote", { actual, chosen })}</div>;
-}
-
 const actualOf = (g: OptGroup) => g.actual !== undefined && g.actual !== g.value && g.options.some((o) => o.value === g.actual);
 
-function ActualTag() {
-  return <span className="ml-1.5 rounded bg-warn/15 px-1 text-[10px] text-warn">{t("options.actual")}</span>;
+// The value in effect isn't the one chosen (OptGroup.actual): a tag on each of the two items, the one running now and
+// the chosen one that comes next. Not a line under the title: it took two lines and pushed the menu into scrolling.
+function ActualTag({ value, actual, chosen }: { value: string; actual: string; chosen: string }) {
+  if (value !== actual && value !== chosen) return null;
+  const now = value === actual;
+  return (
+    <span className={cn("ml-1.5 rounded px-1 text-[10px]", now ? "bg-warn/15 text-warn" : "bg-muted text-muted-foreground")}>
+      {t(now ? "options.actual" : "options.next")}
+    </span>
+  );
 }
 
 function SetDefaultItem({ same, onClick, all }: { same: boolean; onClick: () => void; all?: boolean }) {
@@ -151,14 +153,13 @@ export function OptionsMenu({
           <DropdownMenuGroup key={g.id}>
             {i > 0 && <DropdownMenuSeparator />}
             <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{g.label}</DropdownMenuLabel>
-            {actualOf(g) && <ActualNote actual={nameOf({ ...g, value: g.actual! })} chosen={nameOf(g)} />}
             {g.options.map((o) => (
               <DropdownMenuItem key={o.value || "__"} onClick={() => g.onChange(o.value)} className="items-start gap-2">
                 <Check className={cn("mt-0.5 size-3.5 shrink-0", o.value === g.value ? "opacity-100" : "opacity-0")} />
                 <div className="min-w-0">
                   <div className="text-[13px]">
                     {o.name}
-                    {actualOf(g) && g.actual === o.value && <ActualTag />}
+                    {actualOf(g) && <ActualTag value={o.value} actual={g.actual!} chosen={g.value} />}
                   </div>
                   {o.description && <div className="text-[11px] leading-snug text-muted-foreground">{o.description}</div>}
                 </div>
