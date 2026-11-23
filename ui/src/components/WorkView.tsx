@@ -1,4 +1,4 @@
-import { ArrowDownRight, PanelRightClose, MessageSquare, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
+import { ArrowDownRight, MessageSquare, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { DrawerButton } from "./DrawerButton";
 import { nativeTitleBar } from "@/lib/native";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -784,7 +784,7 @@ function ChatHeader({ onHide, extra }: { onHide?: () => void; extra?: React.Reac
           onClick={onHide}
           style={noDrag}
         >
-          <PanelRightClose className="size-3.5 pointer-coarse:size-4" />
+          <X className="size-3.5 pointer-coarse:size-4" />
         </Button>
       )}
       {extra && <div style={noDrag}>{extra}</div>}
