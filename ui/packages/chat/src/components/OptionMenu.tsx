@@ -39,14 +39,12 @@ export function OptionMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex h-7 min-w-0 max-w-44 items-center gap-1 rounded-md px-1.5 text-[12px] max-md:max-w-none max-md:shrink-0 text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
-        {act ? (
-          // What runs now, then what was chosen: the agent hasn't taken the choice yet
-          <span className="truncate text-warn">
-            {act.name} → {cur?.name ?? value}
-          </span>
-        ) : (
-          <span className="truncate">{cur?.name ?? (value || label)}</span>
-        )}
+        {/* Not in effect yet: the chosen name with a "*" (the one running is in the menu; "Default → Auto" took a
+            phone's whole row) */}
+        <span className={cn("truncate", act && "text-warn")}>
+          {cur?.name ?? (value || label)}
+          {act && "*"}
+        </span>
         {/* 手机上省掉箭头：底栏就这么宽，留给名字 */}
         <ChevronDown className="size-3 shrink-0 opacity-60 max-md:hidden" />
       </DropdownMenuTrigger>
@@ -131,14 +129,8 @@ export function OptionsMenu({
   const all = mode ? [mode, ...groups] : groups;
   const nameOf = (g: OptGroup) => g.options.find((o) => o.value === g.value)?.name ?? g.value;
   // At 2 the mode goes too: "Full access" takes half a phone's row
-  // A mode not in effect yet shows as "Default → Auto" whatever it is: the mode really running is what matters here
-  const modeName = !mode
-    ? undefined
-    : actualOf(mode)
-      ? `${nameOf({ ...mode, value: mode.actual! })} → ${nameOf(mode)}`
-      : (short ?? 0) < 2 && LOUD_MODE.test(mode.value)
-        ? nameOf(mode)
-        : undefined;
+  // A mode not in effect yet shows whatever it is, as "Auto*": the menu says which one is running
+  const modeName = !mode ? undefined : actualOf(mode) ? `${nameOf(mode)}*` : (short ?? 0) < 2 && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
   const shown = short ? groups.filter((g) => g.id === "model").slice(0, 1) : groups;
   const summary = (shown.length ? shown : groups.slice(0, 1)).map(nameOf).filter(Boolean).join(" · ");
   if (!all.length) return null;
@@ -150,7 +142,7 @@ export function OptionsMenu({
         )}
       >
         {!summary && !modeName && <SlidersHorizontal className="size-4" />}
-        {modeName && <span className={cn("max-w-28 shrink-0 truncate", mode && actualOf(mode) && "max-w-40 text-warn")}>{modeName}</span>}
+        {modeName && <span className={cn("max-w-28 shrink-0 truncate", mode && actualOf(mode) && "text-warn")}>{modeName}</span>}
         {summary && <span className="truncate">{summary}</span>}
         {chevron && <ChevronDown className="-ml-0.5 size-3 shrink-0 opacity-60" />}
       </DropdownMenuTrigger>

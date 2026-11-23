@@ -134,7 +134,7 @@ export type ChatSession = {
   tasks?: AgentTask[];
   /**
    * The running turn. mode: the mode it really runs under, when that isn't the session's current one (an agent that
-   * only takes a mode change at its next turn: the picker then shows "Default → Auto")
+   * only takes a mode change at its next turn: the picker then shows "Auto*")
    */
   turn?: { startedAt: number; outputTokens: number; mode?: string };
   context?: { tokens: number; window: number }; // context usage
