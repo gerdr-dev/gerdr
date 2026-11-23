@@ -63,7 +63,15 @@ export function useSwipePager(
   shown.current = tile;
   const idx = useRef(index);
   idx.current = index;
-  const width = () => (body.current?.clientWidth ?? 0) + GAP;
+  // The track's own width, fractional: what pageX's 100% is. clientWidth is rounded, and the rounding piled up page by
+  // page (index × the fraction), so a dozen pages on the page sat a few px off and its right edge, scrollbar and all,
+  // was cut off (user report: Settings → Resources on a phone). The computed width also ignores transforms (the
+  // dialog's open zoom), which getBoundingClientRect wouldn't.
+  const width = () => {
+    const el = track.current ?? body.current;
+    const w = el ? parseFloat(getComputedStyle(el).width) : NaN;
+    return (Number.isFinite(w) ? w : (body.current?.clientWidth ?? 0)) + GAP;
+  };
   // Where the track rests for the shown page (none: the pager is off, Settings on a wider screen, the track untouched)
   const homeAt = (i: number) => (shown.current === undefined ? 0 : -i * width());
   // A turn on its way: the page the track is heading for, and when the slide gets there. The tile switches to it a frame

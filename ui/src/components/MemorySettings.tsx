@@ -205,11 +205,16 @@ export function MemorySettings({ open, project }: { open: boolean; project?: str
     <div className="space-y-3 text-[13px]">
       <div className="text-[12px] text-muted-foreground">{project ? t("memorySettings.projectIntro") : t("memorySettings.intro")}</div>
       <div className={cn("flex flex-wrap items-center gap-2", project && "hidden")}>
-        <div className="flex rounded-md bg-muted p-0.5">
+        {/* One line, never wrapping inside a button: on a phone the row squeezed them until "全部" stood one character a
+          line; a row wider than the screen scrolls sideways instead (no scrollbar drawn) */}
+        <div className="flex max-w-full overflow-x-auto rounded-md bg-muted p-0.5 [scrollbar-width:none] max-md:w-full [&::-webkit-scrollbar]:hidden">
           {AGENTS.map((a) => (
             <button
               key={a.id}
-              className={cn("rounded-sm px-2.5 py-1 text-[12px] text-muted-foreground", agent === a.id && "bg-background text-foreground shadow-sm")}
+              className={cn(
+                "shrink-0 rounded-sm px-2.5 py-1 text-[12px] whitespace-nowrap text-muted-foreground max-md:flex-1",
+                agent === a.id && "bg-background text-foreground shadow-sm",
+              )}
               onClick={() => {
                 setAgent(a.id);
                 setSel(null);
@@ -235,8 +240,14 @@ export function MemorySettings({ open, project }: { open: boolean; project?: str
         <div className="py-6 text-center text-muted-foreground">{q ? t("memorySettings.noResults") : t("memorySettings.empty")}</div>
       ) : (
         <div className={cn("grid gap-3", !project && "md:grid-cols-[220px_1fr]")}>
-          {/* 左边：记忆目录（手机上横着滑） */}
-          <div className={cn("flex gap-1 overflow-x-auto md:max-h-[52vh] md:flex-col md:overflow-x-hidden md:overflow-y-auto", project && "hidden")}>
+          {/* Left: the memory folders (a sideways row on a phone, its scrollbar hidden: Android's WebView drew it as a
+            stub under the first chip) */}
+          <div
+            className={cn(
+              "flex gap-1 overflow-x-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:max-h-[52vh] md:flex-col md:overflow-x-hidden md:overflow-y-auto",
+              project && "hidden",
+            )}
+          >
             {shown.map((s) => (
               <button
                 key={s.id}
