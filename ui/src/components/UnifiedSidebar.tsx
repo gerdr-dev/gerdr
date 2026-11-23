@@ -475,9 +475,9 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                         rows={groups.get(ws.id) ?? []}
                       >
                         {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
-                  the ones on screen just light up. data-side-row(s): drag a row between two others to move it (TabDrag.tsx) */}
+                  the ones on screen just light up. data-side-row(s) / data-pinned: drag a row among the pinned ones to pin it there (TabDrag.tsx) */}
                         {groups.get(ws.id)?.map((r) => (
-                          <div key={r.pane.id} data-side-row={r.pane.id}>
+                          <div key={r.pane.id} data-side-row={r.pane.id} data-pinned={r.pinned || undefined}>
                             <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} groupId={ws.id} pinned={!!r.pinned} />
                           </div>
                         ))}

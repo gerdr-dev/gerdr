@@ -18,8 +18,10 @@ import type { MessageKey } from "@/lib/messages";
  *   接着往下拖进它的某个 pane，就能挑贴在哪一边；
  * - 拖到下面的 pane 上 → 贴到这个 pane 离指针最近的那一边，那半边铺一层预览（和 VS Code 拖编辑器一样）；
  * - 拖到侧栏的别的工作空间上 → 挪过去。
- * - 侧栏（UnifiedSidebar）里拖一行，落在某个分组的两行之间 → 这一行列到那儿（layout.sideRows），那条缝上亮一根横线；
- *   落在分组标题上 → 列到那一组的最后。只改侧栏怎么列，屏幕上的 tab、分屏都不动。
+ * - A sidebar row (UnifiedSidebar) dropped among a group's pinned rows, or just under them, is pinned there
+ *   (layout.sideRows; a line lights up in that gap). Lower down there is no drop: the rest sorts by activity, so a
+ *   place there would be ignored and the drag looked broken (reported). Unpinning is the row's menu. Onto a group's
+ *   title: listed in that group. Only the sidebar's list changes, never the tabs or splits on screen.
  * - Anything carrying one agent (a sidebar row, a pane header, a tab of one pane) dropped on the sidebar's "active"
  *   section joins it (overview.addActive); nothing moves. While such a drag runs the section shows even when empty.
  * - A sidebar group's title dragged between two groups reorders the workspaces (startWsDrag).
@@ -34,6 +36,14 @@ import type { MessageKey } from "@/lib/messages";
  * pane 的标题栏也能拖（startPaneDrag），落点一样，只是搬的是这一个 pane：贴到别的 pane（同一个 tab 里也行）的某一边、
  * 拖进 tab 栏的缝里单独成一个新 tab、拖到别的 tab 上并进去、拖到别的工作空间成为那边的新 tab。
  * tab 里只有这一个 pane 时就当拖整个 tab。两种拖法共用一份状态（模块级），拖影统一由 tab 栏里的 TabDragLayer 画。
+ *
+ * A pane of a split can also leave as its own tab without the tab bar (the sidebar layout hides it):
+ * - its title bar dropped in the sidebar: among the pinned rows, a new tab pinned there (a row dragged from the
+ *   sidebar still only moves in the list, see above); anywhere else in a group or on its title, a new tab in that
+ *   group, the whole group lighting up;
+ * - dropped within EDGE px of the window's edge: a new tab right after the one it came from. Checked before
+ *   everything else, so it wins over the pane sides and the tab bar at the very edge. The preview sits on the pane
+ *   that leaves, its hint in the middle: a strip along the window's edge went unseen.
  */
 
 type Target =
@@ -47,7 +57,9 @@ type Target =
   /** The sidebar's "active" section (UnifiedSidebar, data-active-drop): the dragged agent joins it, nothing moves. */
   | { kind: "active"; session: string; rect: Box }
   /** A sidebar group (workspace) put before the `to`-th group of its session, counted without it (actions.moveWorkspace). */
-  | { kind: "wsorder"; to: number; line: Box };
+  | { kind: "wsorder"; to: number; line: Box }
+  /** The pointer within EDGE px of the window's `side` edge: the dragged pane of a split leaves as a new tab. `rect`: that pane. */
+  | { kind: "edge"; side: Side; rect: Box };
 
 type Box = { left: number; top: number; width: number; height: number };
 
@@ -73,6 +85,7 @@ type Drag = {
 };
 
 const SPRING_MS = 600;
+const EDGE = 12;
 const GAP = 4; // tab 之间的 gap-1
 
 const box = (r: DOMRect): Box => ({ left: r.left, top: r.top, width: r.width, height: r.height });
@@ -155,7 +168,31 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
   const srcTab = allLeaves(get().layout).filter((x) => x.tab.id === tabId);
   const session = (paneId ? srcTab.find((x) => x.pane.id === paneId) : srcTab.length === 1 ? srcTab[0] : undefined)?.pane.sessionId;
 
+  // A pane of a split dragged by its title bar (not a sidebar row, which only moves in the list): it can leave as a new tab
+  const detach = !!paneId && !sideRow;
+
   const locate = (x: number, y: number): Target | null => {
+    // The window's edges: a pane of a split leaves as a new tab (a tab of one pane already is one)
+    if (paneId) {
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const near = (
+        [
+          ["left", x],
+          ["right", W - x],
+          ["up", y],
+          ["down", H - y],
+        ] as [Side, number][]
+      )
+        .filter((e) => e[1] < EDGE)
+        .sort((a, b) => a[1] - b[1])[0];
+      if (near) {
+        // The preview covers the pane that leaves (the hint goes where the eye is, not on the window's edge)
+        const own = document.querySelector<HTMLElement>(`[data-pane-id="${CSS.escape(paneId)}"]`);
+        const rect = own ? box(own.getBoundingClientRect()) : { left: 0, top: 0, width: W, height: H };
+        return { kind: "edge", side: near[0], rect };
+      }
+    }
     // The tab bar, when it's shown (the desktop sidebar hidden, or the old layout)
     const b = tabBar();
     const br = b?.getBoundingClientRect();
@@ -188,22 +225,32 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     const act = hit?.closest<HTMLElement>("[data-active-drop]");
     if (act) return session && !activeIds(get()).includes(session) ? { kind: "active", session, rect: box(act.getBoundingClientRect()) } : null;
     // A sidebar row dragged between two others (UnifiedSidebar): list it there, in this group or another one
-    const list = sideRow ? hit?.closest<HTMLElement>("[data-side-rows]") : null;
+    // A pane's title bar dropped there too (rowPane): a pane of a split leaves as a new tab listed there (detach)
+    const rowPane = sideRow ?? paneId ?? (srcTab.length === 1 ? srcTab[0].pane.id : undefined);
+    const list = rowPane ? hit?.closest<HTMLElement>("[data-side-rows]") : null;
     const rows = list ? [...list.querySelectorAll<HTMLElement>("[data-side-row]")] : [];
-    if (sideRow && list && rows.length) {
+    if (rowPane && list && rows.length) {
       const rs = rows.map((x) => x.getBoundingClientRect());
       let ins = rs.findIndex((r) => y < r.top + r.height / 2);
       if (ins < 0) ins = rs.length;
-      const own = rows.findIndex((x) => x.dataset.sideRow === sideRow);
-      if (own >= 0 && (ins === own || ins === own + 1)) return null;
+      const own = rows.findIndex((x) => x.dataset.sideRow === rowPane);
+      const to = own >= 0 && ins > own ? ins - 1 : ins;
+      // Only the pinned rows keep a hand-made order (the gap just under them included): elsewhere a place means nothing
+      const pins = rows.filter((x, i) => i !== own && x.dataset.pinned).length;
+      const pinned = own >= 0 && !!rows[own].dataset.pinned;
+      const group = list.closest<HTMLElement>("[data-ws-group]");
+      if (to > pins || (own >= 0 && pinned && (ins === own || ins === own + 1))) {
+        // A pane leaving its split still lands in this group as a new tab; a row only moves to another group (own < 0)
+        return group && (detach || (sideRow && own < 0)) ? { kind: "ws", wsId: list.dataset.sideRows!, rect: box(group.getBoundingClientRect()) } : null;
+      }
       const ly = ins < rs.length ? rs[ins].top : rs[rs.length - 1].bottom;
       const lr = list.getBoundingClientRect();
-      const to = own >= 0 && ins > own ? ins - 1 : ins;
-      return { kind: "row", wsId: list.dataset.sideRows!, pane: sideRow, to, line: { left: lr.left + 2, top: ly - 1, width: lr.width - 4, height: 2 } };
+      return { kind: "row", wsId: list.dataset.sideRows!, pane: rowPane, to, line: { left: lr.left + 2, top: ly - 1, width: lr.width - 4, height: 2 } };
     }
     const wsEl = hit?.closest<HTMLElement>("[data-ws-id]");
     // A sidebar row onto a group's title: listed at its end (any group, its own included); a tab moves to another workspace
-    if (wsEl) return wsEl.dataset.wsId === srcWs && !sideRow ? null : { kind: "ws", wsId: wsEl.dataset.wsId!, rect: box(wsEl.getBoundingClientRect()) };
+    if (wsEl)
+      return wsEl.dataset.wsId === srcWs && !sideRow && !detach ? null : { kind: "ws", wsId: wsEl.dataset.wsId!, rect: box(wsEl.getBoundingClientRect()) };
     const paneEl = hit?.closest<HTMLElement>("[data-pane-id]");
     if (!paneEl) return null;
     const overPane = paneEl.dataset.paneId!;
@@ -288,8 +335,18 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     }
     if (!t) restore();
     else if (t.kind === "active") (restore(), addActive([t.session]));
-    else if (t.kind === "row") placeRow(t.pane, t.wsId, t.to);
-    else if (t.kind === "ws" && sideRow) placeRow(sideRow, t.wsId, Infinity);
+    else if (t.kind === "row") {
+      // Out of its split first (a new tab in its own workspace), then listed where it was dropped
+      if (detach) movePane(t.pane, { wsId: srcWs });
+      placeRow(t.pane, t.wsId, t.to);
+    } else if (t.kind === "edge") {
+      // Right after the tab it leaves
+      const at =
+        get()
+          .layout.workspaces.find((w) => w.id === srcWs)
+          ?.tabs.findIndex((x) => x.id === tabId) ?? -1;
+      if (paneId) movePane(paneId, { wsId: srcWs, index: at >= 0 ? at + 1 : undefined });
+    } else if (t.kind === "ws" && sideRow) placeRow(sideRow, t.wsId, Infinity);
     else if (paneId) {
       if (t.kind === "reorder") (restore(), movePane(paneId, { wsId: t.wsId, index: t.to }));
       else if (t.kind === "tab") movePane(paneId, { tabId: t.tabId, side: "right" });
@@ -429,6 +486,11 @@ export function TabDragLayer() {
       )}
       {t?.kind === "active" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}
       {t?.kind === "ws" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}
+      {t?.kind === "edge" && (
+        <div className="fixed flex items-center justify-center rounded-md border-2 border-brand bg-brand/15" style={fixed(t.rect)}>
+          <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{tr("tabDrag.newTab")}</span>
+        </div>
+      )}
       {/* 拖影：在 tab 栏里排序时就是这个 tab 本身（不透明，盖住下面的字）；要合并 / 分屏 / 挪走时缩成指针右下角的小胶囊，
           不然它正好盖住要落的那个 tab / 那半边 pane，看不清落在哪 */}
       <div
@@ -437,9 +499,16 @@ export function TabDragLayer() {
           compact && "max-w-56 shadow-xl",
         )}
         style={
-          compact
-            ? { left: drag.x + 12, top: drag.y + 14, height: drag.h }
-            : { left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.w, height: drag.h }
+          t?.kind === "edge"
+            ? // Pulled inward from the edge it is pressed against, so it stays on screen
+              {
+                [t.side === "right" ? "right" : "left"]: t.side === "right" ? window.innerWidth - drag.x + 12 : drag.x + 12,
+                [t.side === "down" ? "bottom" : "top"]: t.side === "down" ? window.innerHeight - drag.y + 14 : drag.y + 14,
+                height: drag.h,
+              }
+            : compact
+              ? { left: drag.x + 12, top: drag.y + 14, height: drag.h }
+              : { left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.w, height: drag.h }
         }
       >
         {drag.ghost.agent ? (

@@ -99,6 +99,7 @@ export const zh = {
   "tabDrag.right": "放到右边",
   "tabDrag.up": "放到上面",
   "tabDrag.down": "放到下面",
+  "tabDrag.newTab": "移到新 tab",
 
   // Panes
   "panes.count": "这个 Tab 里的 Pane（点一下切到下一个）",
@@ -318,6 +319,7 @@ export const en: Record<keyof typeof zh, string> = {
   "tabDrag.right": "Drop on the right",
   "tabDrag.up": "Drop above",
   "tabDrag.down": "Drop below",
+  "tabDrag.newTab": "Move to a new tab",
 
   "panes.count": "Panes in this tab (tap for the next one)",
   "panes.subAgent": "Subagent",
