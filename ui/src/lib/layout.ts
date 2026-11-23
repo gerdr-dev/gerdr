@@ -51,10 +51,11 @@ export type FloatFit = "pc" | "pad" | "mobile";
 // stills can't be read, larger it isn't a corner view any more
 // device: the page is also that device to sites (user agent, client hints; chromeext phone.go fitUA), reloaded when it
 // changes: the size alone left sites that pick their page by the user agent sending the desktop one (asked for)
+// The default is the smallest: a floating browser is mostly watched in a corner, the user enlarges it when needed (asked for)
 export const FLOAT_FITS: Record<FloatFit, { w: number; h: number; mobile: boolean; device?: string; pw: [number, number, number] }> = {
-  pc: { w: 1280, h: 800, mobile: false, pw: [320, 480, 720] },
-  pad: { w: 820, h: 1180, mobile: true, device: "tablet", pw: [240, 320, 460] },
-  mobile: { w: 390, h: 844, mobile: true, device: "phone", pw: [170, 230, 300] },
+  pc: { w: 1280, h: 800, mobile: false, pw: [320, 320, 720] },
+  pad: { w: 820, h: 1180, mobile: true, device: "tablet", pw: [240, 240, 460] },
+  mobile: { w: 390, h: 844, mobile: true, device: "phone", pw: [170, 170, 300] },
 };
 // A floating Browser box (Code's FloatPane, a panel's PanelFloat) below this share of its fit's largest page width:
 // too small to hit what you mean, so its page only shows and a press anywhere moves it (asked for)
