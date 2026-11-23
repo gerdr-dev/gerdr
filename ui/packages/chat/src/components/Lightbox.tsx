@@ -279,6 +279,11 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
     return () => window.removeEventListener("resize", f);
   }, []);
 
+  // Take focus off whatever opened the lightbox: left on the thumbnail button behind it, Space / Enter "clicked" it
+  // again and reopened the lightbox (a new seq, so the zoom-in played again on every press). Closing hands focus back
+  // through chatHost().refocus.
+  useEffect(() => rootRef.current?.focus({ preventScroll: true }), []);
+
   // 捕获阶段拦键：Esc 在输入框里是「打断 agent」，灯箱开着时只该关灯箱
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -432,9 +437,10 @@ function Lightbox({ items, index, origin }: { items: LightboxItem[]; index: numb
       ref={rootRef}
       role="dialog"
       aria-label={t("lightbox.label")}
+      tabIndex={-1}
       // pointer-events-auto: an open modal dialog (Settings showing an add-on's screenshots) sets pointer-events: none
       // on <body>, and the lightbox is outside it. data-no-swipe: zoomed in, a drag pans (the pager leaves it alone)
-      className="pointer-events-auto fixed inset-0 z-[200] touch-none select-none"
+      className="pointer-events-auto fixed inset-0 z-[200] touch-none outline-none select-none"
       data-no-swipe={zoomed || undefined}
       onPointerDown={onDown}
       onPointerMove={onMove}
