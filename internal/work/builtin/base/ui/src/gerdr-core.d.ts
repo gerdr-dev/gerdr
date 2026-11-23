@@ -276,8 +276,10 @@ declare module "@gerdr/core" {
    * The built-in card (title, body, choices answerable in place with undo), for a card type that only adds to it.
    * `done`: settled outside it. It keeps its height in every state (the "other" box becomes the status line), so give
    * `done` rather than swapping it for a smaller card once answered: a card that shrinks moves the chat being read.
+   * `undoMs`: how long a pick waits, undoable, before it's sent (default 3000; a panel setting can give its own).
+   * Gerdr before 2026-11-23 ignores it and waits 6s.
    */
-  export function DefaultCard(props: { card: Card; done?: CardDone }): ReactNode;
+  export function DefaultCard(props: { card: Card; done?: CardDone; undoMs?: number }): ReactNode;
 
   /** gerdr's toasts. */
   export const toast: {

@@ -16,7 +16,8 @@ import { t } from "@/lib/i18n";
  *
  * `ref` names it, so a page can point the conversation at it (WorkPeek's jump). `choose` makes it answerable right
  * here: the pick runs `fn` of that Work project with `{ ...input, [field]: answer }`, the same call the page would
- * make. A pick waits UNDO_MS before it's sent, with an undo: once sent, the agent is already acting on it.
+ * make. A pick waits UNDO_MS (or the card type's `undoMs`) before it's sent, with an undo: once sent, the agent is
+ * already acting on it.
  * `multi`: options are ticked rather than sent on click, and a submit button sends the ticked ones (and anything
  * written under "other"), one per line.
  */
@@ -34,7 +35,9 @@ export type Card = {
   choose?: { project: string; fn: string; input?: Record<string, unknown>; field: string; options: string[]; other?: boolean; multi?: boolean };
 };
 
-const UNDO_MS = 6000;
+// 3s: long enough to catch a mis-tap, short enough that a deliberate pick doesn't sit waiting (6s felt slow). A panel
+// can give its own (DefaultCard's undoMs, e.g. from its settings)
+const UNDO_MS = 3000;
 
 /** The card in a finished tool call's result, if it has one. */
 export function cardOf(part: GPart | ToolPart): Card | undefined {
@@ -56,22 +59,22 @@ export function cardOf(part: GPart | ToolPart): Card | undefined {
 
 // Picks by card, outside the component: the chat is a virtual list, so a card scrolled away unmounts, and its pending
 // pick must still go out (or stay undoable) when it comes back
-type Pick = { v: string; at: number; sent?: boolean; err?: string; timer?: ReturnType<typeof setTimeout> };
+type Pick = { v: string; at: number; ms: number; sent?: boolean; err?: string; timer?: ReturnType<typeof setTimeout> };
 const picks = new Map<string, Pick>();
 
-function send(key: string, card: Card, v: string) {
+function send(key: string, card: Card, v: string, ms: number) {
   const ch = card.choose!;
-  const p: Pick = { v, at: Date.now() };
+  const p: Pick = { v, at: Date.now(), ms };
   p.timer = setTimeout(() => {
     api.workRun(ch.fn, { ...ch.input, [ch.field]: v }, ch.project).then(
       () => picks.set(key, { ...p, sent: true }),
       (e) => picks.set(key, { ...p, err: String(e?.message ?? e) }),
     );
-  }, UNDO_MS);
+  }, ms);
   picks.set(key, p);
 }
 
-/** "6 秒" left to undo, re-rendered every second while a pick waits. */
+/** "3 秒" left to undo, re-rendered every second while a pick waits. */
 function usePick(key: string) {
   const [, tick] = useState(0);
   const p = picks.get(key);
@@ -129,20 +132,21 @@ export type CardDone = { value?: string; dropped?: boolean; note?: ReactNode; ac
  * the last one (the "other" box while open) turning into the status line — a card that shrank when answered moved
  * the chat under the reader's eyes.
  */
-export function BuiltinCard({ card, done }: { card: Card; done?: CardDone }) {
+export function BuiltinCard({ card, done, undoMs }: { card: Card; done?: CardDone; undoMs?: number }) {
+  const ms = undoMs != null && Number.isFinite(undoMs) && undoMs >= 0 ? undoMs : UNDO_MS;
   const key = card.ref ?? card.title;
   const { p, rerender } = usePick(key);
   const [own, setOwn] = useState("");
   const ch = card.choose;
   const waiting = p && !p.sent && !p.err;
-  const left = waiting ? Math.max(0, Math.ceil((p.at + UNDO_MS - Date.now()) / 1000)) : 0;
+  const left = waiting ? Math.max(0, Math.ceil((p.at + p.ms - Date.now()) / 1000)) : 0;
   const [ticked, setTicked] = useState<string[]>([]);
   const multi = !!ch?.multi;
   // Settled outside: wins over a pick made here that went out already (the outside now says the same, or newer)
   const settled = !!done && !waiting && !p?.err;
   const choose = (v: string) => {
     if (settled || (p && !p.err)) return;
-    send(key, card, v);
+    send(key, card, v, ms);
     rerender();
   };
   // A multiple choice: a click ticks; the submit button sends the ticked ones (in the options' order) plus what's written
