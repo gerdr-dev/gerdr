@@ -131,7 +131,7 @@ g.on("turn", (t) => …);          // a turn ended, with its facts (see g.turns)
 
 `g.state()` is a read-only snapshot of workspaces, tabs, panes and sessions. `g.actions` does things: `newTab`,
 `duplicateTab`, `split`, `focusPane`, `renameTab`, `renameWorkspace`, `send(sessionId, text)` (sends a message),
-`insertText(sessionId, text)` (types into its composer at the caret, without sending), `runCommand`. `g.notify(text, { system })`
+`insertText(sessionId, text)` (types into its composer at the caret, without sending), `runCommand`. `g.notify(text, { level, system, sticky, id })`
 shows a toast or a system notification.
 
 ### Draw

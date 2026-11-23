@@ -20,8 +20,11 @@ export function systemNotify(title: string, body: string, sessionId?: string) {
   else if (Notification.permission !== "denied") Notification.requestPermission().then((p) => p === "granted" && show());
 }
 
-export function notify(text: string, opts?: { level?: "info" | "error"; system?: boolean; sessionId?: string }) {
-  if (opts?.system) systemNotify("Gerdr", text, opts.sessionId);
-  else if (opts?.level === "error") toast.error(text);
-  else toast(text);
+export function notify(text: string, opts?: { level?: "info" | "error"; system?: boolean; sessionId?: string; sticky?: boolean; id?: string }) {
+  if (opts?.system) return systemNotify("Gerdr", text, opts.sessionId);
+  // sticky: stays until closed, for something to act on that a few seconds would hide; id: shown again, it replaces
+  // the one on screen instead of stacking a copy
+  const o = { id: opts?.id, ...(opts?.sticky ? { duration: Infinity, closeButton: true } : {}) };
+  if (opts?.level === "error") toast.error(text, o);
+  else toast(text, o);
 }

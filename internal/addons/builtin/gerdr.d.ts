@@ -161,8 +161,12 @@ declare global {
     on(event: "event", fn: (e: GerdrEvent) => void): Dispose;
     on(event: "focusChanged", fn: (e: { pane?: PaneInfo; tab?: TabInfo; workspace?: WorkspaceInfo }) => void): Dispose;
 
-    /** 弹一条提示。system: true 时用系统通知（mac App / 浏览器通知权限）。 */
-    notify(text: string, opts?: { level?: "info" | "error"; system?: boolean }): void;
+    /**
+     * A toast (error: in the bad colour). system: the system's notification instead (the Mac App natively, a browser
+     * with its permission). sticky: stays until closed (a close button), for something to act on; id: showing it
+     * again replaces the one on screen instead of stacking a copy. Older Gerdr ignores sticky / id.
+     */
+    notify(text: string, opts?: { level?: "info" | "error"; system?: boolean; sticky?: boolean; id?: string }): void;
 
     /**
      * The interface's language: "zh" or "en". Fixed while the add-on runs (changing it reloads the page, and the

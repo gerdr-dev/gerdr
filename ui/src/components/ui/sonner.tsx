@@ -38,6 +38,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           pointerEvents: "auto",
         } as React.CSSProperties
       }
+      // An error looked like any other toast (the icon alone, in the text's colour): its text and border in the bad
+      // token, the card's background left as it is, the way an error note looks in the composer
+      toastOptions={{ classNames: { error: "text-bad! border-bad/40!" } }}
       {...props}
     />
   )
