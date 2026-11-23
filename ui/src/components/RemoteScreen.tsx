@@ -377,8 +377,10 @@ export function RemoteScreen({ open }: { open: boolean }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && closeDialog()}>
+      {/* Nearly full height, centred: in the desktop App it would reach the traffic lights' row, so it leaves that
+          row's height free above and below (--titlebar-h, unset outside the App) */}
       <DialogContent
-        className="flex h-[calc(var(--vvh,100dvh)-1rem)] max-w-[calc(100%-1rem)] flex-col gap-2 overflow-hidden p-2 sm:max-w-[calc(100%-2rem)] sm:p-3"
+        className="flex h-[calc(var(--vvh,100dvh)-1rem-2*var(--titlebar-h,0px))] max-w-[calc(100%-1rem)] flex-col gap-2 overflow-hidden p-2 sm:max-w-[calc(100%-2rem)] sm:p-3"
         style={vvh}
         aria-describedby={undefined}
       >
