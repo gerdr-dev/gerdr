@@ -44,7 +44,7 @@ gerdr browser fill e3 "value"              # replace a field / pick an option / 
 gerdr browser key cmd+a Backspace          # keys in turn; Enter, Tab, Escape, Arrow*, cmd/ctrl/shift/alt+…
 gerdr browser wait --text "已完成" --timeout 2m   # or --gone / --selector / --url / --load / --for 3s
 gerdr browser text                         # URL, title, visible text
-gerdr browser screenshot                   # prints a PNG path; look at it with your image reader
+gerdr browser screenshot                   # prints a PNG path (kept in ~/.gerdr/screenshots/); look at it with your image reader
 gerdr browser scroll down --amount 10      # or scroll e40 (into view), --on e5 (a scrollable panel)
 gerdr browser network --filter api         # requests since open; `body <id>` reads a response
 gerdr browser console --errors

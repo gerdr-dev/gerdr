@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gerdr-dev/gerdr/internal/chromeext"
+	"github.com/gerdr-dev/gerdr/internal/config"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
 )
 
@@ -185,12 +186,20 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 	var shot chromeext.ActArgs
 	shotCmd := &cobra.Command{
 		Use:   "screenshot [file]",
-		Short: i18n.S("截图存到文件（默认临时目录），打印路径。图按 CSS 像素，图上的坐标就是 click x,y", "Save a screenshot (default: a temp file) and print its path. It is in CSS pixels: a point on it is click x,y"),
+		Short: i18n.S("截图存到文件（默认 ~/.gerdr/screenshots/，不会被系统清掉，可以直接贴进对话），打印路径。图按 CSS 像素，图上的坐标就是 click x,y", "Save a screenshot (default: ~/.gerdr/screenshots/, which the system doesn't clean, so it can go in the chat) and print its path. It is in CSS pixels: a point on it is click x,y"),
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			file := filepath.Join(os.TempDir(), fmt.Sprintf("gerdr-browser-%d.png", time.Now().UnixMilli()))
+			// Not the system temp dir: agents show these in the chat (![](path)), and macOS cleans /var/folders/…/T
+			// within days, so older conversations ended up full of broken images. Kept under Gerdr's own dir instead.
+			var file string
 			if len(args) == 1 {
 				file = args[0]
+			} else {
+				dir := filepath.Join(config.FromEnv().Dir, "screenshots")
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					return err
+				}
+				file = filepath.Join(dir, fmt.Sprintf("gerdr-browser-%d.png", time.Now().UnixMilli()))
 			}
 			if l := strings.ToLower(file); strings.HasSuffix(l, ".jpg") || strings.HasSuffix(l, ".jpeg") {
 				shot.Format = "jpeg"
