@@ -974,6 +974,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		s.modes, s.config = res.Modes, res.ConfigOptions
 		h.opts.set(o.Agent, res.Modes, res.ConfigOptions)
 		h.register(s)
+		s.applyMode(ctx, c, o.Mode)
 		s.applyConfig(ctx, mergeConfig(defConfig, o.Config))
 	}
 	s.syncRecFromState()
@@ -1297,6 +1298,28 @@ func (h *Hub) Pending() []PendingReq {
 }
 
 // checkMode：新建会话时指定的模式得在 agent 报的可选模式里。agent 没报模式（有的外部 agent 不支持）就不查。
+// applyMode: the mode a session should be in, set with session/set_mode when the agent didn't take it from _meta.
+// Gerdr's own adapters read the mode from _meta at session/new and session/resume; an external ACP agent (Antigravity's
+// `agy acp`) ignores _meta and opens in its own default, so the settings' default mode ("auto") showed in the picker's
+// default but every command still asked. A mode the agent doesn't offer is skipped (checkMode decides explicit ones).
+func (s *Session) applyMode(ctx context.Context, c *agenthost.Host, mode string) {
+	s.mu.Lock()
+	modes, sid := s.modes, s.rec.AgentSessionID
+	s.mu.Unlock()
+	if mode == "" || modes == nil || string(modes.CurrentModeId) == mode || checkMode(mode, modes) != nil {
+		return
+	}
+	if _, err := c.Conn.SetSessionMode(ctx, acp.SetSessionModeRequest{SessionId: acp.SessionId(sid), ModeId: acp.SessionModeId(mode)}); err != nil {
+		s.h.log.Warn("setting the session mode", "session", s.rec.ID, "mode", mode, "err", err)
+		return
+	}
+	s.mu.Lock()
+	if s.modes != nil {
+		s.modes.CurrentModeId = acp.SessionModeId(mode)
+	}
+	s.mu.Unlock()
+}
+
 func checkMode(mode string, modes *acp.SessionModeState) error {
 	if mode == "" || modes == nil || len(modes.AvailableModes) == 0 {
 		return nil

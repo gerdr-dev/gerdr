@@ -132,6 +132,10 @@ export type ChatSession = {
   /** commands came from a cache (the agent hasn't reported its own yet) */
   commandsCached?: boolean;
   tasks?: AgentTask[];
-  turn?: { startedAt: number; outputTokens: number }; // the running turn
+  /**
+   * The running turn. mode: the mode it really runs under, when that isn't the session's current one (an agent that
+   * only takes a mode change at its next turn: the picker then shows "Default → Auto")
+   */
+  turn?: { startedAt: number; outputTokens: number; mode?: string };
   context?: { tokens: number; window: number }; // context usage
 };

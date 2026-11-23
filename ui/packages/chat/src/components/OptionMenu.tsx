@@ -23,7 +23,10 @@ export function OptionMenu({
   onChange,
   defaultValue,
   onSetDefault,
+  actual,
 }: {
+  /** The value really in effect, when it isn't value (OptGroup.actual) */
+  actual?: string;
   label: string;
   value: string;
   options: Opt[];
@@ -32,20 +35,32 @@ export function OptionMenu({
   onSetDefault?: () => void;
 }) {
   const cur = options.find((o) => o.value === value);
+  const act = actual !== undefined && actual !== value ? options.find((o) => o.value === actual) : undefined;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex h-7 min-w-0 max-w-44 items-center gap-1 rounded-md px-1.5 text-[12px] max-md:max-w-none max-md:shrink-0 text-muted-foreground outline-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted">
-        <span className="truncate">{cur?.name ?? (value || label)}</span>
+        {act ? (
+          // What runs now, then what was chosen: the agent hasn't taken the choice yet
+          <span className="truncate text-warn">
+            {act.name} → {cur?.name ?? value}
+          </span>
+        ) : (
+          <span className="truncate">{cur?.name ?? (value || label)}</span>
+        )}
         {/* 手机上省掉箭头：底栏就这么宽，留给名字 */}
         <ChevronDown className="size-3 shrink-0 opacity-60 max-md:hidden" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-80 w-72 overflow-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
         <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{label}</DropdownMenuLabel>
+        {act && <ActualNote actual={act.name} chosen={cur?.name ?? value} />}
         {options.map((o) => (
           <DropdownMenuItem key={o.value || "__"} onClick={() => onChange(o.value)} className="items-start gap-2">
             <Check className={cn("mt-0.5 size-3.5 shrink-0", o.value === value ? "opacity-100" : "opacity-0")} />
             <div className="min-w-0">
-              <div className="text-[13px]">{o.name}</div>
+              <div className="text-[13px]">
+                {o.name}
+                {act?.value === o.value && <ActualTag />}
+              </div>
               {o.description && <div className="text-[11px] leading-snug text-muted-foreground">{o.description}</div>}
             </div>
           </DropdownMenuItem>
@@ -54,6 +69,17 @@ export function OptionMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+// The value in effect isn't the one chosen (OptGroup.actual): said under the menu's title, and tagged on its item.
+function ActualNote({ actual, chosen }: { actual: string; chosen: string }) {
+  return <div className="px-2 pb-1.5 text-[11px] leading-snug text-warn">{t("options.actualNote", { actual, chosen })}</div>;
+}
+
+const actualOf = (g: OptGroup) => g.actual !== undefined && g.actual !== g.value && g.options.some((o) => o.value === g.actual);
+
+function ActualTag() {
+  return <span className="ml-1.5 rounded bg-warn/15 px-1 text-[10px] text-warn">{t("options.actual")}</span>;
 }
 
 function SetDefaultItem({ same, onClick, all }: { same: boolean; onClick: () => void; all?: boolean }) {
@@ -68,7 +94,16 @@ function SetDefaultItem({ same, onClick, all }: { same: boolean; onClick: () => 
   );
 }
 
-export type OptGroup = { id: string; label: string; value: string; options: Opt[]; onChange: (v: string) => void; defaultValue?: string };
+export type OptGroup = {
+  id: string;
+  label: string;
+  value: string;
+  options: Opt[];
+  onChange: (v: string) => void;
+  defaultValue?: string;
+  /** The value really in effect when it isn't value (ChatSession.turn.mode): the agent takes the choice later */
+  actual?: string;
+};
 
 // 值得一直看得见的模式：只做计划 / 只读（agent 不动文件，以为它在改其实没改）、全放开（不再问就动手）。
 // 其它模式（默认、自动、接受编辑）平时就那样，收起来不占地方
@@ -96,7 +131,14 @@ export function OptionsMenu({
   const all = mode ? [mode, ...groups] : groups;
   const nameOf = (g: OptGroup) => g.options.find((o) => o.value === g.value)?.name ?? g.value;
   // At 2 the mode goes too: "Full access" takes half a phone's row
-  const modeName = (short ?? 0) < 2 && mode && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
+  // A mode not in effect yet shows as "Default → Auto" whatever it is: the mode really running is what matters here
+  const modeName = !mode
+    ? undefined
+    : actualOf(mode)
+      ? `${nameOf({ ...mode, value: mode.actual! })} → ${nameOf(mode)}`
+      : (short ?? 0) < 2 && LOUD_MODE.test(mode.value)
+        ? nameOf(mode)
+        : undefined;
   const shown = short ? groups.filter((g) => g.id === "model").slice(0, 1) : groups;
   const summary = (shown.length ? shown : groups.slice(0, 1)).map(nameOf).filter(Boolean).join(" · ");
   if (!all.length) return null;
@@ -108,7 +150,7 @@ export function OptionsMenu({
         )}
       >
         {!summary && !modeName && <SlidersHorizontal className="size-4" />}
-        {modeName && <span className="max-w-28 shrink-0 truncate">{modeName}</span>}
+        {modeName && <span className={cn("max-w-28 shrink-0 truncate", mode && actualOf(mode) && "max-w-40 text-warn")}>{modeName}</span>}
         {summary && <span className="truncate">{summary}</span>}
         {chevron && <ChevronDown className="-ml-0.5 size-3 shrink-0 opacity-60" />}
       </DropdownMenuTrigger>
@@ -117,11 +159,15 @@ export function OptionsMenu({
           <DropdownMenuGroup key={g.id}>
             {i > 0 && <DropdownMenuSeparator />}
             <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{g.label}</DropdownMenuLabel>
+            {actualOf(g) && <ActualNote actual={nameOf({ ...g, value: g.actual! })} chosen={nameOf(g)} />}
             {g.options.map((o) => (
               <DropdownMenuItem key={o.value || "__"} onClick={() => g.onChange(o.value)} className="items-start gap-2">
                 <Check className={cn("mt-0.5 size-3.5 shrink-0", o.value === g.value ? "opacity-100" : "opacity-0")} />
                 <div className="min-w-0">
-                  <div className="text-[13px]">{o.name}</div>
+                  <div className="text-[13px]">
+                    {o.name}
+                    {actualOf(g) && g.actual === o.value && <ActualTag />}
+                  </div>
                   {o.description && <div className="text-[11px] leading-snug text-muted-foreground">{o.description}</div>}
                 </div>
               </DropdownMenuItem>

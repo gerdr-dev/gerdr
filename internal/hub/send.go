@@ -259,6 +259,7 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 	s.lastErr = ""
 	s.turnMsg = msgID
 	s.turnStarted, s.turnTokens = now(), 0
+	s.turnMode = s.turnModeLocked()
 	s.quiet = false
 	s.byPerson = person
 	if person {
@@ -344,6 +345,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	if next {
 		s.running, s.auto = true, true
 		s.turnStarted, s.turnTokens = now(), 0
+		s.turnMode = s.turnModeLocked()
 		s.quiet = false
 	}
 	// A slash command held back while this turn ran goes next (deferred.go); after the agent's own turn if one follows

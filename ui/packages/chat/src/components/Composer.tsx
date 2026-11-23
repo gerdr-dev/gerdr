@@ -1194,6 +1194,7 @@ const ComposerImpl = forwardRef<
           label: tr("composer.mode"),
           value: modes.currentModeId,
           defaultValue: defs[MODE],
+          actual: running ? session.turn?.mode : undefined,
           options: modes.availableModes.map((m) => ({ value: m.id, name: m.name, description: m.description })),
           onChange: (v) => host.setMode!(session.id, v).catch((e) => toast.error(e.message)),
         }
@@ -1581,6 +1582,7 @@ const ComposerImpl = forwardRef<
                       options={g.options}
                       onChange={g.onChange}
                       defaultValue={g.defaultValue}
+                      actual={g.actual}
                       onSetDefault={
                         defaults &&
                         (() => {

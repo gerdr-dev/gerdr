@@ -181,6 +181,7 @@ type Session struct {
 	closeAfter  bool
 	tasks       []acpx.Task
 	turnStarted int64                // 这一轮几点开始的（状态行：跑了多久）
+	turnMode    string               // the mode at the turn's start (TurnInfo.Mode)
 	byPerson    bool                 // the last turn was started (or joined) by a person typing, not by code / an agent
 	personSaid  PersonSaid           // the last message a person typed in it (in memory only)
 	quiet       bool                 // the last turn was only a /clear (Summary.Quiet)
@@ -372,6 +373,9 @@ type ContextInfo struct {
 type TurnInfo struct {
 	StartedAt    int64 `json:"startedAt"`
 	OutputTokens int   `json:"outputTokens"`
+	// Mode: the mode this turn really runs under, when a person changed it after the turn started (the picker shows
+	// the new one). Only for external agents, see turnModeLocked.
+	Mode string `json:"mode,omitempty"`
 }
 
 func (s *Session) contextLocked() *ContextInfo {
@@ -385,7 +389,23 @@ func (s *Session) turnInfoLocked() *TurnInfo {
 	if !s.running || s.stopping != nil {
 		return nil
 	}
-	return &TurnInfo{StartedAt: s.turnStarted, OutputTokens: s.turnTokens}
+	t := &TurnInfo{StartedAt: s.turnStarted, OutputTokens: s.turnTokens}
+	if s.modes != nil && s.turnMode != "" && s.turnMode != string(s.modes.CurrentModeId) {
+		t.Mode = s.turnMode
+	}
+	return t
+}
+
+// turnModeLocked: the mode a turn starting now runs under, for TurnInfo.Mode. An external ACP agent may fix its
+// permission mode when a turn starts: Antigravity (`agy acp`) reports a mode changed mid-turn at once but keeps
+// asking under the old one until its next prompt (measured: set_mode auto on the first ask, the turn's next two
+// commands still asked, the next turn's didn't), so "I set Auto and it still asks" read as Gerdr ignoring the picker.
+// Gerdr's own adapters apply a change at once: empty for them.
+func (s *Session) turnModeLocked() string {
+	if s.modes == nil || builtinAgent(s.h.Base(s.rec.Agent)) {
+		return ""
+	}
+	return string(s.modes.CurrentModeId)
 }
 
 func (s *Session) Summary() Summary {
@@ -603,6 +623,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 				s.modes, s.config = nres.Modes, nres.ConfigOptions
 				s.h.opts.set(s.rec.Agent, s.modes, s.config)
 				s.mu.Unlock()
+				s.applyMode(ctx, c, rec.Mode)
 				s.syncRecFromState()
 				s.h.broadcastSession(s)
 				return c, nil
@@ -615,6 +636,7 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	s.modes, s.config = res.Modes, res.ConfigOptions
 	s.h.opts.set(s.rec.Agent, s.modes, s.config)
 	s.mu.Unlock()
+	s.applyMode(ctx, c, rec.Mode)
 	s.syncRecFromState()
 	s.h.broadcastSession(s)
 	return c, nil
