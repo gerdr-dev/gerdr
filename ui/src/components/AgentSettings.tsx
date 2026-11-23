@@ -1,4 +1,4 @@
-import { Check, Copy, Pencil, Plus } from "lucide-react";
+import { Check, Copy, Loader2, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, SPRITE } from "@/components/AgentIcon";
@@ -54,6 +54,49 @@ type Draft = {
   showThinking: ThinkingDisplay;
 };
 
+/**
+ * Common ACP agents offered under the command field: picking one fills the command (and the name if it's empty). Each
+ * command was checked to answer ACP's session/new; an env line with no value is a key the agent needs.
+ */
+const ACP_PRESETS: { name: string; command: string; env?: string }[] = [
+  { name: "Antigravity", command: "agy acp" },
+  { name: "Gemini CLI", command: "gemini --acp" },
+  { name: "OpenCode", command: "opencode acp" },
+  { name: "Pi", command: "npx -y pi-acp" },
+  { name: "DeepSeek Harness", command: "npx -y dsh-acp", env: "DEEPSEEK_API_KEY=" },
+];
+
+type Options = NonNullable<AgentInfo["options"]>;
+/** What reading an external agent's options (POST /api/agents/probe) came to; key = the command + env it ran with. */
+type Probe = { key: string; state: "loading" | "done" | "error"; opts?: Options; error?: string };
+
+const words = (s: string) => s.split(/\s+/).filter(Boolean);
+
+function parseEnv(text: string) {
+  const env: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const ln = line.trim();
+    if (!ln || ln.startsWith("#")) continue;
+    const i = ln.indexOf("=");
+    if (i <= 0) throw new Error(t("agentSettings.err.envFormat", { line: ln }));
+    env[ln.slice(0, i).trim()] = ln.slice(i + 1).trim();
+  }
+  return env;
+}
+
+/**
+ * The env text after picking preset p: lines another preset put there and nobody filled in (`KEY=` with no value)
+ * go, p's own keys are added if missing; anything typed or filled in stays. Before, only an empty box took the
+ * preset's lines, so DeepSeek's `DEEPSEEK_API_KEY=` stayed behind after switching to Antigravity.
+ */
+function presetEnv(text: string, p: (typeof ACP_PRESETS)[number]) {
+  const templ = new Set(ACP_PRESETS.flatMap((x) => (x.env ?? "").split("\n")).filter(Boolean));
+  const lines = text.split("\n").filter((ln) => ln.trim() && !templ.has(ln.trim()));
+  const has = (k: string) => lines.some((ln) => ln.trim().startsWith(k + "="));
+  for (const ln of (p.env ?? "").split("\n").filter(Boolean)) if (!has(ln.split("=")[0])) lines.push(ln);
+  return lines.join("\n");
+}
+
 const kindName = (k: Kind) => (k === "command" ? t("agentSettings.kind.command") : { claude: "Claude Code", codex: "Codex", native: "Native" }[k]);
 
 /** The built-in agents: their id is their engine. config.agents may hold an entry editing one (hub.ValidAgentDefs). */
@@ -83,15 +126,7 @@ const toDraft = (d: AgentDef): Draft => ({
 });
 
 function fromDraft(d: Draft): AgentDef {
-  const env: Record<string, string> = {};
-  for (const line of d.env.split("\n")) {
-    const ln = line.trim();
-    if (!ln || ln.startsWith("#")) continue;
-    const i = ln.indexOf("=");
-    if (i <= 0) throw new Error(t("agentSettings.err.envFormat", { line: ln }));
-    env[ln.slice(0, i).trim()] = ln.slice(i + 1).trim();
-  }
-  const words = (s: string) => s.split(/\s+/).filter(Boolean);
+  const env = parseEnv(d.env);
   if (!d.name.trim()) throw new Error(t("agentSettings.err.nameRequired"));
   const fallbackShow = showThinkingFor(get().config);
   const showThinking = d.showThinking === fallbackShow ? undefined : d.showThinking;
@@ -178,7 +213,7 @@ export function AgentSettings() {
     env,
     bin: "",
     args: "",
-    command: kind === "command" ? "gemini --experimental-acp" : "",
+    command: "",
     prompt: "",
     skills: null,
     mcp: null,
@@ -436,7 +471,40 @@ function Editor({
   const login = d.kind === "claude" && dir ? `CLAUDE_CONFIG_DIR=${dir} claude` : d.kind === "codex" && codexHome ? `CODEX_HOME=${codexHome} codex login` : "";
   const role = d.kind !== "command";
   // 「高级」里填过东西（另一个账号）就展开着，不然收起来：大多数角色用不到
-  const [adv, setAdv] = useState(!!(d.env || d.bin || d.args) || d.kind === "command");
+  const [adv, setAdv] = useState(!!(d.env || d.bin || d.args));
+  // An external agent's modes / models aren't known until it has run once: start its command to read them as soon as
+  // it's filled in (on leaving the field, picking a preset, opening one that never ran), so a model can be picked here.
+  const agents = useStore((s) => s.agents);
+  const [probe, setProbe] = useState<Probe | null>(null);
+  const runProbe = (command = d.command, envText = d.env, force = false) => {
+    const argv = words(command);
+    if (!argv.length) return;
+    let env: Record<string, string> = {};
+    try {
+      env = parseEnv(envText);
+    } catch {
+      // a half-typed env line: try without it, saving will point at the line
+    }
+    const key = JSON.stringify([argv, env]);
+    if (!force && probe?.key === key) return;
+    setProbe({ key, state: "loading" });
+    api
+      .probeAgent({ id: d.id, command: argv, env })
+      .then((opts) => setProbe((p) => (p?.key === key ? { key, state: "done", opts } : p)))
+      .catch((e) => setProbe((p) => (p?.key === key ? { key, state: "error", error: e.message } : p)));
+  };
+  useEffect(() => {
+    if (d.kind === "command" && d.command.trim() && !optionsOf(agents, d.id, d.kind)) runProbe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pickPreset = (p: (typeof ACP_PRESETS)[number]) => {
+    const env = presetEnv(d.env, p);
+    const name = !d.name.trim() || ACP_PRESETS.some((x) => x.name === d.name) ? p.name : d.name;
+    set({ command: p.command, env, name });
+    runProbe(p.command, env);
+  };
+  // Options from a probe of what's in the fields now win over the cached ones (the command may have changed)
+  const probed = d.kind === "command" && probe?.state === "done" ? probe.opts : undefined;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* the scrolling part, its scrollbar at the dialog's edge */}
@@ -471,6 +539,47 @@ function Editor({
                   <SelectItem value="command">{t("agentSettings.externalAcp")}</SelectItem>
                 </SelectContent>
               </Select>
+            </>
+          )}
+          {d.kind === "command" && (
+            <>
+              <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.command")}</span>
+              <div className="space-y-1.5">
+                <Input
+                  value={d.command}
+                  onChange={(e) => set({ command: e.target.value })}
+                  onBlur={() => runProbe()}
+                  onKeyDown={stop}
+                  className="h-8 font-mono text-[12px]"
+                  placeholder="agy acp"
+                />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">{t("agentSettings.presets")}</span>
+                  {ACP_PRESETS.map((p) => (
+                    <button
+                      key={p.name}
+                      title={p.command}
+                      onClick={() => pickPreset(p)}
+                      className={cn(
+                        "rounded-md border px-2 py-0.5 text-[12px] hover:bg-accent",
+                        d.command.trim() === p.command && "border-brand bg-brand/10 text-foreground",
+                      )}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.env")}</span>
+              <textarea
+                className="h-20 w-full rounded-md border bg-card p-2 font-mono text-[12px]"
+                value={d.env}
+                spellCheck={false}
+                onChange={(e) => set({ env: e.target.value })}
+                onBlur={() => runProbe()}
+                onKeyDown={stop}
+                placeholder={t("agentSettings.envPlaceholder")}
+              />
             </>
           )}
           {d.kind === "native" && (
@@ -524,6 +633,9 @@ function Editor({
           id={d.id}
           base={d.kind}
           providers={d.kind === "native" ? d.providers : undefined}
+          probed={probed}
+          probe={d.kind === "command" ? (d.command.trim() ? probe : "empty") : undefined}
+          onProbe={() => runProbe(d.command, d.env, true)}
           value={d.defaults}
           onChange={(v) => set({ defaults: v })}
         />
@@ -545,46 +657,31 @@ function Editor({
           <div className="text-[11px] text-muted-foreground">{t("agentSettings.showThinkingHint")}</div>
         </div>
 
-        {d.kind !== "native" && (
+        {d.kind !== "native" && d.kind !== "command" && (
           <div className="space-y-2.5">
-            {d.kind !== "command" && (
-              <button className="text-[12px] text-muted-foreground hover:text-foreground" onClick={() => setAdv(!adv)}>
-                {adv ? "▾" : "▸"} {t("agentSettings.advanced")}
-              </button>
-            )}
-            {(adv || d.kind === "command") && (
+            <button className="text-[12px] text-muted-foreground hover:text-foreground" onClick={() => setAdv(!adv)}>
+              {adv ? "▾" : "▸"} {t("agentSettings.advanced")}
+            </button>
+            {adv && (
               <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2.5 max-md:[&>span.text-muted-foreground]:-mb-1.5 max-md:[&>span.text-muted-foreground]:pt-0">
-                {d.kind === "command" ? (
-                  <>
-                    <span className="text-muted-foreground">{t("agentSettings.command")}</span>
-                    <Input
-                      value={d.command}
-                      onChange={(e) => set({ command: e.target.value })}
-                      onKeyDown={stop}
-                      className="h-8 font-mono text-[12px]"
-                      placeholder="gemini --experimental-acp"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <span className="text-muted-foreground">{t("agentSettings.bin")}</span>
-                    <Input
-                      value={d.bin}
-                      onChange={(e) => set({ bin: e.target.value })}
-                      onKeyDown={stop}
-                      className="h-8 font-mono text-[12px]"
-                      placeholder={t("agentSettings.binPlaceholder", { kind: d.kind })}
-                    />
-                    <span className="text-muted-foreground">{t("agentSettings.args")}</span>
-                    <Input
-                      value={d.args}
-                      onChange={(e) => set({ args: e.target.value })}
-                      onKeyDown={stop}
-                      className="h-8 font-mono text-[12px]"
-                      placeholder={t("agentSettings.argsPlaceholder", { example: d.kind === "claude" ? "--settings ~/my-settings.json" : "-c model=o3" })}
-                    />
-                  </>
-                )}
+                <>
+                  <span className="text-muted-foreground">{t("agentSettings.bin")}</span>
+                  <Input
+                    value={d.bin}
+                    onChange={(e) => set({ bin: e.target.value })}
+                    onKeyDown={stop}
+                    className="h-8 font-mono text-[12px]"
+                    placeholder={t("agentSettings.binPlaceholder", { kind: d.kind })}
+                  />
+                  <span className="text-muted-foreground">{t("agentSettings.args")}</span>
+                  <Input
+                    value={d.args}
+                    onChange={(e) => set({ args: e.target.value })}
+                    onKeyDown={stop}
+                    className="h-8 font-mono text-[12px]"
+                    placeholder={t("agentSettings.argsPlaceholder", { example: d.kind === "claude" ? "--settings ~/my-settings.json" : "-c model=o3" })}
+                  />
+                </>
                 <span className="self-start pt-1.5 text-muted-foreground">{t("agentSettings.env")}</span>
                 <textarea
                   className="h-24 w-full rounded-md border bg-card p-2 font-mono text-[12px]"
@@ -817,18 +914,24 @@ function DefaultsEditor({
   id,
   base,
   providers,
+  probed,
+  probe,
+  onProbe,
   value,
   onChange,
 }: {
   id: string;
   base: string;
   providers?: string[]; // Native 引擎的 agent：模型只列这几家的（空 = 全部）
+  probed?: Options; // an external agent's options just read from its command (wins over the cached ones)
+  probe?: Probe | null | "empty"; // an external agent: how reading its options stands ("empty" = no command yet)
+  onProbe?: () => void;
   value: Record<string, string>;
   onChange: (v: Record<string, string>) => void;
 }) {
   const agents = useStore((s) => s.agents);
   const llm = useStore((s) => s.config.llm);
-  const o = optionsOf(agents, id, base);
+  const o = probed ?? optionsOf(agents, id, base);
   const rows: { key: string; label: string; options: { value: string; name: string }[] }[] = [];
   if (o?.modes?.availableModes.length)
     rows.push({ key: MODE, label: t("agentSettings.mode"), options: o.modes.availableModes.map((m) => ({ value: m.id, name: m.name })) });
@@ -858,8 +961,22 @@ function DefaultsEditor({
   return (
     <div className="space-y-1.5 rounded-md border bg-card p-2.5">
       <div className="font-medium">{t("agentSettings.newSessionDefaults")}</div>
-      {!rows.length ? (
-        <div className="text-[12px] text-muted-foreground">{t("agentSettings.noOptions")}</div>
+      {probe && probe !== "empty" && probe.state === "loading" ? (
+        <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" />
+          {t("agentSettings.probing")}
+        </div>
+      ) : probe && probe !== "empty" && probe.state === "error" ? (
+        <div className="space-y-1 text-[12px]">
+          <div className="break-words text-bad">{t("agentSettings.probeFailed", { error: probe.error ?? "" })}</div>
+          <button className="text-muted-foreground underline hover:text-foreground" onClick={onProbe}>
+            {t("agentSettings.probeRetry")}
+          </button>
+        </div>
+      ) : !rows.length ? (
+        <div className="text-[12px] text-muted-foreground">
+          {probe === "empty" ? t("agentSettings.noOptionsNoCommand") : probe ? t("agentSettings.probeNothing") : t("agentSettings.noOptions")}
+        </div>
       ) : (
         <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 max-md:grid-cols-1 gap-y-2 max-md:gap-y-2.5 max-md:[&>div>span.text-muted-foreground]:-mb-1 max-md:[&>div>span.text-muted-foreground]:pt-0">
           {rows.map((r) => {

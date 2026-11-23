@@ -191,6 +191,7 @@ func (o *optSets) key(modes []acp.SessionMode, config []acp.SessionConfigOption)
 	if k, ok := o.last[id]; ok {
 		return k
 	}
+	config = withoutModeOption(modes, config)
 	set := OptionSet{Modes: modes, Config: make([]acp.SessionConfigOption, len(config))}
 	for i, opt := range config {
 		if opt.Select != nil {
@@ -213,6 +214,23 @@ func (o *optSets) key(modes []acp.SessionMode, config []acp.SessionConfigOption)
 	}
 	o.last[id] = k
 	return k
+}
+
+// withoutModeOption drops a config option of category "mode" when the agent also reports modes the old way: ACP
+// lets an agent offer both for older clients (Antigravity's `agy acp` does), and showing both drew the same choice
+// twice ("模式" and "Mode"). Gerdr keeps the modes list: the mode default, `--mode` checks and the permissive-mode
+// guard all work on it.
+func withoutModeOption(modes []acp.SessionMode, config []acp.SessionConfigOption) []acp.SessionConfigOption {
+	if len(modes) == 0 {
+		return config
+	}
+	for i, c := range config {
+		if c.Select != nil && c.Select.Category != nil && *c.Select.Category == acp.SessionConfigOptionCategoryMode {
+			out := append(append(make([]acp.SessionConfigOption, 0, len(config)-1), config[:i]...), config[i+1:]...)
+			return withoutModeOption(modes, out)
+		}
+	}
+	return config
 }
 
 // OptionSet: the lists a Summary's OptsKey stands for (false if unknown: the page asks again after the next Summary).

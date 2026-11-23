@@ -44,6 +44,25 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"reply": reply, "api": api})
 	})
+	// Settings → Agent: start an external ACP agent's command once to read its modes / models (hub.ProbeAgent), so
+	// a new one gets its new-session defaults before its first session. The command comes from the page (a draft).
+	mux.HandleFunc("POST /api/agents/probe", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			ID      string            `json:"id"`
+			Command []string          `json:"command"`
+			Env     map[string]string `json:"env"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		o, err := s.Hub.ProbeAgent(r.Context(), b.ID, b.Command, b.Env)
+		if err != nil {
+			httpError(w, 502, err.Error())
+			return
+		}
+		writeJSON(w, o)
+	})
 	// The thinking levels a model gets and where they come from (its config, the provider's model list, the id
 	// guess): the settings page's level editor. Provider and model as on the page (an unsaved draft works too).
 	mux.HandleFunc("POST /api/llm/efforts", func(w http.ResponseWriter, r *http.Request) {

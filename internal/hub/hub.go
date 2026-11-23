@@ -441,6 +441,9 @@ func (h *Hub) Agents() []map[string]any {
 			o, ok = h.opts.get(h.Base(id))
 		}
 		if ok {
+			if o.Modes != nil {
+				o.Config = withoutModeOption(o.Modes.AvailableModes, o.Config)
+			}
 			m["options"] = o
 			// models / efforts: the values `start` takes as model / effort, with the names people see in the picker.
 			// A coordinator (a panel's router, an agent running `gerdr session agents`) picks from these; without

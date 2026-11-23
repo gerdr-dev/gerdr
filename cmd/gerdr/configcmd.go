@@ -68,8 +68,10 @@ const agentsHelp = `Each element of agents is one agent (role) offered when star
              edits that agent (name, icon, prompt, skills, mcp, providers, bin / args / env; base is itself)
   name       shown in the UI
   base       the engine: claude (Claude Code) | codex (Codex) | native (Gerdr Agent, calls the model API itself)
-  command    instead of base: an external ACP agent's command line, e.g. ["gemini", "--experimental-acp"],
-             ["opencode", "acp"], ["pi-acp"] (pi: npm i -g @mariozechner/pi-coding-agent pi-acp)
+  command    instead of base: an external ACP agent's command line, e.g. ["agy", "acp"] (Antigravity),
+             ["gemini", "--acp"], ["opencode", "acp"], ["npx", "-y", "pi-acp"] (Pi),
+             ["npx", "-y", "dsh-acp"] (DeepSeek Harness, needs env DEEPSEEK_API_KEY). Its modes / models are
+             known once it has run: Settings → Agent starts it to read them as soon as the command is filled in
   prompt     extra system prompt appended for this agent
   skills     only these skills, by name. Omit = whatever the global Skill settings give; [] = none.
              Skills that come with the repository being worked on are given anyway (no list can name them).
