@@ -1,4 +1,4 @@
-import { ArrowDownRight, PanelRightClose, PanelRightOpen, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
+import { ArrowDownRight, PanelRightClose, MessageSquare, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
 import { DrawerButton } from "./DrawerButton";
 import { nativeTitleBar } from "@/lib/native";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -676,7 +676,7 @@ function ChatOpen({ onOpen, className }: { onOpen: () => void; className?: strin
       aria-label={t("workView.showChat")}
       onClick={onOpen}
     >
-      <PanelRightOpen className="size-3.5" />
+      <MessageSquare className="size-3.5" />
       {dot && (
         <span className="absolute -top-0.5 -right-0.5 flex">
           <StatusDot status={dotStatus(session)} />
