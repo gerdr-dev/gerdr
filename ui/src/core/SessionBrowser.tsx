@@ -56,11 +56,13 @@ function PageBrowser({
   onFitDrawn,
   onPicked,
   viewOnly,
+  lead,
 }: {
   project: string;
   tab?: number;
   onTab: (tab?: number) => void;
   extra?: ReactNode;
+  lead?: ReactNode;
   /** floating (PanelFloat): the page's pictures, laid out at this size */
   fit?: FloatFit;
   onHeadPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
@@ -117,6 +119,7 @@ function PageBrowser({
       headClassName="h-10"
       onHeadPointerDown={onHeadPointerDown}
       extra={extra}
+      lead={lead}
       Body={Body}
     />
   );
@@ -221,6 +224,16 @@ export function PanelBrowserButton({ panel, sessions, className }: { panel: stri
   );
 }
 
+/**
+ * Whether panel's browser column is on screen as a column (not floating, not out in a window): WorkView then puts the
+ * folded agent column's button in its title bar instead of a strip of its own.
+ */
+export function usePanelBrowserDocked(panel: string, sessions: Set<string>): boolean {
+  const { st, shown, tab } = usePanelColumn(panel, sessions);
+  const inWindow = useBrowserWindows((w) => !!tab && w.tabs.includes(tab));
+  return shown && !st.float && !(tab && inWindow);
+}
+
 /** Whether panel's browser column is closed with a page to show (its PanelBrowserButton is there). */
 export function usePanelBrowserClosed(panel: string, sessions: Set<string>): boolean {
   const { st, has } = usePanelColumn(panel, sessions);
@@ -238,11 +251,14 @@ export function PanelBrowser({
   width,
   edge,
   onWidth,
+  lead,
 }: {
   panel: string;
   sessions: Set<string>;
   width?: number;
   edge?: ReactNode;
+  /** first in the docked column's title bar (the folded agent column's button: usePanelBrowserDocked) */
+  lead?: ReactNode;
   /** the column's width set (a phone / tablet size picked narrows it to that size) */
   onWidth?: (w: number) => void;
 }) {
@@ -361,6 +377,7 @@ export function PanelBrowser({
         // a phone / tablet size in a column wider than it: the column narrows to it, never widens (that took the
         // chat's and the panel's room), as a docked Browser pane in Code (lib/actions/browser.ts fitPaneWidth)
         onPicked={(f, over) => width && onWidth && (f === "mobile" || f === "pad") && over > 2 && onWidth(width - over)}
+        lead={lead}
         extra={
           <>
             {tab && (

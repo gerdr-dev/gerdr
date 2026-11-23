@@ -324,8 +324,10 @@ function closeTop(): boolean {
   // 弹窗（设置、命令面板、查看器……都是 Radix 的 Dialog）：发一个 Esc 给它，它自己关
   const dlg = document.querySelector<HTMLElement>('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]');
   if (dlg) {
-    dlg.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
-    if (get().dialog) set({ dialog: null });
+    const esc = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true });
+    dlg.dispatchEvent(esc);
+    // A dialog that took the Esc as a step back inside itself (Settings: a page back to its list) stays open
+    if (!esc.defaultPrevented && get().dialog) set({ dialog: null });
     return true;
   }
   const s = get();

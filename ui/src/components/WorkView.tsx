@@ -11,7 +11,7 @@ import { useClearBadge } from "@/lib/badges";
 import { AgentIcon, StatusDot, dotRank, dotStatus } from "@/components/AgentIcon";
 import { COL_EDGE, startColResize } from "@/components/SidebarChrome";
 import { ChatView } from "@/components/chat/ChatView";
-import { PanelBrowser, PanelBrowserButton, usePanelBrowserClosed } from "@/core/SessionBrowser";
+import { PanelBrowser, PanelBrowserButton, usePanelBrowserClosed, usePanelBrowserDocked } from "@/core/SessionBrowser";
 import { useBrowserTabs } from "@/lib/actions";
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
@@ -650,25 +650,39 @@ function useChatHidden(key: string): [boolean, (v: boolean) => void] {
 /** The folded agent column: open it again, and see at a glance whether the agent is working or waiting for you. */
 // extra: the folded browser column's button (PanelBrowserButton), so the two folded columns share one strip
 function ChatStrip({ onOpen, extra }: { onOpen: () => void; extra?: React.ReactNode }) {
-  const id = useWorkSession();
-  const session = useStore((s) => (id ? s.sessions[id] : undefined));
   return (
     <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-l pb-2">
       {/* the first button on the line of the headers' (h-10, centred), as in the open column it stands for */}
       <div className="flex h-10 shrink-0 items-center">
-        <Button variant="ghost" size="icon" className="size-7" title={t("workView.showChat")} aria-label={t("workView.showChat")} onClick={onOpen}>
-          <PanelRightOpen className="size-3.5" />
-        </Button>
+        <ChatOpen onOpen={onOpen} />
       </div>
-      {/* only a dot that shows something: an idle one is transparent, and its empty slot pushed the folded browser
-          column's button far below this column's (user report) */}
-      {session && dotRank(dotStatus(session), false) < 9 && (
-        <button title={session.title || t("workView.showChat")} onClick={onOpen} className="flex size-7 items-center justify-center">
-          <StatusDot status={dotStatus(session)} />
-        </button>
-      )}
       {extra}
     </div>
+  );
+}
+
+/** The folded agent column's way back, with its agent's state as a dot on it when that says something. */
+function ChatOpen({ onOpen }: { onOpen: () => void }) {
+  const id = useWorkSession();
+  const session = useStore((s) => (id ? s.sessions[id] : undefined));
+  // only a dot that shows something: an idle one is transparent
+  const dot = session && dotRank(dotStatus(session), false) < 9;
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="relative -ml-1 size-7 shrink-0"
+      title={session?.title || t("workView.showChat")}
+      aria-label={t("workView.showChat")}
+      onClick={onOpen}
+    >
+      <PanelRightOpen className="size-3.5" />
+      {dot && (
+        <span className="absolute -top-0.5 -right-0.5 flex">
+          <StatusDot status={dotStatus(session)} />
+        </span>
+      )}
+    </Button>
   );
 }
 
@@ -830,15 +844,17 @@ function WorkViewBody() {
   const [browserW, setBrowserW] = useChatW("gerdr.workBrowserW", BROWSER_W);
   const sessions = usePanelSessions(project);
   // the pages this panel's agents opened: a column at the far right (asked for), a third tab on a phone
-  const browser = (full?: boolean) => (
+  const browser = (full?: boolean, lead?: React.ReactNode) => (
     <PanelBrowser
       panel={project}
       sessions={sessions}
+      lead={lead}
       width={full ? undefined : browserW}
       edge={full ? undefined : <ChatEdge width={browserW} onWidth={setBrowserW} def={BROWSER_W} />}
       onWidth={full ? undefined : setBrowserW}
     />
   );
+  const docked = usePanelBrowserDocked(project, sessions);
   const hasPages = useBrowserTabs((s) => s.tabs.some((x) => !x.gone && !!x.session && sessions.has(x.session)));
   const [side, setSide] = useState<"page" | "chat" | "browser">("page");
   const sides = [...(["page"] as const), ...(ownChat ? [] : (["chat"] as const)), ...(hasPages ? (["browser"] as const) : [])];
@@ -903,8 +919,10 @@ function WorkViewBody() {
       <div className="min-w-0 flex-1">
         <WorkFrames />
       </div>
-      {/* Folded away: a strip with the way back and the agent's state. The chat stays mounted (its scroll, its draft). */}
-      {hidden && <ChatStrip onOpen={() => setHidden(false)} extra={<PanelBrowserButton panel={project} sessions={sessions} />} />}
+      {/* Folded away: a strip with the way back and the agent's state. The chat stays mounted (its scroll, its draft).
+          With the browser column docked beside it, no strip: the way back is first in the browser's title bar (asked
+          for: a full-height strip for one button took the panel's room) */}
+      {hidden && !docked && <ChatStrip onOpen={() => setHidden(false)} extra={<PanelBrowserButton panel={project} sessions={sessions} />} />}
       {/* max-w: a window made smaller after dragging still leaves the Work site some room */}
       <div className={cn("relative flex max-w-[70%] shrink-0 flex-col border-l", hidden && "hidden")} style={{ width: chatW }}>
         <ChatEdge width={chatW} onWidth={setChatW} />
@@ -913,7 +931,7 @@ function WorkViewBody() {
           <WorkChat />
         </div>
       </div>
-      {browser()}
+      {browser(false, hidden && <ChatOpen onOpen={() => setHidden(false)} />)}
     </div>
   );
 }

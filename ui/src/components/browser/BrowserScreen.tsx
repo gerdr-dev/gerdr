@@ -100,6 +100,8 @@ type Props = {
   onHeadPointerDown?: (e: React.PointerEvent<HTMLElement>) => void;
   /** after the address bar in the title bar (the phone's pane count, zoom's restore) */
   extra?: React.ReactNode;
+  /** first in the title bar (a panel's folded agent column's way back: core/SessionBrowser.tsx PanelBrowser) */
+  lead?: React.ReactNode;
   /** the ⋯ menu's items every pane has (Panes.tsx PaneMoveItems), below this pane's own */
   paneItems?: React.ReactNode;
   /** wraps the picture (Panes.tsx PaneBody: the zoom animation's pinned size) */
@@ -150,6 +152,7 @@ export function BrowserScreen({
   headClassName,
   onHeadPointerDown,
   extra,
+  lead,
   paneItems,
   Body,
 }: Props) {
@@ -1019,6 +1022,7 @@ export function BrowserScreen({
         )}
       >
         {busy && <div className="page-loading pointer-events-none absolute inset-x-0 -bottom-px h-0.5 overflow-hidden" />}
+        {lead}
         <Globe className="mr-1 size-4 shrink-0 text-muted-foreground @max-[20rem]/bar:hidden" />
         <Button
           variant="ghost"
