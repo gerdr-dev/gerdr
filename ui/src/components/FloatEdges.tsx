@@ -24,8 +24,9 @@ export function FloatEdges({ onDown }: { onDown: (e: React.PointerEvent<HTMLElem
   };
   return (
     <>
-      {/* while an edge is held: one outline round the whole box says the resize has started */}
-      {held && <div className="pointer-events-none absolute inset-0 rounded-md ring-2 ring-brand ring-inset" />}
+      {/* while an edge is held: one outline round the whole box says the resize has started. z-20: above the box's
+          "release to minimize" cover (z-10), which in a panel's floating browser fills the box edge to edge */}
+      {held && <div className="pointer-events-none absolute inset-0 z-20 rounded-md ring-2 ring-brand ring-inset" />}
       {FLOAT_EDGES.map(({ e: g, cls }, i) => (
         <div key={i} className={cn("absolute touch-none", cls)} onPointerDown={(e) => press(e, g)} />
       ))}
