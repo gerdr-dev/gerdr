@@ -18,6 +18,9 @@ import (
 //     - 能热替换（boundaries）：重新 import 这些模块的新 URL、注册、performReactRefresh()，页面状态保留；
 //     之后冒出 hooks 相关的报错（改了 hooks 的个数或顺序）就卸掉 root、新建一个重新渲染入口；
 //     - 不能（boundaries 为 null）：import 新入口重新渲染（状态丢掉）；
+//     - mounts (mounts.go) are other React roots: the "gerdr:ui" event tells the host which to render again. With
+//     Refresh that is the server's list (update.Remount); without it (production React), every mount a module of
+//     which changed;
 //     - css：只换 <style id="__gerdr_css__">，Tailwind browser 自己重新生成；
 //     - error：构建出错，盖一层报错，修好后刷新一次；reload：importMap 变了，整页刷新。
 //
@@ -109,7 +112,17 @@ async function apply(u) {
   dropStale(build);
   if (u.css != null) { const el = document.getElementById("__gerdr_css__"); if (el) el.textContent = u.css; }
   S.mounts = u.mounts || {};
-  window.dispatchEvent(new CustomEvent("gerdr:ui", { detail: { mounts: S.mounts, remount: u.remount || [] } }));
+  // Without React Refresh (production React, the default) nothing swaps a changed component in place, and the host's
+  // re-render below doesn't reach a mount: it is another React root, drawn from its own entry. So every mount with a
+  // changed module renders again here. The server's remount list only has the ones Refresh couldn't handle, and
+  // leaving it at that kept an open panel on its old code until the whole page was reloaded.
+  const remount = new Set(u.remount || []);
+  if (!R) for (const [p, m] of Object.entries(mods)) {
+    if (!p.startsWith("@m/") || (prev[p] && prev[p].url === m.url)) continue;
+    const name = p.slice(3).split("/")[0];
+    if (S.mounts[name]) remount.add(name);
+  }
+  window.dispatchEvent(new CustomEvent("gerdr:ui", { detail: { mounts: S.mounts, remount: [...remount] } }));
   if (u.boundaries && R) {
     if (!u.boundaries.length) return;
     const seen = errors.length;
