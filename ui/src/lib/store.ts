@@ -394,19 +394,24 @@ export type WorkPeek = {
   items?: { text: string; jump?: string; action?: string }[];
 };
 
+/**
+ * The Work view's conversations: its panel's own chat and the one a page opened beside it (workPeek). Not in the
+ * layout, so visibleSessions doesn't know them.
+ */
+export function workViewSessions(l: Layout): string[] {
+  const space = currentSpace(l);
+  const c = get().config;
+  const panel = get().workPanels[space];
+  const key = panel ? `${space}/${panel}` : space;
+  const work = c.workSessions?.[key] ?? (key === "default" ? c.workSession : undefined);
+  const peek = get().workPeek;
+  return [work, peek?.id].filter((x): x is string => !!x);
+}
+
 export function watchedSessions(l: Layout, kept: string[]): string[] {
   const out = new Set(visibleSessions(l));
   // The Work view's chat isn't in the layout; it's watched while the Work view is mounted (shown, or kept hidden).
-  if (get().mode === "work" || get().workKept) {
-    const space = currentSpace(l);
-    const c = get().config;
-    const panel = get().workPanels[space];
-    const key = panel ? `${space}/${panel}` : space;
-    const work = c.workSessions?.[key] ?? (key === "default" ? c.workSession : undefined);
-    if (work) out.add(work);
-    const peek = get().workPeek;
-    if (peek) out.add(peek.id);
-  }
+  if (get().mode === "work" || get().workKept) for (const id of workViewSessions(l)) out.add(id);
   for (const id of Object.keys(get().mountWatch)) out.add(id);
   // The tabs under the overview stay watched (kept), so closing it doesn't reload them
   // On a phone only the shown tile and the two pages either side of it are mounted (OverviewPhone.tsx): don't stream

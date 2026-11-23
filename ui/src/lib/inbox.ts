@@ -6,7 +6,7 @@ import { systemNotify } from "./notify";
 import { currentSpace, locateSession, mutedSession, spaceInitials, spaceList, spaceOf } from "./layout";
 import { nativeFocusSession } from "./native";
 import { isPhone } from "./phone";
-import { get as getApp, useStore, visibleSessions } from "./store";
+import { get as getApp, useStore, visibleSessions, workViewSessions } from "./store";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
 import { cn } from "./utils";
@@ -301,7 +301,11 @@ function seen(id: string) {
   // Do not disturb (the conversation's own, or its group's): it still goes in the list, but quietly, like one you're looking at
   if (getApp().sessions[id]?.muted || mutedSession(getApp().layout, id)) return true;
   if (document.visibilityState !== "visible" || !document.hasFocus()) return false;
-  return visibleSessions(getApp().layout, isPhone()).includes(id);
+  // The Work view covers the tabs: what's on screen is its panel's chat and the conversation a page opened beside it
+  // (a task's worker on a board). Without this, a question from the very task being read still popped a card.
+  const l = getApp().layout;
+  if (getApp().mode === "work") return workViewSessions(l).includes(id);
+  return visibleSessions(l, isPhone()).includes(id);
 }
 
 /** Settings → Inbox: the user can keep a kind out (missing = on). Battery has its own switch (batteryAlert). */
@@ -436,9 +440,13 @@ export function watchInbox() {
   let key = pendingKey(prev);
   let wasConnected = getApp().connected;
   let shownLayout = getApp().layout;
+  let shownMode = getApp().mode;
+  let shownPeek = getApp().workPeek;
   const unsub = useStore.subscribe((s) => {
-    if (s.layout !== shownLayout) {
+    if (s.layout !== shownLayout || s.mode !== shownMode || s.workPeek !== shownPeek) {
       shownLayout = s.layout;
+      shownMode = s.mode;
+      shownPeek = s.workPeek;
       dropSeenCards();
     }
     if (s.connected !== wasConnected) {
