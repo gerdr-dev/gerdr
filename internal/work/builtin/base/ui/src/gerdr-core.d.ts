@@ -208,7 +208,10 @@ declare module "@gerdr/core" {
    * The element your overlays (sheets, dialogs, popovers, menus) should be portaled into, e.g. shadcn's
    * `<SheetPrimitive.Portal container={usePortalContainer()}>`. It's inside this panel's own area: gerdr keeps a panel
    * mounted but hidden while another panel or Code is shown, and only what's inside the panel is hidden with it — an
-   * overlay portaled to document.body stays on screen over everything else.
+   * overlay portaled to document.body stays on screen over everything else. The panel's area is the containing block
+   * of `position: fixed` (a transform on it), so a fixed sheet or dialog covers the panel and not the agent / browser
+   * columns beside it; a fixed box placed at a pointer's clientX / clientY must subtract the area's own offset (place
+   * a `fixed inset-0` layer and read its getBoundingClientRect()).
    */
   export function usePortalContainer(): HTMLElement | null;
 

@@ -12,6 +12,7 @@ import { t } from "@/lib/i18n";
 import { FLOAT_FITS, FLOAT_OPERABLE, type FloatEdge, type FloatFit } from "@/lib/layout";
 import { isNative, nativeBrowserWindowTab, nativeFitWindow } from "@/lib/native";
 import { cn } from "@/lib/utils";
+import { spaceOfKey } from "@/lib/work";
 
 // Agents' pages outside Code's panes (docs/dev/BROWSER-PANE.md). In Code, a page an agent opens comes up as a Browser
 // pane beside the agent's pane (lib/actions/browser.ts browserOpened). A panel's agents are in no pane, so their pages
@@ -155,7 +156,18 @@ function useStickyProject(tab: number | undefined, pages: BrowserTab[]): string 
 // core listed it), so the window going away means it is back (the column opens on it again)
 // float: over the panel's corner instead of a column (box: its place, px from the panel's right / top, and width)
 // fit: the floating box's page size (unset = pc)
-type Column = { tab?: number; closed: boolean; seen: number; out?: number; outSeen?: boolean; float?: boolean; box?: FloatSpot; fit?: FloatFit };
+// open: the user opened the column themselves (PanelBrowserButton) before any page was there: it shows the address bar
+type Column = {
+  tab?: number;
+  closed: boolean;
+  open?: boolean;
+  seen: number;
+  out?: number;
+  outSeen?: boolean;
+  float?: boolean;
+  box?: FloatSpot;
+  fit?: FloatFit;
+};
 type FloatSpot = { r: number; t: number; w: number };
 const useColumns = create<Record<string, Column>>(() => ({}));
 
@@ -179,21 +191,31 @@ function usePanelColumn(panel: string, sessions: Set<string>) {
   const save = (next: Column) => useColumns.setState({ [panel]: next });
   const alive = (n?: number) => !!n && all.some((x) => x.tab === n && !x.gone);
   const tab = st.tab !== undefined && (alive(st.tab) || !pages.length) ? st.tab : pages.at(-1)?.tab;
-  const project = useStickyProject(tab, pages);
-  const has = !!project && (pages.length > 0 || !!st.tab);
-  return { st, save, last, tab, project, has };
+  // no page yet: the panel's own project, whose browser a page typed into the address bar opens in (as Code's pane)
+  const project = useStickyProject(tab, pages) || spaceOfKey(panel);
+  const has = pages.length > 0 || alive(st.tab);
+  // on screen: not closed, and a page to show or opened by the user to type one
+  const shown = !st.closed && (has || !!st.open);
+  return { st, save, last, tab, project, has, shown };
 }
 
 /**
- * The way back to a closed browser column: a button for the row it sits in (the agent column's header, its folded
- * strip, a strip of its own), so the column doesn't leave a strip of its own beside the chat's (asked for). Nothing
- * while the column is open or has no page.
+ * The way to the browser column while it isn't shown: a button for the row it sits in (the agent column's header, its
+ * folded strip, a strip of its own), so the column doesn't leave a strip of its own beside the chat's (asked for).
+ * Also before any agent opened a page: the column then opens on the address bar (asked for: the user had no way to
+ * open the panel's browser themselves).
  */
 export function PanelBrowserButton({ panel, sessions, className }: { panel: string; sessions: Set<string>; className?: string }) {
-  const { st, save, has } = usePanelColumn(panel, sessions);
-  if (!has || !st.closed) return null;
+  const { st, save, shown } = usePanelColumn(panel, sessions);
+  if (shown) return null;
   return (
-    <Button variant="ghost" size="icon" className={cn("size-7", className)} title={t("browser.showColumn")} onClick={() => save({ ...st, closed: false })}>
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn("size-7", className)}
+      title={t("browser.showColumn")}
+      onClick={() => save({ ...st, closed: false, open: true })}
+    >
       <Globe className="size-3.5" />
     </Button>
   );
@@ -224,7 +246,7 @@ export function PanelBrowser({
   /** the column's width set (a phone / tablet size picked narrows it to that size) */
   onWidth?: (w: number) => void;
 }) {
-  const { st, save, last, tab, project, has } = usePanelColumn(panel, sessions);
+  const { st, save, last, tab, project, has, shown } = usePanelColumn(panel, sessions);
   const inWindow = useBrowserWindows((w) => !!tab && w.tabs.includes(tab));
   const cur = useBrowserTabs((s) => s.tabs.find((x) => x.tab === tab));
   // A page moved out folds the column (asked for: the card in its place took the room for nothing); its window
@@ -240,11 +262,11 @@ export function PanelBrowser({
     // floating while the agent works alone, docked when it wants the user in it (`gerdr browser show`), as in Code
     if (last && last.at > st.seen) save({ ...st, tab: last.tab, closed: false, seen: last.at, float: !last.show, out: undefined, outSeen: false });
   }, [last?.at]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!has) return null;
-  // closed: its way back is a PanelBrowserButton in the row beside it (WorkView); a phone's tab shows it anyway
-  if (st.closed && width) return null;
+  // not shown: its way back is a PanelBrowserButton in the row beside it (WorkView); a phone's tab (only there with a
+  // page) shows it anyway
+  if (width ? !shown : !has) return null;
   const hide = width && (
-    <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.hideColumn")} onClick={() => save({ ...st, closed: true })}>
+    <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("browser.hideColumn")} onClick={() => save({ ...st, closed: true, open: false })}>
       <PanelRightClose className="size-3.5" />
     </Button>
   );

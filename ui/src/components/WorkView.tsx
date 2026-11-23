@@ -221,7 +221,10 @@ function MountRoot({ project }: { project: string }) {
   }, [project, seq, ok]);
   const error = info?.error || failed;
   return (
-    <div className="relative size-full overflow-hidden bg-background" {...{ [MOUNT_ATTR]: mountName(project) }}>
+    // transform: the containing block of the panel's fixed overlays (its drawers, dialogs), so they cover the panel's
+    // own area and not the agent / browser columns beside it (asked for: a task's drawer hid the browser column, and
+    // over the App's real page it pushed the page aside). Coordinates from pointer events need the area's offset.
+    <div className="relative size-full overflow-hidden bg-background" style={{ transform: "translateZ(0)" }} {...{ [MOUNT_ATTR]: mountName(project) }}>
       <div ref={ref} className={cn("size-full", error && "hidden")} />
       <div ref={portal} data-gerdr-portal="" />
       {error && <MountError project={project} error={error} />}
