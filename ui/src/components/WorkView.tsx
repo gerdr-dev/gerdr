@@ -662,7 +662,7 @@ function ChatStrip({ onOpen, extra }: { onOpen: () => void; extra?: React.ReactN
 }
 
 /** The folded agent column's way back, with its agent's state as a dot on it when that says something. */
-function ChatOpen({ onOpen }: { onOpen: () => void }) {
+function ChatOpen({ onOpen, className }: { onOpen: () => void; className?: string }) {
   const id = useWorkSession();
   const session = useStore((s) => (id ? s.sessions[id] : undefined));
   // only a dot that shows something: an idle one is transparent
@@ -671,7 +671,7 @@ function ChatOpen({ onOpen }: { onOpen: () => void }) {
     <Button
       variant="ghost"
       size="icon"
-      className="relative -ml-1 size-7 shrink-0"
+      className={cn("relative size-7 shrink-0", className)}
       title={session?.title || t("workView.showChat")}
       aria-label={t("workView.showChat")}
       onClick={onOpen}
@@ -931,7 +931,7 @@ function WorkViewBody() {
           <WorkChat />
         </div>
       </div>
-      {browser(false, hidden && <ChatOpen onOpen={() => setHidden(false)} />)}
+      {browser(false, hidden && <ChatOpen onOpen={() => setHidden(false)} className="-ml-1" />)}
     </div>
   );
 }

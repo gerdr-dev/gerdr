@@ -253,9 +253,11 @@ export function SettingsDialog({ open }: { open: boolean }) {
     );
   };
 
+  // The icon and the field side by side in one bordered box: an icon positioned over the field sat against its left
+  // border, off the text's line (user screenshot)
   const searchBox = (
-    <>
-      <Search className="pointer-events-none absolute top-1/2 left-5.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+    <label className="flex h-8 w-full cursor-text items-center gap-2 rounded-md border border-input bg-background px-2.5 focus-within:border-ring dark:bg-input/30">
+      <Search className="size-3.5 shrink-0 text-muted-foreground" />
       <input
         // First in the dialog, so it takes the focus on opening (desktop): type to find a setting
         value={query}
@@ -265,9 +267,9 @@ export function SettingsDialog({ open }: { open: boolean }) {
           if (e.key === "Enter" && hits[0]) go(hits[0].page, hits[0].label);
         }}
         placeholder={t("settings.search")}
-        className="h-8 w-full rounded-md border border-input bg-background pr-2 pl-7 text-[13px] outline-none placeholder:text-muted-foreground focus-visible:border-ring max-md:text-base dark:bg-input/30"
+        className="h-full min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground max-md:text-base"
       />
-    </>
+    </label>
   );
   const results = hits.length ? (
     <div className="space-y-0.5">{hits.map((h) => navButton(h.page, h.label))}</div>
@@ -280,7 +282,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
       <div className="px-4 pt-5 pb-3">
         <DialogTitle className="text-[15px]">{t("settings.title")}</DialogTitle>
       </div>
-      <div className="relative px-3 pb-2">{searchBox}</div>
+      <div className="px-3 pb-2">{searchBox}</div>
       <div className={"min-h-0 flex-1 overflow-auto px-2 pb-3"}>
         {query
           ? results
@@ -759,7 +761,7 @@ function PhoneSettings({
       </div>
       {searching ? (
         <>
-          <div className="relative px-3 pt-2 pb-2">{searchBox}</div>
+          <div className="px-3 pt-2 pb-2">{searchBox}</div>
           <div className="min-h-0 flex-1 overflow-auto px-2 pb-3">{results}</div>
         </>
       ) : (

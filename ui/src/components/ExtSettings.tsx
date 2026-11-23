@@ -88,13 +88,15 @@ function HelpTip({ lines }: { lines: string[] }) {
   );
 }
 
-function Group({ title, count, hint, children }: { title: string; count: number; hint?: string; children: React.ReactNode }) {
+/** action: a button at the end of the header, for what is made in this group (Skill's New goes into Gerdr's). */
+function Group({ title, count, hint, action, children }: { title: string; count: number; hint?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <div className="flex items-baseline gap-2 px-0.5">
+      <div className="flex min-h-6 items-center gap-2 px-0.5">
         <span className="shrink-0 text-[12px] font-medium whitespace-nowrap">{title}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{count}</span>
         {hint && <span className="min-w-0 truncate text-[11px] text-muted-foreground">{hint}</span>}
+        {action && <div className="ml-auto shrink-0">{action}</div>}
       </div>
       <div className="divide-y rounded-md border">{children}</div>
     </div>
@@ -214,13 +216,24 @@ export function SkillSettings({ open }: { open: boolean }) {
           <span className="text-[12px] whitespace-nowrap text-muted-foreground">{t("extSettings.agentUses")}</span>
           <SourcePicker value={s.skillSource} onChange={(x) => save({ skillSource: x })} />
         </div>
-        <Button size="sm" variant="outline" className="text-[12px]" onClick={() => setEdit({ name: "", content: "", isNew: true })}>
-          <Plus className="size-3.5" />
-          {t("extSettings.new")}
-        </Button>
       </div>
       {groups.map((g) => (
-        <Group key={g.id} title={g.title} count={g.rows.length} hint={g.hint}>
+        <Group
+          key={g.id}
+          title={g.title}
+          count={g.rows.length}
+          hint={g.hint}
+          // New writes to ~/.gerdr/skills, so it sits on that group, not by the source picker at the top, where it read
+          // as belonging to the picker (user's call)
+          action={
+            g.id === "gerdr" && (
+              <Button size="sm" variant="outline" className="h-7 px-2.5 text-[12px]" onClick={() => setEdit({ name: "", content: "", isNew: true })}>
+                <Plus className="size-3.5" />
+                {t("extSettings.new")}
+              </Button>
+            )
+          }
+        >
           {g.rows.length === 0 && <Empty>{t("extSettings.skillEmpty")}</Empty>}
           {g.rows.map((r) => {
             const sk = r.sk;

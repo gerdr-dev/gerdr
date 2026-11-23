@@ -207,7 +207,8 @@
      marked [data-titlebar-drag] (PhoneBar's title: it would cover most of the bar, leaving nothing to drag by). */
   .native-titlebar [data-phone-titlebar] {
     height: var(--titlebar-h) !important;
-    padding-left: var(--titlebar-right) !important;
+    /* `right` (72) is where the lights end, measured ~77 on screen: plus a gap, as the wide header's 1.25rem */
+    padding-left: calc(var(--titlebar-right) + 1rem) !important;
     -webkit-app-region: drag;
   }
   .native-titlebar [data-phone-titlebar] :is(button, a, input, [role="button"], [data-titlebar-no-drag]):not([data-titlebar-drag]) {
