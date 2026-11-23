@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronUp, Folder, FolderGit2, Globe, History, Laptop, Loader2, Play, Server, Settings2, SquareTerminal } from "lucide-react";
+import { ArrowRight, ChevronUp, Folder, FolderGit2, Globe, History, Laptop, Loader2, Play, Search, Server, Settings2, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -350,6 +350,10 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
     // when their turn started instead, which holds still for the whole turn.
     .sort((a, b) => (b.turn?.startedAt ?? b.updatedAt) - (a.turn?.startedAt ?? a.updatedAt))
     .map((s) => ({ s, open: !!locateSession(layout, s.id) }));
+  // The list shows the latest dozen; the search goes through every one of them (titles; every word has to match)
+  const [q, setQ] = useState("");
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = words.length ? old.filter(({ s }) => words.every((w) => `${s.title} ${s.id}`.toLowerCase().includes(w))) : old.slice(0, 12);
   const nameOf = (id: string) => agents.find((a) => a.id === id)?.name ?? id;
   const agentName = nameOf(agent);
 
@@ -549,9 +553,16 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
             </button>
           </div>
           {old.length === 0 && <div className="text-[12px] text-muted-foreground">{t("newSession.noOld")}</div>}
+          {old.length > 12 && (
+            <div className="relative mb-1.5">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("resumeDialog.search")} className="h-8 pl-8 text-[13px]" />
+            </div>
+          )}
+          {words.length > 0 && shown.length === 0 && <div className="text-[12px] text-muted-foreground">{t("newSession.noMatch")}</div>}
           {/* -mx-2 cancels the rows' padding, so their icons line up with the header's and everything above */}
           <div className="-mx-2 space-y-0.5">
-            {old.slice(0, 12).map(({ s: o, open }) => (
+            {shown.map(({ s: o, open }) => (
               <div key={o.id} className="group flex items-center rounded-md hover:bg-accent">
                 <button
                   disabled={busy}

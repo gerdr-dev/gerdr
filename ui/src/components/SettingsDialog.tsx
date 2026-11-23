@@ -826,7 +826,7 @@ function SwipePages({
     (p) => go(p as Page),
   );
   return (
-    <div ref={body} className={cn(SIZING, "relative mt-2 min-h-0 min-w-0 flex-1 overflow-hidden bg-muted")}>
+    <div ref={body} className={cn(SIZING, "relative mt-2 min-h-0 min-w-0 flex-1 overflow-hidden bg-background")}>
       <div ref={track} className="absolute inset-0 will-change-transform">
         {children}
       </div>

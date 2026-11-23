@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
@@ -121,11 +121,18 @@ export function ResumeDialog() {
             // cmdk tracks the highlighted item by value: two equal values light up together, so the key keeps it unique
             <CommandItem key={e.key} value={`${e.key} ${e.search}`} className="gap-2.5" disabled={busy} onSelect={e.pick}>
               <AgentIcon agent={e.agent} className="size-4 shrink-0" />
-              <span className="min-w-0 truncate">{e.title}</span>
+              {/* flex-1: the title takes what the tags leave. The handoff mark is an arrow and the agent's icon, as on the
+                  new-session page: spelled out ("Continue with …") it squeezed the title to nothing on a phone */}
+              <span className="min-w-0 flex-1 truncate">{e.title}</span>
               {/* Shown in a pane / Work view already: picking it brings that one over instead of opening it again */}
               {e.open && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-[11px] text-muted-foreground">{t("newSession.opened")}</span>}
-              {e.agent !== cur.agent && <span className="shrink-0 text-[11px] text-muted-foreground">{t("newSession.handoff", { agent: agentName })}</span>}
-              <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{e.at ? ago(e.at) : ""}</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">{e.at ? ago(e.at) : ""}</span>
+              {e.agent !== cur.agent && (
+                <span className="flex shrink-0 items-center gap-0.5 text-muted-foreground" title={t("newSession.handoff", { agent: agentName })}>
+                  <ArrowRight className="size-3" />
+                  <AgentIcon agent={cur.agent} className="size-3.5" />
+                </span>
+              )}
             </CommandItem>
           ))}
         </CommandGroup>
