@@ -33,10 +33,29 @@ function rowText(r: Row): string {
   }
   if (r.kind === "part" && (r.part.type === "text" || r.part.type === "reasoning")) {
     let s = lowerOf.get(r.part);
-    if (s === undefined) lowerOf.set(r.part, (s = r.part.text.toLowerCase()));
+    if (s === undefined) lowerOf.set(r.part, (s = mdPlain(r.part.text).toLowerCase()));
     return s;
   }
   return "";
+}
+
+/*
+ * Markdown source → roughly the text it draws, so a match can run across **bold**, `code` or a [link](url): counted on
+ * the raw source, "已完成原视频" found nothing in "已完成**原视频**". Code keeps its text (only the backticks / fence lines
+ * go), so `a*b` and snake_case still match; `_` is dropped only where it can be emphasis (not inside a word).
+ */
+const CODE = /(^```.*$[\s\S]*?^```.*$|`[^`\n]+`)/m;
+function mdPlain(src: string): string {
+  return src
+    .split(new RegExp(CODE.source, "gm"))
+    .map((seg, i) => {
+      if (i % 2) return seg.startsWith("```") ? seg.replace(/^```.*$/gm, "") : seg.slice(1, -1);
+      return seg
+        .replace(/!?\[([^\]\n]*)\]\([^)\n]*\)/g, "$1")
+        .replace(/\*+|~~/g, "")
+        .replace(/(^|[^\p{L}\p{N}])_+|_+(?=[^\p{L}\p{N}]|$)/gu, "$1");
+    })
+    .join("");
 }
 
 function count(hay: string, q: string): number {
