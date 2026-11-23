@@ -3,7 +3,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { openSessionNear } from "@/lib/actions";
+import { focusSession, openSessionNear } from "@/lib/actions";
+import { ownerOf } from "@/lib/panelRoute";
+import { workProjectOf } from "@/lib/work";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { closeDialog, useStore } from "@/lib/store";
@@ -14,7 +16,7 @@ import { AgentIcon } from "./AgentIcon";
  * Fork a conversation: a new session carrying it so far, with the same agent or another, named "Fork: <title>"
  * (hub CreateOptions.Fork). The same engine copies its own session (hub/fork.go), unless "hand over as text" is
  * ticked; another engine always gets the history as text (hub/handoff.go). It opens beside the original, which stays
- * as it was. One click on an agent forks.
+ * as it was. One click on an agent forks. Forked from a panel, it opens in Code (openSessionNear) and the view goes there.
  */
 export function ForkSessionDialog() {
   const d = useStore((s) => s.dialog);
@@ -44,6 +46,8 @@ export function ForkSessionDialog() {
       useStore.setState((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
       closeDialog();
       openSessionNear(s.id, session.id, true);
+      // Forked from a panel's conversation: the fork is Code's (no panel tag), so go there to show it, or it opens out of sight
+      if (workProjectOf(session.id) || ownerOf(session.id)) focusSession(s.id);
     } catch (e: any) {
       toast.error(t("forkSession.failed", { error: e.message ?? String(e) }));
     } finally {

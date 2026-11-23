@@ -31,6 +31,7 @@ import {
 import { get, set, setLayout } from "../store";
 import { addActive, focusTile, joinActiveOnStart, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter, toggleOverview } from "../overview";
 import { spaceOfKey, workProjectOf } from "../work";
+import { ownerOf } from "../panelRoute";
 import { rememberPane } from "./reopen";
 import { createInPane, focusSession, openInWork } from "./sessions";
 import { basename, focusedLeaf, inSpace, inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
@@ -169,12 +170,26 @@ export function openSessionNear(sessionId: string, near?: string, focus = false)
         return focus ? next : { ...next, focus: tab.focus };
       });
     }
-    // Asked by a Work agent (no pane of its own): into its project's workspace, not whichever one is on screen
-    const key = near ? workProjectOf(near) : undefined;
+    // Asked by a Work agent (no pane of its own), or forked from a Work conversation: into its project, in the
+    // workspace for the session's folder, a new one when there is none. Its active workspace was whichever one the
+    // person last had open in Code, unrelated to the session (user report: a panel's fork landed in a workspace of
+    // another repo).
+    // A panel's own conversation (tags.panel, e.g. a board's task) has no pane either: its project too
+    const key = near ? (workProjectOf(near) ?? ownerOf(near)) : undefined;
     const project = key && spaceOfKey(key);
+    const t = newTab(undefined, sessionId);
+    const cwd = key ? get().sessions[sessionId]?.cwd?.replace(/\/+$/, "") : undefined;
+    if (cwd) {
+      const space = project || currentSpace(l);
+      const mine = spaceWorkspaces(l, space).filter((w) => w.cwd?.replace(/\/+$/, "") === cwd);
+      const hit = mine.find((w) => w.id === spaceList(l).find((s) => s.id === space)?.active) ?? mine[0];
+      if (hit) return updateWs(l, hit.id, (w) => ({ ...w, tabs: [...w.tabs, t], activeTab: focus ? t.id : w.activeTab }));
+      // Not made the active workspace: the person is in the panel, and Code shouldn't switch under them
+      const ws: Workspace = { id: rid("w"), name: basename(cwd), cwd, tabs: [t], activeTab: t.id, space: inSpace(space) };
+      return { ...l, workspaces: [...l.workspaces, ws] };
+    }
     const home = project && project !== currentSpace(l) ? spaceWorkspaces(l, project) : [];
     const ws = home.find((w) => w.id === spaceList(l).find((s) => s.id === project)?.active) ?? home[0] ?? activeWs(l);
-    const t = newTab(undefined, sessionId);
     return updateWs(l, ws.id, (w) => ({ ...w, tabs: [...w.tabs, t], activeTab: focus ? t.id : w.activeTab }));
   });
 }
