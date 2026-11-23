@@ -1,10 +1,9 @@
-import { Code2, Command, Keyboard, Plus, Settings } from "lucide-react";
+import { Code2, Command, Plus, Settings } from "lucide-react";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { switchSpace } from "@/lib/actions";
 import { useLanRoute } from "@/lib/android";
 import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout";
-import { isCoarse } from "@/lib/phone";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { nativeTitleBar, updateWaitsForClick } from "@/lib/native";
@@ -121,7 +120,6 @@ export function Rail() {
   const connected = useStore((s) => s.connected);
   const lanRoute = useLanRoute();
   const cur = mode === "work" ? "work" : "agents";
-  const coarse = isCoarse();
 
   // The mode you're in again: Code toggles its list (as an activity bar does). An icon in the capsule the panels share,
   // as wide as the project chips above (36px), the current one raised; the name is in the tooltip. Dragged and ordered
@@ -194,20 +192,14 @@ export function Rail() {
         <div className="flex shrink-0 flex-col items-center gap-1 pb-2">
           <RailAddonButtons />
           <InboxButton rail />
-          {/* A touch screen seldom has a keyboard to need a shortcut list: the command palette instead, as in the phone's drawer */}
-          {coarse
-            ? tip(
-                t("nav.commandPalette"),
-                <button aria-label={t("nav.commandPalette")} className={railBtn} onClick={() => set({ dialog: { kind: "palette" } })}>
-                  <Command className="size-4" />
-                </button>,
-              )
-            : tip(
-                t("nav.shortcuts"),
-                <button aria-label={t("nav.shortcuts")} className={railBtn} onClick={() => set({ dialog: { kind: "help" } })}>
-                  <Keyboard className="size-4" />
-                </button>,
-              )}
+          {/* The command palette (⌘K), not a shortcut list: the list is one of its commands, and the palette also reaches
+              add-on commands and works on a touch screen with no keyboard */}
+          {tip(
+            t("nav.commandPalette"),
+            <button aria-label={t("nav.commandPalette")} className={railBtn} onClick={() => set({ dialog: { kind: "palette" } })}>
+              <Command className="size-4" />
+            </button>,
+          )}
           {tip(
             doctorBad ? t("rail.settingsDoctorBad") : updateWaits ? t("rail.settingsUpdate") : t("nav.settings"),
             <button

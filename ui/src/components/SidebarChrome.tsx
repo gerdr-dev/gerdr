@@ -1,4 +1,4 @@
-import { Command, Keyboard, PanelLeft, Settings } from "lucide-react";
+import { Command, PanelLeft, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ModeSwitch } from "@/components/WorkView";
@@ -106,28 +106,22 @@ export function SidebarFooter({ sidebarToggle }: { sidebarToggle?: boolean }) {
       <PhoneAddonButtons />
       {/* On a phone the inbox is in the top bar (PhoneBar); this row is in the drawer there */}
       {!phone && <InboxButton />}
-      {/* A phone has no ⌘K and no keyboard to need a shortcut list: the slot opens the palette instead, the only way
-          to reach add-on commands there. The drawer closes so the palette isn't under it on the way back. */}
-      {phone ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 text-muted-foreground"
-          aria-label={t("nav.commandPalette")}
-          onClick={() => set({ drawer: false, dialog: { kind: "palette" } })}
-        >
-          <Command className="size-3.5" />
-        </Button>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={() => set({ dialog: { kind: "help" } })}>
-              <Keyboard className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("nav.shortcuts")}</TooltipContent>
-        </Tooltip>
-      )}
+      {/* The command palette (⌘K), not a shortcut list: the list is one of its commands, and on a phone (no ⌘K) this is
+          the only way to add-on commands. The drawer closes so the palette isn't under it on the way back. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground"
+            aria-label={t("nav.commandPalette")}
+            onClick={() => set({ drawer: false, dialog: { kind: "palette" } })}
+          >
+            <Command className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t("nav.commandPalette")}</TooltipContent>
+      </Tooltip>
       {sidebarToggle && (
         <Tooltip>
           <TooltipTrigger asChild>
