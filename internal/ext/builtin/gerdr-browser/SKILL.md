@@ -51,7 +51,10 @@ gerdr browser console --errors
 gerdr browser close                        # its Browser pane closes too; --keep leaves page and pane to the user
 ```
 
-- The user can also open pages in the Browser pane themselves; `status` lists every page with its project.
+- The user can also open pages in the Browser pane themselves; `status` lists your project's pages.
+- **Each project's browser is its own**: you see and drive only your project's pages (a panel's workers: the panel's
+  project). Without `-t`, actions take the last page opened in your project; another project's page number is refused
+  as unknown. In the user's Chrome, a page another project's agent opened is theirs; pages the user opened are everyone's.
 - Several Chrome profiles can be connected (`status` lists them, each with the name the user gave it in the
   extension's popup, like "Work"). When the user says which one ("the Work Chrome"), pass `open --profile Work`
   (a name or an id); otherwise `open` picks one that allowed the site. A profile without a name: ask the user to name

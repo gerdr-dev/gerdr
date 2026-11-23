@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -161,7 +162,7 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			c := artifactsClient()
-			return c.do("POST", "/api/browser/close", map[string]any{"tab": tab, "keep": keep, "from": c.caller().Session}, nil)
+			return c.do("POST", "/api/browser/close", map[string]any{"tab": tab, "keep": keep, "from": c.caller().Session, "project": c.caller().Project, "term": c.caller().Term}, nil)
 		},
 	}
 	closeCmd.Flags().BoolVar(&keep, "keep", false, i18n.S("窗口留给用户", "leave the window to the user"))
@@ -411,7 +412,9 @@ func browserAct(tab int, action string, a chromeext.ActArgs) (*chromeext.ActResu
 	}
 	c.http.Timeout = 11 * time.Minute // wait can be long
 	var res chromeext.ActResult
-	if err := c.do("POST", "/api/browser/act", map[string]any{"tab": tab, "action": action, "args": a}, &res); err != nil {
+	// who is calling: the server limits an agent to its project's pages (internal/server/browserscope.go)
+	cl := c.caller()
+	if err := c.do("POST", "/api/browser/act", map[string]any{"tab": tab, "action": action, "args": a, "project": cl.Project, "from": cl.Session, "term": cl.Term}, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -497,7 +500,9 @@ func getBrowserState() (*browserState, error) {
 		return nil, err
 	}
 	var st browserState
-	if err := c.do("GET", "/api/browser", nil, &st); err != nil {
+	cl := c.caller()
+	q := url.Values{"project": {cl.Project}, "from": {cl.Session}, "term": {cl.Term}}
+	if err := c.do("GET", "/api/browser?"+q.Encode(), nil, &st); err != nil {
 		return nil, err
 	}
 	return &st, nil

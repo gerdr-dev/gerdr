@@ -43,7 +43,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		if b == nil {
 			return
 		}
-		writeJSON(w, map[string]any{"profiles": b.Profiles(), "tabs": b.Tabs()})
+		// an agent's list: its project's pages only (browserscope.go)
+		writeJSON(w, map[string]any{"profiles": b.Profiles(), "tabs": s.scopedTabs(b, s.browserScope(callerOf(r)))})
 	})
 	// open a page: in the project's own browser (the Browser pane shows it), or with chrome / profile in the user's
 	// Chrome through the extension. The project is the caller's (ResolveSpace) unless given.
@@ -78,6 +79,7 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 				return
 			}
 			id = t.ID
+			s.noteChromeScope(id, s.browserScope(in.Caller))
 		} else {
 			project := s.browserProject(in.Caller)
 			tab, err := s.ProjBrowser.Open(r.Context(), project, in.URL, in.Width, in.Height)
@@ -152,7 +154,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			return
 		}
 		var page *chromeext.Tab
-		for _, t := range b.Tabs() { // oldest first: without a number, the last one opened, as the actions take it
+		// oldest first: without a number, the last one opened, as the actions take it; another project's pages unseen
+		for _, t := range s.scopedTabs(b, s.browserScope(in.Caller)) {
 			if in.Tab == 0 || t.ID == in.Tab {
 				page = &t
 			}
@@ -178,13 +181,18 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		id := in.Tab
-		if id == 0 { // the last page opened, as Close takes it (Tabs: oldest first)
+		// the last page opened (Tabs: oldest first), of the caller's project for an agent
+		id, err := s.scopedTab(b, s.browserScope(in.Caller), in.Tab)
+		if err != nil {
+			httpError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if id == 0 {
 			if ts := b.Tabs(); len(ts) > 0 {
 				id = ts[len(ts)-1].ID
 			}
 		}
-		if err := b.Close(in.Tab, in.Keep); err != nil {
+		if err := b.Close(id, in.Keep); err != nil {
 			httpError(w, http.StatusBadGateway, err.Error())
 			return
 		}
@@ -268,12 +276,19 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			Tab    int               `json:"tab"`
 			Action string            `json:"action"`
 			Args   chromeext.ActArgs `json:"args"`
+			Caller
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		res, err := b.Act(r.Context(), in.Tab, in.Action, in.Args)
+		// an agent drives its project's pages only; without a number, the last one of them (browserscope.go)
+		tab, err := s.scopedTab(b, s.browserScope(in.Caller), in.Tab)
+		if err != nil {
+			httpError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		res, err := b.Act(r.Context(), tab, in.Action, in.Args)
 		if err != nil {
 			httpError(w, http.StatusBadGateway, err.Error())
 			return

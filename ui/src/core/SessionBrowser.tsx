@@ -312,6 +312,12 @@ export function PanelBrowser({
           <SquareArrowOutUpRight /> {t("browser.newWindow")}
         </DropdownMenuItem>
       )}
+      {/* floating: the same as pulling it smaller than its smallest size (PanelFloat onMin), as Code's menu has it */}
+      {floating && (
+        <DropdownMenuItem onClick={() => save({ ...st, min: true })}>
+          <Minus /> {t("panes.minimize")}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem onClick={() => save({ ...st, float: !floating })}>
         {floating ? <PanelRight /> : <PictureInPicture2 />} {floating ? t("browser.dockColumn") : t("browser.floatColumn")}
       </DropdownMenuItem>

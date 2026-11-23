@@ -58,7 +58,7 @@ func browserTools() []mcpTool {
 			map[string]any{"url": str("http(s) URL"), "chrome": boolean("Open in the user's own Chrome instead of the project's browser"), "size": str("Window size like 1440x900"),
 				"why": str("chrome: shown to the user when asking to allow the site"), "focus": boolean("chrome: bring the window to the front"),
 				"profile": str("chrome: which Chrome profile, the name the user gave it (status lists them, like Work) or its id; default: one that allowed the site"),
-				"show": boolean("Dock it beside the chat as the real page at once (the user is to act in it); default: floating in a corner")}, "url"),
+				"show":    boolean("Dock it beside the chat as the real page at once (the user is to act in it); default: floating in a corner")}, "url"),
 		tool("show", "", "Dock the page beside the chat as the real page, from the corner it floats in: call before asking the user to act in it (sign in, a captcha).", nil),
 		tool("close", "", "Close the window (keep: leave it open for the user, no longer driven).", map[string]any{"keep": boolean("Leave it to the user")}),
 		tool("snapshot", "snapshot", "An outline of the page: everything that can be acted on (links, buttons, fields…) and the page's structure, each with a ref (e12) to use in click / type / fill / scroll / hover. Take a new one after the page changes.",
@@ -201,7 +201,7 @@ func callBrowserTool(byName map[string]mcpTool, name string, raw json.RawMessage
 		if err != nil {
 			return fail(err)
 		}
-		if err := c.do("POST", "/api/browser/close", map[string]any{"tab": common.Tab, "keep": common.Keep, "from": c.caller().Session}, nil); err != nil {
+		if err := c.do("POST", "/api/browser/close", map[string]any{"tab": common.Tab, "keep": common.Keep, "from": c.caller().Session, "project": c.caller().Project, "term": c.caller().Term}, nil); err != nil {
 			return fail(err)
 		}
 		return text("closed")

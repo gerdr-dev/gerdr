@@ -25,6 +25,12 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   server and the console / network logs work on them unchanged. Only the transport differs (`Tab.send`: the
   extension, or the project browser's pipe). Agents get them by default: `gerdr browser open` opens in the
   caller's project (`ResolveSpace`), `--chrome` / `--profile` in the user's Chrome through the extension.
+- **Projects don't see each other's pages** (asked for: separate browsers): an agent's calls say who is calling
+  (`Caller`), and the page list, actions, `show` and `close` are limited to its project, the default page (no `-t`)
+  being the last of its own (`internal/server/browserscope.go`). A panel's worker counts as in its panel's project
+  (`panelSpace`; it is in no pane and runs in a repo, and its pages used to land in the default project's browser).
+  The UI's calls say nobody and see everything; it shows each project only its own. Pages of the user's Chrome
+  belong to the project of the agent that opened them (and their popups); ones the user opened are everyone's.
 - **The picture uses the remote screen's stream** (Settings → Remote access → Control this computer): only the
   tiles that changed go out, as JPEG, in the same binary format (`internal/screen/diff.go`, `lib/screenStream.ts`).
   `streamPictures` takes a `pictureSource`: the display (`desktopSource`) or a tab (`browserSource`). So the pane works

@@ -309,7 +309,13 @@ func (b *Bridge) Tabs() []Tab {
 		out = append(out, c)
 	}
 	b.mu.Unlock()
-	sort.Slice(out, func(i, j int) bool { return out[i].Opened < out[j].Opened })
+	// ties (pages opened in the same millisecond) by id, which counts up: "the last one opened" stays one page
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Opened != out[j].Opened {
+			return out[i].Opened < out[j].Opened
+		}
+		return out[i].ID < out[j].ID
+	})
 	return out
 }
 

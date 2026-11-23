@@ -16,6 +16,7 @@ type browserPanes struct {
 	mu     sync.Mutex
 	pages  map[string]int // Browser pane id → the page it shows; nil until the first layout is seen
 	opener map[int]string // page → the agent session that opened it
+	chrome map[int]string // a page of the user's Chrome → the project of the agent that opened it (browserscope.go)
 }
 
 // notePageOpener: session opened page (POST /api/browser/open).
