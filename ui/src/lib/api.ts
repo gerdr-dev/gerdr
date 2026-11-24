@@ -331,6 +331,8 @@ export const api = {
         model,
       },
     ),
+  /** The name each model id shows under when its config gives none (backend native.ModelName) */
+  llmNames: (ids: string[]) => req<Record<string, string>>("POST", "/api/llm/names", ids),
   llmTest: (provider: LLMProvider, model: LLMModel) => req<{ reply: string; api: string }>("POST", "/api/llm/test", { provider, model }),
   doctor: () => req<DoctorReport | null>("GET", "/api/doctor"),
   /** deep = also run every claude / codex install found (can pop macOS's "malware blocked" dialog for a blocked one) */

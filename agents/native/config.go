@@ -274,7 +274,7 @@ func withDefaults(m Model) Model {
 		m.Images = &v
 	}
 	if m.Name == "" {
-		m.Name = m.ID
+		m.Name = ModelName(m.ID)
 	}
 	return m
 }
@@ -323,7 +323,7 @@ func anthropicDefaults(m Model, id string) Model {
 		m.Images = &v
 	}
 	if m.Name == "" {
-		m.Name = m.ID
+		m.Name = ModelName(m.ID)
 	}
 	return m
 }
@@ -355,7 +355,7 @@ func geminiDefaults(m Model, id string) Model {
 		m.Images = &v
 	}
 	if m.Name == "" {
-		m.Name = m.ID
+		m.Name = ModelName(m.ID)
 	}
 	return m
 }

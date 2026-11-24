@@ -748,7 +748,7 @@ func (a *Agent) configOptions(ctx context.Context, s *session) []acp.SessionConf
 		}
 		var eo acp.SessionConfigSelectOptionsUngrouped
 		for _, e := range curModel.SupportedReasoningEfforts {
-			eo = append(eo, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(e.ReasoningEffort), Name: e.ReasoningEffort, Description: nilIfEmpty(e.Description)})
+			eo = append(eo, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(e.ReasoningEffort), Name: acpx.EffortName(e.ReasoningEffort), Description: nilIfEmpty(e.Description)})
 		}
 		out = append(out, acp.SessionConfigOption{Select: &acp.SessionConfigOptionSelect{
 			Id: "effort", Name: "Effort", Type: "select", Category: acp.Ptr(acp.SessionConfigOptionCategoryThoughtLevel),

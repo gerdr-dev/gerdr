@@ -1,4 +1,4 @@
-import { Brain, Check, Download, Image as ImageIcon, Loader2, Pencil, Plus, X } from "lucide-react";
+import { Brain, Check, Download, Image as ImageIcon, Loader2, Pencil, Plus, Tag, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon } from "@/components/AgentIcon";
@@ -220,6 +220,7 @@ function Editor({
   const [adding, setAdding] = useState("");
   const [testing, setTesting] = useState<string | null>(null);
   const [levels, setLevels] = useState<string | null>(null); // the model whose thinking levels are open
+  const [naming, setNaming] = useState<string | null>(null); // the model whose display name is being edited
   const has = (id: string) => d.models.some((m) => m.id === id);
   const addModel = (id: string) => {
     id = id.trim();
@@ -334,6 +335,19 @@ function Editor({
               <span key={m.id} className="flex items-center gap-1 rounded-sm bg-card py-0.5 pr-0.5 pl-1.5 font-mono text-[12px] ring-1 ring-border">
                 {m.id}
                 <button
+                  className="flex items-center gap-0.5 rounded-sm px-1 font-sans text-muted-foreground hover:bg-muted hover:text-foreground data-[on=true]:bg-muted data-[on=true]:text-foreground data-[own=true]:text-brand"
+                  data-on={naming === m.id}
+                  data-own={!!m.name}
+                  title={t("llmSettings.nameTitle")}
+                  onClick={() => {
+                    setNaming(naming === m.id ? null : m.id);
+                    setLevels(null);
+                  }}
+                >
+                  <Tag className="size-3" />
+                  {m.name && <span className="max-w-32 truncate">{m.name}</span>}
+                </button>
+                <button
                   className="flex items-center gap-0.5 rounded-sm px-1 text-muted-foreground hover:bg-muted hover:text-foreground data-[on=true]:text-brand"
                   data-on={isImageModel(m)}
                   title={t("llmSettings.imageToggle")}
@@ -354,7 +368,10 @@ function Editor({
                     data-on={levels === m.id}
                     data-own={!!m.efforts?.length}
                     title={t("llmSettings.levelsTitle")}
-                    onClick={() => setLevels(levels === m.id ? null : m.id)}
+                    onClick={() => {
+                      setLevels(levels === m.id ? null : m.id);
+                      setNaming(null);
+                    }}
                   >
                     <Brain className="size-3" />
                     {m.efforts?.length ? <span className="font-sans">{m.efforts.length}</span> : null}
@@ -378,6 +395,17 @@ function Editor({
             ))}
             {!d.models.length && <span className="text-[12px] text-muted-foreground">{t("llmSettings.modelsEmpty")}</span>}
           </div>
+          {(() => {
+            const m = d.models.find((x) => x.id === naming);
+            return m ? (
+              <NameEditor
+                key={m.id}
+                model={m}
+                onChange={(next) => set({ models: d.models.map((x) => (x.id === m.id ? next : x)) })}
+                onClose={() => setNaming(null)}
+              />
+            ) : null;
+          })()}
           {(() => {
             const m = d.models.find((x) => x.id === levels);
             const p = m && draftProvider();
@@ -589,6 +617,36 @@ type LevelInfo = { efforts: string[] | null; default: string; source: "config" |
  * from its id — /api/llm/efforts), and editing them. Any edit makes them the model's own (efforts / defaultEffort in
  * config.json, saved with the provider); "Back to automatic" drops them again. Values go to the API as written.
  */
+// A model's display name: what the composer's button and the model menu show. Empty = the one
+// Gerdr makes from the id (native.ModelName), shown as the placeholder so it's clear what empty means
+function NameEditor({ model, onChange, onClose }: { model: LLMModel; onChange: (m: LLMModel) => void; onClose: () => void }) {
+  const [auto, setAuto] = useState(model.id);
+  useEffect(() => {
+    api
+      .llmNames([model.id])
+      .then((r) => r[model.id] && setAuto(r[model.id]))
+      .catch(() => {});
+  }, [model.id]);
+  const write = (v: string) => {
+    const next: LLMModel = { ...model, name: v.trim() || undefined };
+    if (!next.name) delete next.name;
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2 rounded-md border bg-card p-2.5 text-[12px]">
+      <div className="flex items-center gap-2">
+        <Tag className="size-3.5 text-muted-foreground" />
+        <span className="font-medium">{t("llmSettings.nameOf", { id: model.id })}</span>
+        <button className="ml-auto rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={onClose}>
+          <X className="size-3.5" />
+        </button>
+      </div>
+      <Input autoFocus defaultValue={model.name ?? ""} placeholder={auto} onChange={(e) => write(e.target.value)} className="h-8 text-[12px]" />
+      <div className="text-muted-foreground">{t("llmSettings.nameHint", { auto })}</div>
+    </div>
+  );
+}
+
 function LevelEditor({ provider, model, onChange, onClose }: { provider: LLMProvider; model: LLMModel; onChange: (m: LLMModel) => void; onClose: () => void }) {
   const [info, setInfo] = useState<LevelInfo | null>(null);
   const [err, setErr] = useState("");

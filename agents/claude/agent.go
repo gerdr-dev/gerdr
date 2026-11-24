@@ -680,7 +680,7 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 		}
 		var eo acp.SessionConfigSelectOptionsUngrouped
 		if def != "" {
-			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: def, Description: acp.Ptr(i18n.S("默认 · 跟着 settings 里的 effortLevel", "Default · follows effortLevel in settings"))})
+			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: acpx.EffortName(def), Description: acp.Ptr(i18n.S("默认 · 跟着 settings 里的 effortLevel", "Default · follows effortLevel in settings"))})
 		} else {
 			eo = append(eo, acp.SessionConfigSelectOption{Value: "", Name: i18n.S("默认", "Default"), Description: acp.Ptr(i18n.S("不指定，由 Claude Code 决定", "Not set; Claude Code decides"))})
 		}
@@ -688,7 +688,7 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 			if e == def && effort != e {
 				continue
 			}
-			eo = append(eo, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(e), Name: e})
+			eo = append(eo, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(e), Name: acpx.EffortName(e)})
 		}
 		out = append(out, acp.SessionConfigOption{Select: &acp.SessionConfigOptionSelect{
 			Id: "effort", Name: "Effort", Type: "select", Category: acp.Ptr(acp.SessionConfigOptionCategoryThoughtLevel),

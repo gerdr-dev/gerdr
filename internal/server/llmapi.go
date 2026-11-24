@@ -78,6 +78,20 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 		defer cancel()
 		writeJSON(w, native.ModelEfforts(ctx, agentwire.WithKey(b.Provider, s.Secrets), b.Model))
 	})
+	// The names models get when their config gives none (native.ModelName): the settings page shows them where a name
+	// can be typed, so the page needn't keep its own copy of the rules
+	mux.HandleFunc("POST /api/llm/names", func(w http.ResponseWriter, r *http.Request) {
+		var ids []string
+		if err := decode(r, &ids); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		out := map[string]string{}
+		for _, id := range ids {
+			out[id] = native.ModelName(id)
+		}
+		writeJSON(w, out)
+	})
 	mux.HandleFunc("POST /api/image", s.generateImage)
 	mux.HandleFunc("GET /api/image/models", func(w http.ResponseWriter, r *http.Request) {
 		cfg := s.Hub.LLM()

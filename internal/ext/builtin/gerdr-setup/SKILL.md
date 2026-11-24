@@ -95,6 +95,11 @@ the provider's model list when it gives them, else a guess from the id. To set t
 `gerdr config set llm.providers.<provider>.models.<model>.efforts '["low","medium","high","xhigh"]'` and
 `… .defaultEffort medium`; values go to the API as written. `gerdr config unset` on both goes back to automatic.
 
+A Gerdr Agent model's display name (the composer's button, the model menu) is its `name`; unset, Gerdr makes a
+short one from the id (`claude-fable-5-2` → `Fable 5.2`, `gemini-3-pro-preview` → `Gemini 3 Pro Preview`; ids it
+doesn't recognise show as they are). To name one: `gerdr config set llm.providers.<provider>.models.<model>.name "Fable"`;
+`unset` goes back to the automatic name.
+
 The image model (for `gerdr image gen` and Gerdr Agent's `generate_image`) is `llm.imageModel`, picked from the
 providers' image models (`gerdr image models`); setting one up is in the gerdr-image skill.
 

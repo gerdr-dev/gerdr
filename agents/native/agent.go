@@ -362,11 +362,6 @@ func (a *Agent) SetSessionConfigOption(ctx context.Context, p acp.SetSessionConf
 	return acp.SetSessionConfigOptionResponse{ConfigOptions: a.configOptions(s)}, nil
 }
 
-var effortNames = map[string]string{
-	"off": i18n.S("关", "Off"), "none": i18n.S("关", "Off"), "minimal": i18n.S("最低", "Minimal"), "low": i18n.S("低", "Low"),
-	"medium": i18n.S("中", "Medium"), "high": i18n.S("高", "High"), "xhigh": i18n.S("超高", "Extra high"), "max": i18n.S("最高", "Max"),
-}
-
 func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 	cfg := a.config()
 	ms := cfg.models()
@@ -380,15 +375,17 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 	multi := len(cfg.Providers) > 1
 	var opts acp.SessionConfigSelectOptionsUngrouped
 	for _, m := range ms {
-		name := m.Name
+		o := acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(m.Key), Name: m.Name}
+		// The provider tells two of the same model apart in the menu, under the name: in the name itself
+		// ("Fable 5.2 · my gateway") it filled the composer's button, which shows the chosen name
 		if multi {
 			pn := m.Provider.Name
 			if pn == "" {
 				pn = m.Provider.ID
 			}
-			name += " · " + pn
+			o.Description = acp.Ptr(pn)
 		}
-		opts = append(opts, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(m.Key), Name: name})
+		opts = append(opts, o)
 	}
 	out := []acp.SessionConfigOption{{Select: &acp.SessionConfigOptionSelect{
 		Id: "model", Name: "Model", Type: "select", Category: acp.Ptr(acp.SessionConfigOptionCategoryModel),
@@ -398,11 +395,7 @@ func (a *Agent) configOptions(s *session) []acp.SessionConfigOption {
 		r := run{model: cur, effort: effort}
 		var eo acp.SessionConfigSelectOptionsUngrouped
 		for _, e := range cur.Efforts {
-			n := effortNames[e]
-			if n == "" {
-				n = e
-			}
-			eo = append(eo, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(e), Name: n})
+			eo = append(eo, acp.SessionConfigSelectOption{Value: acp.SessionConfigValueId(e), Name: acpx.EffortName(e)})
 		}
 		out = append(out, acp.SessionConfigOption{Select: &acp.SessionConfigOptionSelect{
 			Id: "effort", Name: "Effort", Type: "select", Category: acp.Ptr(acp.SessionConfigOptionCategoryThoughtLevel),
