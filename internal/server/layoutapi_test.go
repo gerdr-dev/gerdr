@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/gerdr-dev/gerdr/internal/work"
 )
 
 // Two sessions: default has w1 (a split tab t1 with A | B, a tab t3 with C) and w3 (empty); s2 has w2 with D.
@@ -305,5 +307,72 @@ func TestPaneFit(t *testing.T) {
 	}
 	if _, _, err := ApplyLayout(json.RawMessage(browser), opsSessions, "A", "default", "pane.fit", LayoutParams{ID: "p2", Fit: "tv"}); err == nil {
 		t.Fatal("took an unknown fit")
+	}
+}
+
+func TestProjectNew(t *testing.T) {
+	raw, res := apply(t, opsLayout, call("project.new", LayoutParams{ID: " lb ", Cwd: "/r/lb"}))
+	b, _ := json.Marshal(res)
+	if !strings.Contains(string(b), `"id":"lb"`) || !strings.Contains(string(b), `"restored":false`) {
+		t.Fatalf("result: %s", b)
+	}
+	var l node
+	_ = json.Unmarshal([]byte(raw), &l)
+	if n := len(nodes(l["spaces"])); n != 3 {
+		t.Errorf("spaces: %d, want 3", n)
+	}
+	var found node
+	for _, w := range nodes(l["workspaces"]) {
+		if spaceOfWs(w) == "lb" {
+			found = w
+		}
+	}
+	if found == nil || str(found, "cwd") != "/r/lb" {
+		t.Errorf("no workspace in lb with its cwd: %v", found)
+	}
+	if str(l, "active") != "w1" {
+		t.Errorf("switched to the new project: active %v", l["active"])
+	}
+	// Taken (also by another project's shown name, case-insensitively), bad characters, reserved
+	for _, name := range []string{"LB", "Other", "a/b", "x.y", "api", ""} {
+		if _, _, err := ApplyLayout(json.RawMessage(raw), opsSessions, "A", "default", "project.new", LayoutParams{ID: name}); err == nil {
+			t.Errorf("%q was accepted", name)
+		}
+	}
+	_, res = apply(t, raw, call("project.list", LayoutParams{}))
+	b, _ = json.Marshal(res)
+	if !strings.Contains(string(b), `"id":"lb"`) || !strings.Contains(string(b), `"current":true`) {
+		t.Errorf("list: %s", b)
+	}
+}
+
+func TestProjectNewBringsSavedWorkspacesBack(t *testing.T) {
+	saved := func(p string) (*work.ProjectLayout, error) {
+		if p != "old" {
+			return nil, nil
+		}
+		return &work.ProjectLayout{Workspaces: []json.RawMessage{
+			json.RawMessage(`{"id":"wold","name":"repo","activeTab":"tx","tabs":[{"id":"tx","focus":"px","root":{"type":"pane","id":"px","sessionId":"Z"}}]}`),
+			json.RawMessage(`{"id":"w1","name":"clash","tabs":[{"id":"ty","root":{"type":"pane","id":"py"}}]}`),
+		}}, nil
+	}
+	out, res, err := ApplyLayout(json.RawMessage(opsLayout), opsSessions, "A", "default", "project.new", LayoutParams{ID: "old"}, LayoutOpts{SavedLayout: saved})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(res)
+	if !strings.Contains(string(b), `"restored":true`) {
+		t.Errorf("result: %s", b)
+	}
+	var l node
+	_ = json.Unmarshal(out, &l)
+	var in []string
+	for _, w := range nodes(l["workspaces"]) {
+		if spaceOfWs(w) == "old" {
+			in = append(in, str(w, "id"))
+		}
+	}
+	if strings.Join(in, ",") != "wold" {
+		t.Errorf("old's workspaces: %v (w1 already exists and must be skipped)", in)
 	}
 }

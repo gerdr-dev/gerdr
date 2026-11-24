@@ -44,6 +44,44 @@ func moveFlags(cmd *cobra.Command, p *server.LayoutParams, what string) {
 	}
 }
 
+// projectCmd: Gerdr projects (the sidebar's project list). A project holds its own workspaces, panels, skills and memory;
+// most other commands take --project <id>.
+func projectCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "project",
+		Short: "List / create Gerdr projects (the sidebar's projects: each has its own workspaces, panels, skills and memory)",
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List projects (JSON): id (what --project takes), name, how many workspaces; current = the one you're in",
+		RunE:  func(_ *cobra.Command, _ []string) error { return layoutCall("project.list", server.LayoutParams{}) },
+	})
+	var np server.LayoutParams
+	create := &cobra.Command{
+		Use:   "new <name>",
+		Short: "Create a project, as the sidebar's New project does (the name is also its id). Doesn't switch to it",
+		Long: `Create a project, as the sidebar's New project does. The name is also its id, the one --project takes
+(gerdr panel install --project <id>, gerdr skill add --project <id> …); it can't contain / \ or . and can't be
+taken, case-insensitively. A project that existed before under that name gets its workspaces back; otherwise it
+starts with one empty workspace (in --cwd). No window switches to it: the person picks it in the sidebar.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, a []string) error {
+			np.ID = a[0]
+			if np.Cwd != "" {
+				dir, err := filepath.Abs(expandHome(np.Cwd))
+				if err != nil {
+					return err
+				}
+				np.Cwd = dir
+			}
+			return layoutCall("project.new", np)
+		},
+	}
+	create.Flags().StringVar(&np.Cwd, "cwd", "", "folder its first workspace starts in")
+	cmd.AddCommand(create)
+	return cmd
+}
+
 func workspaceCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "workspace", Short: "List / create / rename / reorder / close workspaces in Gerdr (JSON, your session only)"}
 	cmd.AddCommand(&cobra.Command{

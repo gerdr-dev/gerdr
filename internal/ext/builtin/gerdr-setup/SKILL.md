@@ -1,6 +1,6 @@
 ---
 name: gerdr-setup
-description: "Changing how Gerdr (the GUI you run in) is set up, from the command line: its settings (theme, default agent / mode / model, shortcuts, model providers: `gerdr config`); agents (roles) with their own prompt, skills and MCP servers (`gerdr agent / skill / mcp`); a Gerdr project's own skills and shared memory (`gerdr skill --project`); add-ons (`gerdr addon`: stores, install, settings); a project's panels (`gerdr panel`: install, new, update, icon, order, badge, remove); the layout (workspaces, tabs, splits, a moved project folder: `gerdr workspace / tab / pane`); remote access from a phone (`gerdr remote`). Changing Gerdr's UI code is gerdr-ui. Requires GERDR_ENV=1."
+description: "Changing how Gerdr (the GUI you run in) is set up, from the command line: its settings (theme, default agent / mode / model, shortcuts, model providers: `gerdr config`); agents (roles) with their own prompt, skills and MCP servers (`gerdr agent / skill / mcp`); Gerdr projects (`gerdr project list / new`) and a project's own skills and shared memory (`gerdr skill --project`); add-ons (`gerdr addon`: stores, install, settings); a project's panels (`gerdr panel`: install, new, update, icon, order, badge, remove); the layout (workspaces, tabs, splits, a moved project folder: `gerdr workspace / tab / pane`); remote access from a phone (`gerdr remote`). Changing Gerdr's UI code is gerdr-ui. Requires GERDR_ENV=1."
 ---
 
 # Gerdr: settings, agents, add-ons, panels, layout
@@ -140,6 +140,14 @@ A Gerdr project (the user's lb, default…) spans several repositories and has i
 computer and given only to that project's sessions, whatever agent runs them. Your own project's id and its memory
 folder are in your system prompt ("Project memory (Gerdr project …)"). The user edits both in the project's
 right-click menu → Skills & memory.
+
+Projects are listed and created from the command line too (the sidebar's New project; the name is also the id that
+`--project` takes; a name used before gets its workspaces back; no window switches to it):
+
+```bash
+gerdr project list
+gerdr project new lb [--cwd ~/dev/lb]
+```
 
 - **Skills**: when a skill is meant for one project (its deploy routine, its team's tools), put it there, not in
   gerdr's pool or `~/.claude/skills`: no source to switch, no other project to hide it from. A same-named gerdr skill

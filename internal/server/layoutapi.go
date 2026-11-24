@@ -30,6 +30,7 @@ import (
 	"sync"
 
 	"github.com/gerdr-dev/gerdr/internal/hub"
+	"github.com/gerdr-dev/gerdr/internal/work"
 )
 
 // LayoutSession is what the layout calls need to know about a conversation shown in a pane.
@@ -65,11 +66,13 @@ type layoutCall struct {
 	self     string
 	sessions map[string]LayoutSession
 	changed  bool
+	// project.new: a project's saved workspaces (work.Runner.Layout); nil = none to bring back
+	savedLayout func(project string) (*work.ProjectLayout, error)
 }
 
 // ApplyLayout runs one layout method against raw (layout.json). out is the new layout, nil when the method only reads.
 // from is the calling agent's gerdr session, space the project the caller is in (ResolveSpace; "" = not scoped).
-func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, space, method string, p LayoutParams) (out json.RawMessage, result any, err error) {
+func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, space, method string, p LayoutParams, opts ...LayoutOpts) (out json.RawMessage, result any, err error) {
 	var l node
 	if json.Unmarshal(raw, &l) != nil || len(arr(l, "workspaces")) == 0 {
 		return nil, nil, errors.New("no layout yet: open Gerdr's window once")
@@ -79,6 +82,11 @@ func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, space, met
 		c.sessions[s.ID] = s
 	}
 	c.space = space
+	for _, o := range opts {
+		if o.SavedLayout != nil {
+			c.savedLayout = o.SavedLayout
+		}
+	}
 	result, err = c.run(method, p)
 	if err != nil || !c.changed {
 		return nil, result, err
@@ -91,6 +99,10 @@ func ApplyLayout(raw json.RawMessage, sessions []LayoutSession, from, space, met
 
 func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 	switch method {
+	case "project.list":
+		return c.projectList(), nil
+	case "project.new":
+		return c.projectNew(p)
 	case "workspace.list":
 		out := []node{}
 		for i, w := range c.visibleWs() {
@@ -1373,7 +1385,11 @@ func (s *Server) layoutOp(w http.ResponseWriter, r *http.Request) {
 			b.SessionCwd = x.Cwd
 		}
 	}
-	out, res, err := ApplyLayout(raw, sessions, b.Session, ResolveSpace(raw, b.Caller, s.workProject()), b.Method, b.Params)
+	var opts LayoutOpts
+	if s.Work != nil {
+		opts.SavedLayout = s.Work.Layout
+	}
+	out, res, err := ApplyLayout(raw, sessions, b.Session, ResolveSpace(raw, b.Caller, s.workProject()), b.Method, b.Params, opts)
 	if err != nil {
 		httpError(w, 400, err.Error())
 		return
