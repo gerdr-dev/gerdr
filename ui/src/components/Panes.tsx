@@ -1115,8 +1115,6 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const unread = useStore((s) => (pane.sessionId ? !!s.unread[pane.sessionId] : false));
   const starting = useStore((s) => !!s.starting[pane.id]);
   const inTodo = useStore((s) => !!pane.sessionId && activeIds(s).includes(pane.sessionId));
-  // Asked on every draw of the title bar: the panel's answer changes with its own data, which nothing here follows
-  const panelItems = codeMenuItems(pane.id, pane.sessionId);
   const agents = useStore((s) => s.agents);
   const home = useStore((s) => s.home);
   // The tab's only pane on a phone: the top bar (PhoneBar) already says its title and status, so this bar says where
@@ -1257,16 +1255,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               </DropdownMenuItem>
             )}
             {/* The hosting panel's own items for this pane (lib/codeMenu.ts): a task's status and the like */}
-            {panelItems.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                {panelItems.map((it) => (
-                  <DropdownMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
-                    {it.icon} {it.label}
-                  </DropdownMenuItem>
-                ))}
-              </>
-            )}
+            <PanelMenuItems pane={pane.id} session={pane.sessionId} />
             {session && (
               <>
                 <DropdownMenuSeparator />
@@ -1380,4 +1369,24 @@ function resumeCommand(agent: string, cwd: string, agentSessionId: string): stri
   const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   const resume = agent === "codex" ? `codex resume ${agentSessionId}` : `claude --resume ${agentSessionId}`;
   return cwd ? `cd ${q(cwd)} && ${resume}` : resume;
+}
+
+/**
+ * The hosting panel's items in a pane's ⋯ menu. A component of its own so the panel is asked when the menu opens (its
+ * content mounts then): asked as the title bar draws, the answer was from before the panel had registered, and went
+ * stale as the panel's own data moved (a task already in 待验收 still offered 移到待验收).
+ */
+function PanelMenuItems({ pane, session }: { pane: string; session?: string }) {
+  const items = codeMenuItems(pane, session);
+  if (!items.length) return null;
+  return (
+    <>
+      <DropdownMenuSeparator />
+      {items.map((it) => (
+        <DropdownMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
+          {it.icon} {it.label}
+        </DropdownMenuItem>
+      ))}
+    </>
+  );
 }
