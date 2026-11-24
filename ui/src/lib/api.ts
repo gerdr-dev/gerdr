@@ -770,5 +770,7 @@ const hostQ = (host?: string, sep = "?") => (host ? `${sep}host=${encodeURICompo
 export const fileRawURL = (path: string, download = false, host?: string) =>
   `${host ? `/h/${encodeURIComponent(host)}` : ""}/api/fs/raw?path=${encodeURIComponent(path)}${download ? "&download=1" : ""}`;
 
-// 这个浏览器标签页的 id：布局 / 配置广播回来时认出「是我自己改的」，不重复应用。
-export const clientId = Math.random().toString(36).slice(2);
+// This page's id: a layout / config broadcast coming back is recognised as our own change and not applied twice. Kept on
+// window so a hot update (a new instance of this module) keeps it: a fresh id per instance made the page look like a
+// new client to anything addressed by it (the App update relay's buttons, native.ts relayUpdate).
+export const clientId: string = ((window as any).__gerdrClientId ??= Math.random().toString(36).slice(2));

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/internal/auth"
 	"github.com/gerdr-dev/gerdr/internal/i18n"
+	"github.com/gerdr-dev/gerdr/internal/version"
 )
 
 // Settings → 版本 on a device without the desktop App's shell (a phone over remote access, a plain browser).
@@ -25,20 +26,72 @@ import (
 // appUpdateFresh: the App's page re-reports every 30s; past this the window is taken to be gone.
 const appUpdateFresh = 90 * time.Second
 
+// appUpdate keeps every App page's report, not just the last one. Several pages report at once (each window, and
+// pages the shell no longer pushes to, which keep re-sending the status they last got), and taking the last writer
+// made a phone's Settings → 版本 flip between them every few seconds, between versions and check times hours apart.
+// So the one shown is picked: the report whose running backend is this one, then the latest check.
 type appUpdate struct {
-	mu     sync.Mutex
+	mu      sync.Mutex
+	reports map[string]appUpdateReport // by client id
+	at      time.Time                  // test hook: when set, every report counts as made at this time
+}
+
+type appUpdateReport struct {
 	status json.RawMessage
-	client string
 	at     time.Time
+	// from the status, for picking
+	running   string
+	checkedAt int64
+}
+
+func (a *appUpdate) put(client string, status json.RawMessage, now time.Time) {
+	var st struct {
+		Running   string `json:"running"`
+		CheckedAt int64  `json:"checkedAt"`
+	}
+	_ = json.Unmarshal(status, &st)
+	if a.reports == nil {
+		a.reports = map[string]appUpdateReport{}
+	}
+	a.reports[client] = appUpdateReport{status: status, at: now, running: st.Running, checkedAt: st.CheckedAt}
+}
+
+// pick: the report to show, or none when no App page reported lately; drops the gone ones. Caller holds mu.
+func (a *appUpdate) pick(now time.Time) (json.RawMessage, string) {
+	var best appUpdateReport
+	client := ""
+	for c, r := range a.reports {
+		at := r.at
+		if !a.at.IsZero() {
+			at = a.at
+		}
+		if now.Sub(at) > appUpdateFresh {
+			delete(a.reports, c)
+			continue
+		}
+		if client == "" || better(r, best, c, client) {
+			best, client = r, c
+		}
+	}
+	return best.status, client
+}
+
+// better: r (from client c) is the truer report than b (from client bc). Ties go to the client id, so the pick is
+// stable and doesn't wander with map order.
+func better(r, b appUpdateReport, c, bc string) bool {
+	if ra, ba := r.running == version.Version, b.running == version.Version; ra != ba {
+		return ra
+	}
+	if r.checkedAt != b.checkedAt {
+		return r.checkedAt > b.checkedAt
+	}
+	return c < bc
 }
 
 func (a *appUpdate) get(now time.Time) (json.RawMessage, string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.status == nil || now.Sub(a.at) > appUpdateFresh {
-		return nil, ""
-	}
-	return a.status, a.client
+	return a.pick(now)
 }
 
 func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
@@ -62,11 +115,12 @@ func (s *Server) appUpdateRoutes(mux *http.ServeMux) {
 		}
 		a := &s.appUpdate
 		a.mu.Lock()
-		changed := a.client != b.Client || !bytes.Equal(a.status, b.Status) || time.Since(a.at) > appUpdateFresh
-		a.status, a.client, a.at = b.Status, b.Client, time.Now()
+		before, beforeClient := a.pick(time.Now())
+		a.put(b.Client, b.Status, time.Now())
+		st, client := a.pick(time.Now())
 		a.mu.Unlock()
-		if changed && s.Hub != nil {
-			s.Hub.Broadcast("app_update", map[string]any{"status": b.Status, "client": b.Client})
+		if (client != beforeClient || !bytes.Equal(st, before)) && s.Hub != nil {
+			s.Hub.Broadcast("app_update", map[string]any{"status": st, "client": client})
 		}
 		writeJSON(w, map[string]any{})
 	})

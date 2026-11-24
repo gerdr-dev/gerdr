@@ -318,13 +318,16 @@ function newer(a: string, b: string): boolean {
 /**
  * Pass the status on to the backend for devices without a shell (a phone over remote access, server/appupdate.go),
  * and keep re-sending it: the backend takes a window that went quiet for 90s as closed.
+ * The timer and what it sends live on window, not in this module: a hot update makes a new instance of the module and
+ * the shell then calls the new onAppUpdate, so a per-instance timer kept re-sending the old instance's last status
+ * forever, under its own client id, and a phone flipped between versions hours apart.
  */
-let relayed: AppUpdateStatus | null = null;
 function relayUpdate(u: AppUpdateStatus) {
-  const first = !relayed;
-  relayed = u;
-  api.reportAppUpdate(u).catch(() => {});
-  if (first) setInterval(() => relayed && api.reportAppUpdate(relayed).catch(() => {}), 30_000);
+  const w = window as any;
+  const r: { send?: () => void; timer?: number } = (w.__gerdrUpdateRelay ??= {});
+  r.send = () => void api.reportAppUpdate(u).catch(() => {});
+  r.send();
+  r.timer ||= window.setInterval(() => r.send?.(), 30_000);
 }
 
 /** A button pressed on another device ("app_update_op", addressed to this page): do it as if pressed here. */

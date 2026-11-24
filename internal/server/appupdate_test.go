@@ -1,10 +1,13 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gerdr-dev/gerdr/internal/version"
 )
 
 // The App's page reports locally; a phone reads it and presses buttons; a remote device can't fake the report.
@@ -39,5 +42,24 @@ func TestAppUpdateRelay(t *testing.T) {
 	s.appUpdate.at = time.Now().Add(-appUpdateFresh - time.Second)
 	if w := do(rh, "GET", "/api/app-update", nil, phone); !strings.Contains(w.Body.String(), `"status":null`) {
 		t.Fatalf("stale report should read as none: %s", w.Body)
+	}
+}
+
+// Several App pages report: the phone sees one, the truest, not whichever wrote last.
+func TestAppUpdatePicksTruest(t *testing.T) {
+	var a appUpdate
+	now := time.Now()
+	a.put("stale", json.RawMessage(`{"running":"0.0.1-old","checkedAt":200}`), now)
+	a.put("live", json.RawMessage(`{"running":"`+version.Version+`","checkedAt":100}`), now)
+	a.put("old", json.RawMessage(`{"running":"`+version.Version+`","checkedAt":50}`), now)
+	for i := 0; i < 3; i++ {
+		a.put("stale", json.RawMessage(`{"running":"0.0.1-old","checkedAt":200}`), now)
+		if _, c := a.get(now); c != "live" {
+			t.Fatalf("want the report running this backend with the latest check, got %q", c)
+		}
+	}
+	a.reports["live"] = appUpdateReport{at: now.Add(-appUpdateFresh - time.Second)}
+	if _, c := a.get(now); c != "old" {
+		t.Fatalf("a gone page drops out: got %q", c)
 	}
 }
