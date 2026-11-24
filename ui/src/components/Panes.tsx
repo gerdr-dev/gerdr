@@ -90,7 +90,7 @@ import {
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
 import { useWindowInFront } from "@/lib/front";
-import { get, markRead, set, setLayout, useStore } from "@/lib/store";
+import { codeHost, get, markRead, set, setLayout, useStore } from "@/lib/store";
 import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { useCaughtUp } from "@/lib/catchup";
@@ -1115,6 +1115,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const unread = useStore((s) => (pane.sessionId ? !!s.unread[pane.sessionId] : false));
   const starting = useStore((s) => !!s.starting[pane.id]);
   const inTodo = useStore((s) => !!pane.sessionId && activeIds(s).includes(pane.sessionId));
+  const noActive = useStore((s) => codeHost(s)?.list === "replace");
   const agents = useStore((s) => s.agents);
   const home = useStore((s) => s.home);
   // The tab's only pane on a phone: the top bar (PhoneBar) already says its title and status, so this bar says where
@@ -1259,7 +1260,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
             {session && (
               <>
                 <DropdownMenuSeparator />
-                {inTodo ? (
+                {/* Not where a panel draws the whole list: Code's "active" section isn't there (UnifiedSidebar Row) */}
+                {noActive ? null : inTodo ? (
                   <DropdownMenuItem onClick={() => removeActive(session.id)}>
                     <ListX /> {t("panes.removeActive")}
                   </DropdownMenuItem>

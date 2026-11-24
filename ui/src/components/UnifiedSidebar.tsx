@@ -902,6 +902,10 @@ const Row = memo(function Row({
   /** Kept at the top of its group (layout.sideRows pins) instead of sorting by activity. */
   pinned?: boolean;
 }) {
+  // "Active" is a section of Code's own list. Where a panel draws the whole list (CodeView list="replace") there is
+  // no such section to join or leave, and the panel's own groups may well be called the same: a task's menu read
+  // 移出进行中 (ours) right above 移到进行中 (the panel's status)
+  const noActive = useStore((st) => codeHost(st)?.list === "replace");
   const label = paneLabel(pane, s);
   const { title } = label;
   const sub = label.sub === groupDir ? "" : label.sub;
@@ -1046,6 +1050,7 @@ const Row = memo(function Row({
       </ContextMenuTrigger>
       <ContextMenuContent>
         {s &&
+          !noActive &&
           (inActive ? (
             <ContextMenuItem onClick={() => onActive(false)}>
               <PinOff /> {t("nav.removeActive")}
