@@ -7,7 +7,19 @@ import { get } from "./store";
  * right-click menu. For what the panel knows about a conversation and Code doesn't (a task's status: 移到待验收).
  * The ⋯ menu is the one place a phone has for it: no hover, no drag, no right click there.
  */
-export type CodeMenuItem = { id: string; label: string; icon?: ReactNode; disabled?: boolean; onSelect: () => void };
+export type CodeMenuItem = {
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  disabled?: boolean;
+  onSelect?: () => void;
+  /**
+   * A second level: picking the item unfolds these under it, in place (as the pane menu's own 更多 does: on a phone a
+   * submenu to the side has no room and is cut off). For a list of choices that would make the menu long (which
+   * agent, of seven).
+   */
+  children?: CodeMenuItem[];
+};
 export type CodeMenuFn = (row: { pane: string; session?: string }) => CodeMenuItem[];
 
 const byPanel = new Map<string, CodeMenuFn>();

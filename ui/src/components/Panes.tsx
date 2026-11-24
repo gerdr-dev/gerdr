@@ -31,7 +31,7 @@ import {
   CircleX,
   X,
 } from "lucide-react";
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
@@ -1380,15 +1380,35 @@ function resumeCommand(agent: string, cwd: string, agentSessionId: string): stri
  */
 function PanelMenuItems({ pane, session }: { pane: string; session?: string }) {
   const items = codeMenuItems(pane, session);
+  // Which item with a second level is unfolded; folded again with the next opening (this mounts with the menu)
+  const [open, setOpen] = useState("");
   if (!items.length) return null;
   return (
     <>
       <DropdownMenuSeparator />
-      {items.map((it) => (
-        <DropdownMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
-          {it.icon} {it.label}
-        </DropdownMenuItem>
-      ))}
+      {items.map((it) =>
+        it.children?.length ? (
+          <Fragment key={it.id}>
+            <DropdownMenuItem disabled={it.disabled} onSelect={(e) => (e.preventDefault(), setOpen((v) => (v === it.id ? "" : it.id)))}>
+              {it.icon} {it.label}
+              <ChevronDown className={cn("ml-auto transition-transform", open === it.id && "rotate-180")} />
+            </DropdownMenuItem>
+            {open === it.id && (
+              <div className="ml-3 border-l pl-1">
+                {it.children.map((c) => (
+                  <DropdownMenuItem key={c.id} disabled={c.disabled} onClick={c.onSelect}>
+                    {c.icon} {c.label}
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            )}
+          </Fragment>
+        ) : (
+          <DropdownMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
+            {it.icon} {it.label}
+          </DropdownMenuItem>
+        ),
+      )}
     </>
   );
 }

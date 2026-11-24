@@ -325,7 +325,15 @@ declare module "@gerdr/core" {
    * and the like. `fn` is asked each time a menu is drawn; return [] for none. On a phone the ⋯ menu is the only
    * place for it: give there whatever your list does by hover, drag or right click.
    */
-  export type CodeMenuItem = { id: string; label: string; icon?: ReactNode; disabled?: boolean; onSelect: () => void };
+  export type CodeMenuItem = {
+    id: string;
+    label: string;
+    icon?: ReactNode;
+    disabled?: boolean;
+    onSelect?: () => void;
+    /** A second level, unfolded under the item when it's picked: for a list of choices that would make the menu long. */
+    children?: CodeMenuItem[];
+  };
   export function useCodeRowMenu(fn: (row: { pane: string; session?: string }) => CodeMenuItem[]): void;
   /**
    * With CodeView: close the phone's drawer (Code's list over the page), after something in your part of the list

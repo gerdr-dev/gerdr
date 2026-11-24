@@ -27,7 +27,7 @@ import {
   ArrowUpToLine,
   Orbit,
 } from "lucide-react";
-import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
+import { createContext, Fragment, memo, useContext, useEffect, useRef, useState } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1102,9 +1102,28 @@ const Row = memo(function Row({
 
 /** The hosting panel's items in a row's right-click menu: asked when the menu opens (see Panes.tsx PanelMenuItems). */
 function RowPanelItems({ pane, session }: { pane: string; session?: string }) {
-  return codeMenuItems(pane, session).map((it) => (
-    <ContextMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
-      {it.icon} {it.label}
-    </ContextMenuItem>
-  ));
+  const [open, setOpen] = useState("");
+  return codeMenuItems(pane, session).map((it) =>
+    it.children?.length ? (
+      <Fragment key={it.id}>
+        <ContextMenuItem disabled={it.disabled} onSelect={(e) => (e.preventDefault(), setOpen((v) => (v === it.id ? "" : it.id)))}>
+          {it.icon} {it.label}
+          <ChevronRight className={cn("ml-auto transition-transform", open === it.id && "rotate-90")} />
+        </ContextMenuItem>
+        {open === it.id && (
+          <div className="ml-3 border-l pl-1">
+            {it.children.map((c) => (
+              <ContextMenuItem key={c.id} disabled={c.disabled} onClick={c.onSelect}>
+                {c.icon} {c.label}
+              </ContextMenuItem>
+            ))}
+          </div>
+        )}
+      </Fragment>
+    ) : (
+      <ContextMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
+        {it.icon} {it.label}
+      </ContextMenuItem>
+    ),
+  );
 }
