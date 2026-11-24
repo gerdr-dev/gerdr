@@ -209,7 +209,8 @@ Rules that keep it looking like Gerdr:
   count), still, in theme tokens. Need more room? `tallIcon: true` makes your button two cells tall, its box 32×72
   (24×24 on a phone). Without an icon the button shows your addon.json icon. A click on the button toggles the
   panel; give `click: () => …` to have it do something else (open your details dialog) while hover still shows
-  the panel.
+  the panel. The panel closes after your click unless it returns `false` (`click: () => false`: a click that does
+  nothing; or change what the open panel shows and return `false` to keep it up).
 - Want other add-ons' blocks behind the same button as yours (today's numbers next to two quota meters)? Copy their
   code into your add-on (add-ons are small) and tell the user to turn the originals off. Gerdr has no grouping on
   purpose: one add-on can line the rows up and draw one icon from all of the data, a grouping setting couldn't.

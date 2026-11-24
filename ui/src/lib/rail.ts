@@ -13,7 +13,15 @@ export type RailOpen = "hover" | "click";
 /** An icon component an add-on draws in a box of width × height px (opts.icon). */
 export type IconComponent = ComponentType<{ width: number; height: number }>;
 
-export type RailButton = { addon: string; title: string; icon?: string | IconComponent; tall: boolean; open: RailOpen; click?: () => void; blocks: SlotReg[] };
+export type RailButton = {
+  addon: string;
+  title: string;
+  icon?: string | IconComponent;
+  tall: boolean;
+  open: RailOpen;
+  click?: SlotReg["click"];
+  blocks: SlotReg[];
+};
 
 /**
  * One button per add-on with loaded blocks, in slot order (by the smallest order of its blocks, then add-on id: the

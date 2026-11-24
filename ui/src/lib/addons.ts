@@ -71,8 +71,9 @@ export type SlotReg = {
   open?: "hover" | "click";
   /** A panel's icon component wants a button two cells tall on the rail (a 32×72 box instead of 32×20). */
   tallIcon?: boolean;
-  /** A click on a panel's rail button runs this instead of toggling the panel (which still opens on hover). */
-  click?: () => void;
+  /** A click on a panel's rail button runs this instead of toggling the panel (which still opens on hover); it
+   * returning false leaves the panel as it is, anything else closes it. */
+  click?: () => boolean | void;
 };
 export const slots: Record<SlotName, SlotReg[]> = {
   panel: [],
@@ -577,7 +578,7 @@ function makeApi(id: string, hash: string) {
     slot: (
       asked: SlotName | "sidebar",
       Component: React.ComponentType<any>,
-      o?: { order?: number; id?: string; title?: string; icon?: SlotReg["icon"]; open?: SlotReg["open"]; tallIcon?: boolean; click?: () => void },
+      o?: { order?: number; id?: string; title?: string; icon?: SlotReg["icon"]; open?: SlotReg["open"]; tallIcon?: boolean; click?: SlotReg["click"] },
     ) => {
       // "sidebar": the panel slot's first name, from when blocks sat in the left column. Kept for good: add-ons in the
       // wild use it
