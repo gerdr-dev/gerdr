@@ -224,7 +224,10 @@ function MountRoot({ project }: { project: string }) {
     // transform: the containing block of the panel's fixed overlays (its drawers, dialogs), so they cover the panel's
     // own area and not the agent / browser columns beside it (asked for: a task's drawer hid the browser column, and
     // over the App's real page it pushed the page aside). Coordinates from pointer events need the area's offset.
-    <div className="relative size-full overflow-hidden bg-background" style={{ transform: "translateZ(0)" }} {...{ [MOUNT_ATTR]: mountName(project) }}>
+    // clip, not hidden: a hidden box is still a scroll container, and with the drawers' containing block here the
+    // browser scrolled it sideways to reveal one focused while still sliding in off the right edge (the board jumped
+    // left and slid back as the drawer came in)
+    <div className="relative size-full overflow-clip bg-background" style={{ transform: "translateZ(0)" }} {...{ [MOUNT_ATTR]: mountName(project) }}>
       <div ref={ref} className={cn("size-full", error && "hidden")} />
       <div ref={portal} data-gerdr-portal="" />
       {error && <MountError project={project} error={error} />}
