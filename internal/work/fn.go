@@ -242,7 +242,14 @@ func (run *runner) call(file, fn string, prog *moejs.Script, input any) (any, er
 			return nil, errors.New("the function's promise never settled (there's no setTimeout here: to wait, await ctx.sleep(ms))")
 		}
 	}
-	return plain(toPlain(run.toGo(res))), nil
+	// The result stays JSON bytes until someone needs it as values (Run.Wait). Decoded into map[string]any it took
+	// ~10x its JSON size, and a page's SSE only re-encodes it: a board answering 1.4 MB every few seconds kept
+	// 250-300 MB of live heap in these maps while its runs waited out keepReceived (pprof, 2026-11-24).
+	b, err := json.Marshal(toPlain(run.toGo(res)))
+	if err != nil {
+		return json.RawMessage("null"), nil // as plain() did: what can't be JSON comes back as null
+	}
+	return json.RawMessage(b), nil
 }
 
 func (r *runner) cleanup() {

@@ -2,6 +2,7 @@ package work
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -210,5 +211,28 @@ export async function boom() { throw new Error('bad thing') }`,
 	all, _ := r.Logs("", "t", 10)
 	if len(all) != 3 { // slow, key, boom (the _lib attempt isn't a "t" run)
 		t.Errorf("runs of t = %d: %+v", len(all), all)
+	}
+}
+
+// A run keeps its result as the JSON the function returned (a page's SSE sends those bytes as they are); Wait still
+// hands back Go values. Decoded maps took ~10x the JSON's size in memory for every result a run held.
+func TestResultKeptAsJSON(t *testing.T) {
+	r, _ := newProject(t, map[string]string{"t.ts": `
+export function big() { return { id: 1795485490081035000, rows: [{ a: "x", b: [1, 2] }], none: undefined } }`})
+	res, evs, err := run(t, r, "t.big", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m, ok := res.(map[string]any); !ok || len(m["rows"].([]any)) != 1 {
+		t.Fatalf("Wait = %#v, want decoded values", res)
+	}
+	last := evs[len(evs)-1]
+	raw, ok := last.Data.(map[string]any)["value"].(json.RawMessage)
+	if !ok {
+		t.Fatalf("result value is %T, want json.RawMessage", last.Data.(map[string]any)["value"])
+	}
+	b, _ := json.Marshal(last)
+	if !strings.Contains(string(b), `"value":`+string(raw)) || !strings.Contains(string(raw), `"rows":[{"a":"x","b":[1,2]}]`) {
+		t.Errorf("event JSON = %s", b)
 	}
 }

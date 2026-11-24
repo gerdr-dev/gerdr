@@ -91,7 +91,7 @@ func (rn *Run) Wait(ctx context.Context) (any, error) {
 				msg, _ := d["message"].(string)
 				return nil, errors.New(msg)
 			}
-			return d["value"], nil
+			return value(d["value"]), nil
 		}
 		select {
 		case <-wake:
@@ -334,4 +334,16 @@ func (r *Runner) LogOf(project, id string) ([]LogLine, error) {
 		}
 	}
 	return out, nil
+}
+
+// value is a result as Go values: a function's result is kept as JSON bytes (runner.call) and decoded only here, for
+// the callers that read it (tools, triggers, schedules, the CLI's non-streaming path). A page's SSE sends the bytes.
+func value(v any) any {
+	raw, ok := v.(json.RawMessage)
+	if !ok {
+		return v
+	}
+	var out any
+	_ = json.Unmarshal(raw, &out)
+	return out
 }
