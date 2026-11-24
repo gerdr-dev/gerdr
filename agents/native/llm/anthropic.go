@@ -138,12 +138,15 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		thinkingSeen, started bool
 	}
 	var (
-		blocks   []*block
-		calls    []ToolCall
-		usage    anthropicUsage
-		rawU     rawUsage
-		stop     string
-		thoughts int // thinking blocks seen so far: a blank line between them in the UI
+		blocks      []*block
+		calls       []ToolCall
+		usage       anthropicUsage
+		rawU        rawUsage
+		stop        string
+		stopDetails *anthropicStopDetails
+		msgID       string
+		reqID       = responseHeader(rc).Get("request-id")
+		thoughts    int // thinking blocks seen so far: a blank line between them in the UI
 	)
 	at := func(i int) *block {
 		for len(blocks) <= i {
@@ -156,19 +159,22 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 			Type    string `json:"type"`
 			Index   int    `json:"index"`
 			Message *struct {
+				ID    string         `json:"id"`
 				Usage anthropicUsage `json:"usage"`
 			} `json:"message"`
 			ContentBlock json.RawMessage `json:"content_block"`
 			Delta        *struct {
-				Type        string `json:"type"`
-				Text        string `json:"text"`
-				Thinking    string `json:"thinking"`
-				Signature   string `json:"signature"`
-				PartialJSON string `json:"partial_json"`
-				StopReason  string `json:"stop_reason"`
+				Type        string                `json:"type"`
+				Text        string                `json:"text"`
+				Thinking    string                `json:"thinking"`
+				Signature   string                `json:"signature"`
+				PartialJSON string                `json:"partial_json"`
+				StopReason  string                `json:"stop_reason"`
+				StopDetails *anthropicStopDetails `json:"stop_details"`
 			} `json:"delta"`
-			Usage *anthropicUsage `json:"usage"`
-			Error *struct {
+			StopDetails *anthropicStopDetails `json:"stop_details"`
+			Usage       *anthropicUsage       `json:"usage"`
+			Error       *struct {
 				Type    string `json:"type"`
 				Message string `json:"message"`
 			} `json:"error"`
@@ -179,6 +185,9 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		switch ev.Type {
 		case "message_start":
 			if ev.Message != nil {
+				if ev.Message.ID != "" {
+					msgID = ev.Message.ID
+				}
 				usage.merge(ev.Message.Usage)
 				var raw struct {
 					Message struct {
@@ -247,8 +256,16 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 				}
 			}
 		case "message_delta":
-			if ev.Delta != nil && ev.Delta.StopReason != "" {
-				stop = ev.Delta.StopReason
+			if ev.Delta != nil {
+				if ev.Delta.StopReason != "" {
+					stop = ev.Delta.StopReason
+				}
+				if ev.Delta.StopDetails != nil {
+					stopDetails = ev.Delta.StopDetails
+				}
+			}
+			if ev.StopDetails != nil {
+				stopDetails = ev.StopDetails
 			}
 			if ev.Usage != nil {
 				usage.merge(*ev.Usage)
@@ -327,7 +344,7 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 	}
 	switch {
 	case stop == "refusal":
-		return res, &APIError{Msg: "the model declined to continue (stop_reason: refusal)"}
+		return res, &APIError{Msg: anthropicRefusalMsg(stopDetails, reqID, msgID)}
 	case len(res.Message.ToolCalls) > 0:
 		res.Stop = "tool_use"
 	case stop == "max_tokens":
@@ -336,6 +353,35 @@ func (c *anthropic) Stream(ctx context.Context, req Request, on func(Event)) (Re
 		res.Stop = "end"
 	}
 	return res, nil
+}
+
+// anthropicStopDetails carries the classifier refusal reason on message_delta.delta.stop_details.
+type anthropicStopDetails struct {
+	Type        string `json:"type"`
+	Category    string `json:"category"`
+	Explanation string `json:"explanation"`
+}
+
+func anthropicRefusalMsg(d *anthropicStopDetails, reqID, msgID string) string {
+	meta := []string{"stop_reason: refusal"}
+	if d != nil && d.Category != "" {
+		meta = append(meta, "category: "+d.Category)
+	}
+	msg := "the model declined to continue (" + strings.Join(meta, ", ") + ")"
+	if d != nil && strings.TrimSpace(d.Explanation) != "" {
+		msg += ": " + strings.TrimSpace(d.Explanation)
+	}
+	var ids []string
+	if reqID != "" {
+		ids = append(ids, "request_id: "+reqID)
+	}
+	if msgID != "" {
+		ids = append(ids, "message_id: "+msgID)
+	}
+	if len(ids) > 0 {
+		msg += " [" + strings.Join(ids, ", ") + "]"
+	}
+	return msg
 }
 
 type anthropicUsage struct {

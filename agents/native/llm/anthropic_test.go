@@ -184,3 +184,63 @@ func TestAnthropicThinkingOff(t *testing.T) {
 		}
 	}
 }
+
+func TestAnthropicRefusalDetails(t *testing.T) {
+	cases := []struct {
+		name   string
+		reqID  string
+		stream string
+		want   string
+	}{
+		{
+			name:  "full details and ids",
+			reqID: "req_abc",
+			stream: "event: message_start\n" +
+				`data: {"type":"message_start","message":{"id":"msg_xyz","usage":{"input_tokens":10,"output_tokens":0}}}` + "\n\n" +
+				"event: message_delta\n" +
+				`data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"This request was declined because it could enable cyber harm."}},"usage":{"output_tokens":0}}` + "\n\n" +
+				"event: message_stop\n" +
+				`data: {"type":"message_stop"}` + "\n\n",
+			want: "model API error: the model declined to continue (stop_reason: refusal, category: cyber): This request was declined because it could enable cyber harm. [request_id: req_abc, message_id: msg_xyz]",
+		},
+		{
+			name:  "category only",
+			reqID: "",
+			stream: "event: message_delta\n" +
+				`data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":null}},"usage":{"output_tokens":0}}` + "\n\n" +
+				"event: message_stop\n" +
+				`data: {"type":"message_stop"}` + "\n\n",
+			want: "model API error: the model declined to continue (stop_reason: refusal, category: cyber)",
+		},
+		{
+			name:  "no details",
+			reqID: "",
+			stream: "event: message_delta\n" +
+				`data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_details":null},"usage":{"output_tokens":0}}` + "\n\n" +
+				"event: message_stop\n" +
+				`data: {"type":"message_stop"}` + "\n\n",
+			want: "model API error: the model declined to continue (stop_reason: refusal)",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				if tc.reqID != "" {
+					w.Header().Set("request-id", tc.reqID)
+				}
+				io.WriteString(w, tc.stream)
+			}))
+			defer srv.Close()
+
+			c := New("anthropic", Endpoint{BaseURL: srv.URL, APIKey: "k"})
+			_, err := c.Stream(context.Background(), Request{
+				Model:    "claude-opus-5-5",
+				Messages: []Message{{Role: "user", Content: []Part{TextPart("hi")}}},
+			}, func(Event) {})
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("got %v, want %q", err, tc.want)
+			}
+		})
+	}
+}

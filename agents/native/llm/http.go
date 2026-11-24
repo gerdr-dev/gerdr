@@ -85,10 +85,18 @@ var errStreamIdle = errors.New("no data from the model API for too long")
 // idleBody cancels its request once no byte has come for streamIdle; the blocked Read then fails with errStreamIdle.
 type idleBody struct {
 	rc     io.ReadCloser
+	header http.Header
 	timer  *time.Timer
 	cancel context.CancelFunc
 	idle   time.Duration
 	fired  atomic.Bool
+}
+
+func responseHeader(rc io.ReadCloser) http.Header {
+	if b, ok := rc.(*idleBody); ok {
+		return b.header
+	}
+	return nil
 }
 
 func newIdleBody(rc io.ReadCloser, cancel context.CancelFunc, idle time.Duration) *idleBody {
@@ -162,7 +170,9 @@ func postBytes(ctx context.Context, url string, auth http.Header, extra map[stri
 		}
 		res, err := httpClient.Do(req)
 		if err == nil && res.StatusCode == 200 {
-			return newIdleBody(res.Body, cancel, streamIdle), nil
+			b := newIdleBody(res.Body, cancel, streamIdle)
+			b.header = res.Header
+			return b, nil
 		}
 		var wait time.Duration
 		if err == nil {
