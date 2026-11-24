@@ -285,9 +285,21 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   useEffect(() => {
     if (folded.includes(cur.id)) setFolded(folded.filter((x) => x !== cur.id));
   }, [cur.id]);
-  // Keep the row you're on in sight when it changes from elsewhere (⌘1–9, next-needs-you)
+  // Keep the row you're on in sight when it changes from elsewhere (⌘1–9, next-needs-you). A running tab is drawn twice
+  // (under "active" and in its group): if either copy is already in view, stay put, or clicking the group's copy jumped
+  // the list up to the "active" one. Only when none is visible, scroll to the copy closest to where the list is.
   useEffect(() => {
-    scroller.current?.querySelector<HTMLElement>("[data-row-current]")?.scrollIntoView({ block: "nearest" });
+    const box = scroller.current;
+    if (!box) return;
+    const rows = [...box.querySelectorAll<HTMLElement>("[data-row-current]")];
+    if (!rows.length) return;
+    const view = box.getBoundingClientRect();
+    const dist = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      return r.top < view.top ? view.top - r.top : r.bottom > view.bottom ? r.bottom - view.bottom : 0;
+    };
+    if (rows.some((el) => dist(el) === 0)) return;
+    rows.reduce((a, b) => (dist(b) < dist(a) ? b : a)).scrollIntoView({ block: "nearest" });
   }, [curTab?.id, curTab?.focus, gridOn]);
 
   const toggleFold = (id: string) => setFolded(folded.includes(id) ? folded.filter((x) => x !== id) : [...folded, id]);
