@@ -859,6 +859,12 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
     Settings → Skill), not something to turn on per session: nobody would (the user, 2026-11-18). One
     session can override it: `gerdr session set <s> --skill-updates on|off|default`. Not left to Claude Code's own "file changed" note: that only covers files still in its
     read cache, which compaction empties, and codex / native have none (2026-11-17, a panel task that ran for weeks).
+  - Panels have the same ride-along for their own news: `ctx.sessions.note(id, key, text, { fold })` leaves a
+    `<gerdr-note fold="…">` block that goes in front of the conversation's next message, whoever sends it (hub
+    `note.go`, kept in the Record until it went; the key is scoped to the panel). The chat draws the fold as a notice
+    line above the message. Not a `send` of its own: the Superagent board said "the user ignored your question" with
+    one the moment the person typed, and it landed as a second message after theirs, starting a turn of its own when
+    the first had ended (2026-11-24).
   - Memory is the same format as Claude Code's auto memory (one .md per fact, MEMORY.md index). The index goes into
     the system prompt through `AppendPrompt` (claude `--append-system-prompt`, codex developerInstructions, native
     every model call), with where it lives and what belongs there; entries are read on demand. Read when the agent

@@ -51,6 +51,15 @@ type SendOpts struct {
 
 // SendWith is SendFrom with every option.
 func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o SendOpts) (SendResult, error) {
+	var notes []Note
+	res, err := s.sendWith(ctx, content, o, &notes)
+	if err == nil {
+		s.dropNotes(notes) // they went with it; on an error they wait for the next message
+	}
+	return res, err
+}
+
+func (s *Session) sendWith(ctx context.Context, content []acp.ContentBlock, o SendOpts, notes *[]Note) (SendResult, error) {
 	clientID, from, urgent, fold := o.ClientID, o.From, o.Urgent, strings.TrimSpace(o.Fold)
 	// A stop still finishing in the background (Escape): the new turn goes after it, or it would land mid-rollback
 	if err := s.waitStopping(ctx); err != nil {
@@ -197,6 +206,10 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 		s.mu.Lock()
 		content = withShell(s.pendingShellLocked(), content)
 		s.mu.Unlock()
+		// Notes code left for the next message (note.go): in front of whatever is said now, the person's words included
+		var nb []acp.ContentBlock
+		nb, *notes = s.takeNotes()
+		content = withShell(nb, content)
 		// Skill files changed since the last message (skillnote.go): said first, before anything else
 		content = withShell(s.skillsChanged(), content)
 	}

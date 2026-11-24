@@ -233,6 +233,14 @@ interface Ctx {
      */
     send(id: string, text: string, opts?: { attachments?: string[]; now?: boolean; fold?: string; show?: boolean }): Promise<Session>;
     /**
+     * Leaves `text` for the conversation's next message, whoever sends it (the person typing in its chat, `send`,
+     * another agent): it goes in front of that message, not as a turn of its own, and the chat shows it as one line
+     * (`fold`, else its first line) above it. For what the agent should hear but isn't worth waking it for ("the
+     * user ignored your question"). Once per message: after it went, it's gone. The same `key` (your panel's own)
+     * replaces a note that hasn't gone yet; `""` as the text takes it back.
+     */
+    note(id: string, key: string, text: string, opts?: { fold?: string }): void;
+    /**
      * Stops its agent and takes it off the screen, like closing its tab: the conversation is kept and `send` carries on
      * from where it was. For a worker whose task is done or parked, so it stops holding a process.
      */

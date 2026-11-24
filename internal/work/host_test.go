@@ -17,6 +17,7 @@ type fakeHost struct {
 	tagged   map[string]string
 	listTag  map[string]string
 	answered []string
+	noted    []string
 }
 
 func (f *fakeHost) StartSession(_ context.Context, project string, o StartOptions) (map[string]any, error) {
@@ -44,6 +45,10 @@ func (f *fakeHost) Tag(id string, tags map[string]string) (map[string]any, error
 }
 func (f *fakeHost) Mute(id string, on bool) (map[string]any, error) {
 	return map[string]any{"id": id, "muted": on}, nil
+}
+func (f *fakeHost) Note(panel, id, key, text, fold string) error {
+	f.noted = append(f.noted, panel+"|"+id+"|"+key+"|"+text+"|"+fold)
+	return nil
 }
 func (f *fakeHost) Send(_ context.Context, _, id, text string, _ SendOptions) (map[string]any, error) {
 	return map[string]any{"id": id, "sent": text}, nil
@@ -89,6 +94,8 @@ export async function go(input, ctx) {
   const s = await ctx.sessions.start({ cwd: '~/proj', prompt: 'do it', title: 'Task 1', tags: { mr: 'a!1' }, reportTo: 'work' })
   ctx.sessions.list({ tags: { mr: '' } })
   ctx.sessions.tag('s1', { mr: '', task: 't9' })
+  ctx.sessions.note('s1', 'ignored', 'they ignored q1', { fold: 'ignored' })
+  ctx.sessions.note('s1', 'ignored', '')
   await ctx.sessions.close('s1')
   let noCwd = ''
   await ctx.sessions.start({ prompt: 'x' }).catch((e) => (noCwd = e.message))
@@ -120,6 +127,9 @@ export async function go(input, ctx) {
 	}
 	if v, ok := h.tagged["mr"]; !ok || v != "" || h.tagged["task"] != "t9" {
 		t.Errorf("tag: %v", h.tagged)
+	}
+	if len(h.noted) != 2 || h.noted[0] != "default|s1|ignored|they ignored q1|ignored" || h.noted[1] != "default|s1|ignored||" {
+		t.Errorf("note: %q", h.noted)
 	}
 	if len(h.closed) != 1 || h.closed[0] != "s1" {
 		t.Errorf("close: %v", h.closed)

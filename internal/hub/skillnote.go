@@ -37,11 +37,15 @@ func isSkillsBlock(raw json.RawMessage) bool {
 	return json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.HasPrefix(b.Text, skillsPrefix)
 }
 
-// injectedText: a text block Gerdr put in front of a message (`!` output, the earlier conversation, changed skills),
+// injectedText: a text block Gerdr put in front of a message (`!` output, the earlier conversation, changed skills,
+// a note),
 // not something anyone said: titles, folds and "what the person said" skip it.
 func injectedText(t string) bool {
-	return strings.HasPrefix(t, shellPrefix) || strings.HasPrefix(t, handoffPrefix) || strings.HasPrefix(t, skillsPrefix)
+	return strings.HasPrefix(t, shellPrefix) || strings.HasPrefix(t, handoffPrefix) || strings.HasPrefix(t, skillsPrefix) || strings.HasPrefix(t, notePrefix)
 }
+
+// IsInjected: injectedText for readers outside the hub (ctx.sessions.read shows what people and agents said).
+func IsInjected(t string) bool { return injectedText(t) }
 
 type skillFile struct{ rel, path string }
 

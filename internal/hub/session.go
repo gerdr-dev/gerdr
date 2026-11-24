@@ -110,6 +110,8 @@ type Record struct {
 	// SkillsSeen: when the skill files were last checked (ms); changes after it are news. 0 = not counting (off, or
 	// nothing sent since it came on): the next message only starts the count.
 	SkillsSeen int64 `json:"skillsSeen,omitempty"`
+	// Notes: what code left to go in front of the next message, whoever sends it (note.go, ctx.sessions.note).
+	Notes []Note `json:"notes,omitempty"`
 }
 
 // WorkDir is the directory the agent works in now: what paths it prints are relative to, where `!` commands run.

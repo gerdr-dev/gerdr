@@ -42,6 +42,9 @@ type Host interface {
 	Tag(id string, tags map[string]string) (map[string]any, error)
 	// Mute turns do not disturb on or off for a conversation: nothing about it notifies the person (hub Record.Muted).
 	Mute(id string, on bool) (map[string]any, error)
+	// Note leaves text to go in front of the conversation's next message, whoever sends it (hub Session.SetNote);
+	// key is the panel's own (Gerdr scopes it to the panel), "" text takes it back.
+	Note(panel, id, key, text, fold string) error
 	// SessionsChanged waits until one of ids moves — something new in its log (a message, the agent's text as it
 	// streams, a tool call) or its status — and returns those that moved; none when timeout passes first. Pushed by the
 	// hub, the way the chat follows a conversation: a panel follows conversations without polling them.
@@ -333,6 +336,21 @@ func (r *runner) sessionsObject() map[string]any {
 				r.throw(err)
 			}
 			return s
+		},
+		// ctx.sessions.note(id, key, text, { fold }): goes in front of its next message, whoever sends it; "" takes it back
+		"note": func(id, key, text string, arg jsValue) {
+			if h == nil {
+				r.throw(errNoHost)
+			}
+			var o struct {
+				Fold string `json:"fold"`
+			}
+			if err := r.opts(arg, &o); err != nil {
+				r.throw(fmt.Errorf("ctx.sessions.note: %w", err))
+			}
+			if err := h.Note(r.project, id, key, text, o.Fold); err != nil {
+				r.throw(err)
+			}
 		},
 		// ctx.sessions.tag(id, { key: "value", gone: "" }) → session
 		"tag": func(id string, arg jsValue) map[string]any {

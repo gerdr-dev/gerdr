@@ -198,7 +198,7 @@ func conversationAll(evs []*hub.Event, last int) []map[string]any {
 					Type string `json:"type"`
 					Text string `json:"text"`
 				}
-				if json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.TrimSpace(b.Text) != "" && !hub.IsImageLabel(b.Text) {
+				if json.Unmarshal(raw, &b) == nil && b.Type == "text" && strings.TrimSpace(b.Text) != "" && !hub.IsImageLabel(b.Text) && !hub.IsInjected(b.Text) {
 					parts = append(parts, b.Text)
 				}
 			}
@@ -305,6 +305,17 @@ func (h workHost) Mute(id string, on bool) (map[string]any, error) {
 	}
 	sess.SetMuted(on)
 	return h.view(sess.Summary(), nil), nil
+}
+
+// Note: ctx.sessions.note. The key is scoped to the panel, so two panels' notes on one conversation don't replace
+// each other.
+func (h workHost) Note(panel, id, key, text, fold string) error {
+	sess, err := h.s.Hub.Session(id)
+	if err != nil {
+		return err
+	}
+	sess.SetNote(keyOr(panel)+":"+key, text, fold)
+	return nil
 }
 
 // ownSession: a conversation the panel started (its PanelTag), for what only its own panel may do with it.
