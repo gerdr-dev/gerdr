@@ -1,7 +1,9 @@
 import { type ReactNode, useContext, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { currentSpace } from "@/lib/layout";
-import { setCodeHost, useStore } from "@/lib/store";
+import { addTabForSession, focusPane } from "@/lib/actions";
+import { currentSpace, locateSession } from "@/lib/layout";
+import { toggleOverview } from "@/lib/overview";
+import { focusedSession, get, markRead, setCodeHost, useStore } from "@/lib/store";
 import { PanelKeyContext } from "./visible";
 
 /**
@@ -30,4 +32,22 @@ export function CodeView({ sidebar }: { sidebar?: ReactNode }) {
     return (panel ? `${space}/${panel}` : space) === key ? s.codeSlot : null;
   });
   return slot && sidebar ? createPortal(sidebar, slot) : null;
+}
+
+/**
+ * Show a conversation as a pane of the hosted Code: its pane when it has one, else a new tab in the workspace for its
+ * directory. For the hosting panel's own conversations, which Gerdr otherwise hands back to the panel to show
+ * (onShowSession): here "showing it" is a pane like any other.
+ */
+export function showInCodeView(id: string) {
+  toggleOverview(false);
+  const loc = locateSession(get().layout, id);
+  if (loc) focusPane(loc.pane.id);
+  else addTabForSession(id);
+  markRead(id);
+}
+
+/** The conversation in the focused pane of Code's layout, for the panel's part to mark its row. */
+export function useCodeSession(): string | undefined {
+  return useStore((s) => focusedSession(s.layout));
 }

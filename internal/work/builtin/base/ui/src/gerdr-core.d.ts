@@ -289,6 +289,14 @@ declare module "@gerdr/core" {
    * Experimental (2026-11): not in released Gerdr yet.
    */
   export function CodeView(props: { sidebar?: ReactNode }): ReactNode;
+  /**
+   * With CodeView: show a conversation as a pane of Code (its pane, else a new tab in the workspace for its directory).
+   * Call it from onShowSession too, so this panel's conversations brought up from a notification open as panes.
+   * This panel's conversations aren't listed in Code's workspaces while the panel shows: list them in `sidebar`.
+   */
+  export function showInCodeView(session: string): void;
+  /** With CodeView: the conversation in Code's focused pane, to mark its row in `sidebar`. */
+  export function useCodeSession(): string | undefined;
 
   /**
    * How a card's question was settled outside the card (on your page, an answer given before), for DefaultCard: drawn

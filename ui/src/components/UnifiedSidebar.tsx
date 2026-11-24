@@ -25,6 +25,7 @@ import {
   X,
   ArrowDownWideNarrow,
   ArrowUpToLine,
+  Orbit,
 } from "lucide-react";
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import {
@@ -95,6 +96,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { get, hostsCode, markRead, set, useStore } from "@/lib/store";
+import { showInCodeView } from "@/core/CodeView";
 import { whenCaughtUp } from "@/lib/catchup";
 import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
 import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
@@ -280,7 +282,24 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     return () => clearInterval(t);
   }, [roomy]);
   const list = spaceWorkspaces(layout);
+  // A hosting panel lists its own conversations in its part above (the secretary's workers): not again in the
+  // workspace their pane sits in, nor under "active". The workspace's title says how many of them work in its folder.
+  const theirs = (id?: string) => hosted && !!id && sessions[id]?.tags?.panel === workKey;
   const groups = sideRows(layout, undefined, sessions);
+  // A workspace holding nothing but the panel's conversations (made for a worker's directory, where the person has
+  // nothing open) isn't listed at all: it would be a title over "empty" for every repository a worker touched
+  const onlyTheirs = new Set<string>();
+  if (hosted)
+    for (const [id, rows] of groups) {
+      const rest = rows.filter((r) => !theirs(r.pane.sessionId));
+      if (rows.length && !rest.length) onlyTheirs.add(id);
+      groups.set(id, rest);
+    }
+  const panelLive = hosted ? Object.values(sessions).filter((s) => s.tags?.panel === workKey && (s.status === "running" || needsYou(s))) : [];
+  const liveIn = (ws: Workspace) => {
+    const dir = ws.cwd?.replace(/\/+$/, "");
+    return dir ? panelLive.filter((s) => s.cwd === dir || s.cwd?.startsWith(dir + "/")).map((s) => s.id) : [];
+  };
   const cur = activeWs(layout);
   const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
   const scroller = useRef<HTMLDivElement>(null);
@@ -315,7 +334,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   // "active" can reach other projects (allProjects): find each one's place
   const active = activeIds.flatMap((id) => {
     const loc = locateSession(layout, id);
-    if (!loc) return [];
+    if (!loc || theirs(id)) return [];
     const item: Item = { ws: loc.ws, tab: loc.tab, pane: loc.pane, split: leaves(loc.tab.root).length > 1, s: sessions[id] };
     return [item];
   });
@@ -481,29 +500,34 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                         )}
                       </div>
                     )}
-                    {list.map((ws, wi) => (
-                      <Group
-                        key={ws.id}
-                        ws={ws}
-                        index={wi}
-                        last={wi === list.length - 1}
-                        folded={folded.includes(ws.id)}
-                        onFold={() => toggleFold(ws.id)}
-                        sessions={sessions}
-                        unread={unread}
-                        current={ws.id === cur.id}
-                        rows={groups.get(ws.id) ?? []}
-                      >
-                        {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
+                    {list.map((ws, wi) =>
+                      onlyTheirs.has(ws.id) ? null : (
+                        <Group
+                          key={ws.id}
+                          ws={ws}
+                          index={wi}
+                          last={wi === list.length - 1}
+                          folded={folded.includes(ws.id)}
+                          onFold={() => toggleFold(ws.id)}
+                          sessions={sessions}
+                          unread={unread}
+                          current={ws.id === cur.id}
+                          rows={groups.get(ws.id) ?? []}
+                          panelLive={liveIn(ws)}
+                        >
+                          {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
                   the ones on screen just light up. data-side-row(s) / data-pinned: drag a row among the pinned ones to pin it there (TabDrag.tsx) */}
-                        {groups.get(ws.id)?.map((r) => (
-                          <div key={r.pane.id} data-side-row={r.pane.id} data-pinned={r.pinned || undefined}>
-                            <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} groupId={ws.id} pinned={!!r.pinned} />
-                          </div>
-                        ))}
-                        {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>}
-                      </Group>
-                    ))}
+                          {groups.get(ws.id)?.map((r) => (
+                            <div key={r.pane.id} data-side-row={r.pane.id} data-pinned={r.pinned || undefined}>
+                              <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} groupId={ws.id} pinned={!!r.pinned} />
+                            </div>
+                          ))}
+                          {!groups.get(ws.id)?.length && (
+                            <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>
+                          )}
+                        </Group>
+                      ),
+                    )}
                   </div>
                   <div className="mt-1 flex gap-1 px-0.5">
                     <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
@@ -577,6 +601,7 @@ function Group({
   unread,
   current,
   rows,
+  panelLive,
   children,
 }: {
   ws: Workspace;
@@ -588,6 +613,8 @@ function Group({
   unread: Record<string, true>;
   current: boolean;
   rows: SideRow[];
+  /** Conversations of the hosting panel at work in this workspace's folder (listed in the panel's part, not here). */
+  panelLive: string[];
   children: React.ReactNode;
 }) {
   const layout = useStore((s) => s.layout);
@@ -627,6 +654,19 @@ function Group({
               </span>
             )}
             <span className="flex-1" />
+            {panelLive.length > 0 && (
+              <button
+                className="flex h-4 shrink-0 items-center gap-1 rounded-full bg-brand/15 px-1.5 text-[10px] font-medium text-brand hover:bg-brand/25"
+                title={t("unifiedSidebar.panelLiveHint", { n: panelLive.length })}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  showInCodeView(panelLive[0]);
+                }}
+              >
+                <Orbit className="size-2.5" />
+                {panelLive.length}
+              </button>
+            )}
             {folded && waiting > 0 ? (
               <span className="shrink-0 rounded-full bg-bad px-1.5 text-[10px] leading-4 font-semibold text-white">
                 {t("unifiedSidebar.waitingN", { n: waiting })}
