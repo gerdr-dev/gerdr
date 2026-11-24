@@ -127,6 +127,12 @@ type State = {
    * is Code's own layout (sidebar, tabs, panes) with the panel's part in it, not the panel's page over Code: codeShown.
    */
   codeHosts: Record<string, CodeHost>;
+  /**
+   * The folders a hosting panel offers as quick picks on the new-conversation page (core useCodeDirs), by panel key,
+   * in place of Code's own (the project's workspaces): a panel that doesn't group by workspace has its own idea of
+   * where work goes (the repositories in its settings).
+   */
+  codeDirs: Record<string, CodeDir[]>;
   /** Where a hosting panel's sidebar part is drawn: an element at the top of Code's list (UnifiedSidebar), while it shows. */
   codeSlot: HTMLElement | null;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
@@ -200,6 +206,7 @@ export const useStore = create<State>(() => ({
   mountWatch: {},
   workPanels: loadWorkPanels(),
   codeHosts: {},
+  codeDirs: {},
   codeSlot: null,
   overview: loadOverview(),
   localFont: loadLocalFont(),
@@ -344,6 +351,25 @@ export function codeHost(s: Pick<State, "mode" | "layout" | "workPanels" | "code
   const space = currentSpace(s.layout);
   const panel = s.workPanels[space];
   return s.codeHosts[panel ? `${space}/${panel}` : space];
+}
+
+export type CodeDir = { path: string; name?: string };
+
+/** The quick-pick folders of the hosting panel on screen, when it gave any (core useCodeDirs). */
+export function hostDirs(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts" | "codeDirs"> = get()): CodeDir[] | undefined {
+  if (!codeHost(s)) return undefined;
+  const space = currentSpace(s.layout);
+  const panel = s.workPanels[space];
+  const dirs = s.codeDirs[panel ? `${space}/${panel}` : space];
+  return dirs?.length ? dirs : undefined;
+}
+
+/** core useCodeDirs: panel `key`'s quick-pick folders; null takes them away. */
+export function setCodeDirs(key: string, dirs: CodeDir[] | null) {
+  const next = { ...get().codeDirs };
+  if (dirs) next[key] = dirs;
+  else delete next[key];
+  set({ codeDirs: next });
 }
 
 /** The panel on screen hosts Code (core CodeView). */

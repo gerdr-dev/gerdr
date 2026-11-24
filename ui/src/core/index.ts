@@ -21,6 +21,8 @@ export {
   type CodeMenuItem,
   showInCodeView,
   closeCodeDrawer,
+  useCodeDirs,
+  type CodeDir,
   newCodeTab,
   useCodeRows,
   useCodeSession,

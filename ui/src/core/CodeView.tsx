@@ -5,7 +5,7 @@ import { addTab, addTabForSession, focusPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
 import { type CodeMenuFn, setCodeMenu } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
-import { focusedSession, get, markRead, set, setCodeHost, useStore } from "@/lib/store";
+import { type CodeDir, focusedSession, get, markRead, set, setCodeDirs, setCodeHost, useStore } from "@/lib/store";
 import { PanelKeyContext } from "./visible";
 
 /**
@@ -158,3 +158,20 @@ export type { CodeMenuItem } from "@/lib/codeMenu";
 export function closeCodeDrawer() {
   if (get().drawer) set({ drawer: false });
 }
+
+/**
+ * The folders the new-conversation page offers as quick picks while this panel hosts Code, in place of Code's own (the
+ * project's workspaces): for a panel with its own idea of where work goes (the repositories in its settings). [] or
+ * unmounting gives Code's back.
+ */
+export function useCodeDirs(dirs: CodeDir[]) {
+  const key = useContext(PanelKeyContext);
+  const sig = JSON.stringify(dirs);
+  useEffect(() => {
+    if (!key) return;
+    setCodeDirs(key, JSON.parse(sig));
+    return () => setCodeDirs(key, null);
+  }, [key, sig]);
+}
+
+export type { CodeDir } from "@/lib/store";

@@ -16,7 +16,7 @@ import {
   resumeInPane,
 } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
-import { get, set, useStore, type AgentDef } from "@/lib/store";
+import { get, hostDirs, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
 import { allLeaves, locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
@@ -311,10 +311,16 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   // The open workspaces of this pane's project, as quick picks over the directory input: the input starts with the
   // current workspace's directory, and these switch it in one tap (typing a path on a phone is slow). Only this
   // computer's: another one's folders aren't these.
+  // A panel hosting Code gives its own instead (core useCodeDirs): where work goes there isn't the workspaces, which
+  // such a panel may not even show (the repositories in its settings). Code mode keeps the workspaces.
+  const panelDirs = useStore((s) => hostDirs(s));
   const wsDirs = useMemo(() => {
+    if (panelDirs) return panelDirs.map((d) => ({ id: d.path, cwd: trimSlash(d.path), name: d.name || trimSlash(d.path).split("/").pop() || d.path }));
     const seen = new Set<string>();
-    return spaceWorkspaces(layout, paneSpace(layout, pane.id)).filter((w) => w.cwd && !seen.has(w.cwd) && (seen.add(w.cwd), true));
-  }, [layout, pane.id]);
+    return spaceWorkspaces(layout, paneSpace(layout, pane.id))
+      .filter((w) => w.cwd && !seen.has(w.cwd) && (seen.add(w.cwd), true))
+      .map((w) => ({ id: w.id, cwd: w.cwd!, name: w.name }));
+  }, [layout, pane.id, panelDirs]);
   // Whatever this pane becomes goes into the workspace whose folder is picked: the chips above name workspaces, and
   // picking one while the empty pane sat in another left the new session stuck in the wrong group (user report). The
   // pane's own workspace wins when it has that folder too; another computer's folders aren't these workspaces.
@@ -480,7 +486,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
           ))}
         </div>
         <div className="space-y-2">
-          {!host && wsDirs.length > 1 && (
+          {!host && wsDirs.length > (panelDirs ? 0 : 1) && (
             // One row that scrolls sideways: wrapped, a dozen workspaces ate half a phone screen. Both scrollbar hiders, as
             // Android's WebView ignores scrollbar-width (OverviewPhone).
             <div ref={wsRow} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -488,8 +494,8 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
                 <button
                   key={w.id}
                   data-on={w.cwd === trimSlash(abs) || undefined}
-                  title={tilde(w.cwd!, home)}
-                  onClick={() => setCwd(tilde(w.cwd!, home))}
+                  title={tilde(w.cwd, home)}
+                  onClick={() => setCwd(tilde(w.cwd, home))}
                   className={cn(
                     "flex max-w-48 shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors",
                     w.cwd === trimSlash(abs) ? "border-brand bg-brand/8" : "hover:bg-accent",

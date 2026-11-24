@@ -333,6 +333,12 @@ declare module "@gerdr/core" {
    * on themselves: the panel's page is hidden under Code, and they are part of it.
    */
   export function closeCodeDrawer(): void;
+  /**
+   * With CodeView: the folders the new-conversation page offers as quick picks while this panel shows, in place of
+   * Code's own (the project's workspaces): your own idea of where work goes (the repositories in your settings).
+   */
+  export type CodeDir = { path: string; name?: string };
+  export function useCodeDirs(dirs: CodeDir[]): void;
   /** With CodeView: a new tab in Code (the "new conversation" page), in `cwd` when given. */
   export function newCodeTab(opts?: { cwd?: string }): void;
   /**
