@@ -254,6 +254,8 @@ declare global {
      *                opts.tallIcon: true for a button two cells tall on the rail, its box 32×72 (24×24 on a phone),
      *                when your marks need the room.
      *                opts.open: "hover" (default) or "click", for a panel you work in rather than glance at.
+     *                opts.click: a function a click on the button runs instead of toggling the panel (the panel
+     *                stays a hover glance; a phone's tap still opens it), e.g. opening your details dialog.
      *                Gerdr doesn't put several add-ons behind one button: to show other add-ons' blocks together
      *                with yours, copy their code into your add-on (they're small) and turn them off
      *   "railButton" a whole button of your own on the rail (and in the phone drawer's bottom row), in slot order
@@ -631,6 +633,9 @@ declare global {
     tallIcon?: boolean;
     /** Open the panel on hover (default) or on click. */
     open?: "hover" | "click";
+    /** A click on the rail button runs this instead of toggling the panel, e.g. to open your details dialog; the
+     * panel still opens on hover (with open: "hover"). A tap on a phone still opens the panel. */
+    click?: () => void;
   }
 
   interface AgentEntry {

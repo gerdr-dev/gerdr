@@ -13,7 +13,7 @@ export type RailOpen = "hover" | "click";
 /** An icon component an add-on draws in a box of width × height px (opts.icon). */
 export type IconComponent = ComponentType<{ width: number; height: number }>;
 
-export type RailButton = { addon: string; title: string; icon?: string | IconComponent; tall: boolean; open: RailOpen; blocks: SlotReg[] };
+export type RailButton = { addon: string; title: string; icon?: string | IconComponent; tall: boolean; open: RailOpen; click?: () => void; blocks: SlotReg[] };
 
 /**
  * One button per add-on with loaded blocks, in slot order (by the smallest order of its blocks, then add-on id: the
@@ -33,6 +33,7 @@ export function railButtons(): RailButton[] {
     b.icon = withIcon?.icon;
     b.tall = !!withIcon?.tallIcon;
     b.open = b.blocks.find((x) => x.open)?.open ?? "hover";
+    b.click = b.blocks.find((x) => x.click)?.click;
   }
   return [...out.values()];
 }

@@ -143,7 +143,7 @@ own gesture is sideways (a slider, swipe to send) puts `data-no-swipe` on itself
 
 | where | call | gets |
 |---|---|---|
-| A block of your panel, opened from your add-on's own button on the rail | `g.slot("panel", Component, { order, id, title, icon, tallIcon, open })` | no props |
+| A block of your panel, opened from your add-on's own button on the rail | `g.slot("panel", Component, { order, id, title, icon, tallIcon, open, click })` | no props |
 | A whole button of your own on the rail: its look, state, click, hover, popup are all yours (a switch, a menu) | `g.slot("railButton", Component, { order, id })` | `{ width, height, className }`: see below |
 | A sprite: a small picture the user can use as the working indicator (Settings → General) or as an agent's icon | `g.slot("sprite", Component, { id, title })` | `{ state, width, height }` |
 | The app's root, always mounted, no space taken | `g.slot("overlay", Component)` | no props |
@@ -207,7 +207,9 @@ Rules that keep it looking like Gerdr:
 - Your add-on gets one rail button; its blocks stack in its panel. `icon` is a lucide name or a component drawn in a
   `{ width, height }` box (32×20 on the rail, 28×16 on a phone, clipped): live data belongs there (quota rings, a
   count), still, in theme tokens. Need more room? `tallIcon: true` makes your button two cells tall, its box 32×72
-  (24×24 on a phone). Without an icon the button shows your addon.json icon.
+  (24×24 on a phone). Without an icon the button shows your addon.json icon. A click on the button toggles the
+  panel; give `click: () => …` to have it do something else (open your details dialog) while hover still shows
+  the panel.
 - Want other add-ons' blocks behind the same button as yours (today's numbers next to two quota meters)? Copy their
   code into your add-on (add-ons are small) and tell the user to turn the originals off. Gerdr has no grouping on
   purpose: one add-on can line the rows up and draw one icon from all of the data, a grouping setting couldn't.

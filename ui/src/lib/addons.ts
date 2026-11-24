@@ -71,6 +71,8 @@ export type SlotReg = {
   open?: "hover" | "click";
   /** A panel's icon component wants a button two cells tall on the rail (a 32×72 box instead of 32×20). */
   tallIcon?: boolean;
+  /** A click on a panel's rail button runs this instead of toggling the panel (which still opens on hover). */
+  click?: () => void;
 };
 export const slots: Record<SlotName, SlotReg[]> = {
   panel: [],
@@ -575,7 +577,7 @@ function makeApi(id: string, hash: string) {
     slot: (
       asked: SlotName | "sidebar",
       Component: React.ComponentType<any>,
-      o?: { order?: number; id?: string; title?: string; icon?: SlotReg["icon"]; open?: SlotReg["open"]; tallIcon?: boolean },
+      o?: { order?: number; id?: string; title?: string; icon?: SlotReg["icon"]; open?: SlotReg["open"]; tallIcon?: boolean; click?: () => void },
     ) => {
       // "sidebar": the panel slot's first name, from when blocks sat in the left column. Kept for good: add-ons in the
       // wild use it
@@ -584,7 +586,17 @@ function makeApi(id: string, hash: string) {
       const own = slots[name].filter((x) => x.addon === id).length;
       const key = `${id}:${o?.id ?? own}`;
       if (slots[name].some((x) => x.key === key)) throw new Error(t("addons.slotTaken", { slot: name, id: o?.id ?? own }));
-      const r: SlotReg = { addon: id, key, Component, order: o?.order ?? 0, title: o?.title, icon: o?.icon, open: o?.open, tallIcon: o?.tallIcon };
+      const r: SlotReg = {
+        addon: id,
+        key,
+        Component,
+        order: o?.order ?? 0,
+        title: o?.title,
+        icon: o?.icon,
+        open: o?.open,
+        tallIcon: o?.tallIcon,
+        click: o?.click,
+      };
       slots[name].push(r);
       slots[name].sort((a, b) => a.order - b.order || a.addon.localeCompare(b.addon));
       bump();

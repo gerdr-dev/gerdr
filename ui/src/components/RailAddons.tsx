@@ -132,7 +132,15 @@ function AddonButton({ b }: { b: RailButton }) {
         )}
         onPointerEnter={hover(true)}
         onPointerLeave={hover(false)}
-        onClick={() => (clearTimeout(timer.current), setOpen(!open))}
+        // An add-on with a click of its own (open its details, say) gets the click; the panel stays a hover glance.
+        // Otherwise a click toggles the panel
+        onClick={() => {
+          clearTimeout(timer.current);
+          if (b.click) {
+            setOpen(false);
+            b.click();
+          } else setOpen(!open);
+        }}
       >
         <ButtonIcon b={b} />
       </button>
