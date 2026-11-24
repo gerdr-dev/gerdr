@@ -245,6 +245,17 @@ function eatNextClick() {
   const t = setTimeout(off, 500);
 }
 
+/** The clock the roomy rows' "3m" column goes by, ticking every 15s while `on` (minutes are its smallest step). */
+function useNow(on: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!on) return;
+    const t = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, [on]);
+  return now;
+}
+
 /**
  * Code's row for one pane, on its own (core CodeRow): the part every list is made of — the frame's search results, a
  * panel's own grouping (CodeView list="replace"). The same Row CodeList draws in its groups — icon, status, unread,
@@ -263,11 +274,17 @@ export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
   // The phone's grid covers the panes: no row is "the one in front" then (as in CodeList)
   const phone = usePhone();
   const gridOn = useStore((st) => st.overview.on) && phone;
+  // A phone's drawer has roomier rows (Roomy), said by the frame through context. A panel's part of the list is
+  // another React root portaled in, which that context doesn't reach: its rows came out in the desktop's size, 28px
+  // tall under a finger and without the "3m" column. So a row not told says it itself on a phone.
+  const told = useContext(Roomy);
+  const now = useNow(!told && phone);
+  const own = !told && phone ? { now } : null;
   if (!loc) return null;
   const cur = activeWs(layout);
   const here = !gridOn && loc.ws.id === cur.id && loc.tab.id === cur.activeTab;
   const inSplit = leaves(loc.tab.root).length > 1;
-  return (
+  const row = (
     <Row
       tab={loc.tab}
       pane={loc.pane}
@@ -281,6 +298,7 @@ export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
       where={where}
     />
   );
+  return own ? <Roomy.Provider value={own}>{row}</Roomy.Provider> : row;
 }
 
 /** A workspace's name as a row says it out of its group: with its project's when that isn't the one on screen. */
