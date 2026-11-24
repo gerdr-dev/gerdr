@@ -95,7 +95,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { get, hostsCode, markRead, set, useStore } from "@/lib/store";
+import { codeHost, get, markRead, set, useStore } from "@/lib/store";
 import { showInCodeView } from "@/core/CodeView";
 import { whenCaughtUp } from "@/lib/catchup";
 import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
@@ -243,6 +243,41 @@ function eatNextClick() {
   const t = setTimeout(off, 500);
 }
 
+/**
+ * Code's row for one pane, on its own (core CodeRow): for a panel that draws Code's list itself (CodeView
+ * list="replace"). The same row as in the groups below — icon, status, unread, the menu, dragging it onto a pane —
+ * minus what belongs to a workspace group (pinning, its place in the group). `where`: shown at its end instead of
+ * the folder.
+ */
+export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
+  const layout = useStore((s) => s.layout);
+  const loc = allLeaves(layout).find((x) => x.pane.id === id);
+  const sid = loc?.pane.sessionId;
+  const s = useStore((st) => (sid ? st.sessions[sid] : undefined));
+  const unread = useStore((st) => !!(sid && st.unread[sid]));
+  const inActive = useActiveIds()
+    .split(",")
+    .includes(sid ?? "\0");
+  if (!loc) return null;
+  const cur = activeWs(layout);
+  const here = loc.ws.id === cur.id && loc.tab.id === cur.activeTab;
+  const inSplit = leaves(loc.tab.root).length > 1;
+  return (
+    <Row
+      tab={loc.tab}
+      pane={loc.pane}
+      s={s}
+      inSplit={inSplit}
+      unread={unread}
+      inActive={inActive}
+      current={here && (!inSplit || loc.tab.focus === id)}
+      visible={here && inSplit}
+      inActiveTab={loc.tab.id === cur.activeTab}
+      where={where}
+    />
+  );
+}
+
 /** `className`: the phone drawer, which sets its own width (no resize edge there). */
 export function UnifiedSidebar({ className }: { className?: string }) {
   const layout = useStore((s) => s.layout);
@@ -270,7 +305,10 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   // A panel on screen in the phone drawer: its own items (core/phoneMenu.ts) instead of Code's tabs, when it gives any
   const mode = useStore((s) => s.mode);
   const workKey = useWorkProject();
-  const hosted = useStore((s) => hostsCode(s));
+  const host = useStore((s) => codeHost(s));
+  const hosted = !!host;
+  // The hosting panel draws the whole list (core CodeView list="replace"): Code's own groups and "active" aren't drawn
+  const replaced = host?.list === "replace";
   const panelMenu = usePanelPhoneMenu(roomy && mode === "work" && !hosted ? workKey : null);
   // The drawer's search: not kept, it's "what am I looking for right now" (the drawer remounts on every open)
   const [q, setQ] = useState("");
@@ -438,7 +476,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                   {/* A panel that hosts Code (core CodeView) draws its own part here, above Code's lists */}
                   {hosted && <div ref={setCodeSlot} data-code-slot />}
                   {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
-                  <div className="pt-1.5" data-ws-groups>
+                  <div className={cn("pt-1.5", replaced && "hidden")} data-ws-groups>
                     {(active.length > 0 || gridOn || allProjects || dragAgent) && (
                       // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
                       <div data-active-drop className="mb-1 border-b pb-1.5">
@@ -536,9 +574,12 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                     <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
                       <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
                     </FootButton>
-                    <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
-                      <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
-                    </FootButton>
+                    {/* A new workspace is a new group of Code's own list: nothing to show for it when a panel draws the list */}
+                    {!replaced && (
+                      <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
+                        <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
+                      </FootButton>
+                    )}
                   </div>
                 </>
               )}

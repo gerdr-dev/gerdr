@@ -126,7 +126,7 @@ type State = {
    * Panels whose page hosts Code (core CodeView), by key. While one of them is the panel shown, what the person sees
    * is Code's own layout (sidebar, tabs, panes) with the panel's part in it, not the panel's page over Code: codeShown.
    */
-  codeHosts: Record<string, true>;
+  codeHosts: Record<string, CodeHost>;
   /** Where a hosting panel's sidebar part is drawn: an element at the top of Code's list (UnifiedSidebar), while it shows. */
   codeSlot: HTMLElement | null;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
@@ -331,13 +331,23 @@ export function setWorkPanel(space: string, panel: string) {
   } catch {}
 }
 
-/** The panel on screen hosts Code (core CodeView): Work mode, yet Code's layout is what shows. */
-export function hostsCode(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): boolean {
-  if (s.mode !== "work") return false;
+/**
+ * How a panel hosts Code (core CodeView). list: what becomes of Code's own list (its workspaces and "active") —
+ * "add": it stays, the panel's part goes above it; "replace": the panel draws the whole list (its own grouping of
+ * the same panes: by a task's status, by person…), Code's isn't drawn.
+ */
+export type CodeHost = { list: "add" | "replace" };
+
+/** How the panel on screen hosts Code, if it does: Work mode, yet Code's layout is what shows. */
+export function codeHost(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): CodeHost | undefined {
+  if (s.mode !== "work") return undefined;
   const space = currentSpace(s.layout);
   const panel = s.workPanels[space];
-  return !!s.codeHosts[panel ? `${space}/${panel}` : space];
+  return s.codeHosts[panel ? `${space}/${panel}` : space];
 }
+
+/** The panel on screen hosts Code (core CodeView). */
+export const hostsCode = (s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): boolean => !!codeHost(s);
 
 /**
  * Code's layout is on screen: Code mode, or a panel that hosts Code. What used to ask `mode !== "work"` to mean "the
@@ -347,11 +357,11 @@ export function hostsCode(s: Pick<State, "mode" | "layout" | "workPanels" | "cod
 export const codeShown = (s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()) => s.mode !== "work" || hostsCode(s);
 
 /** core CodeView mounting / unmounting in panel `key`. */
-export function setCodeHost(key: string, on: boolean) {
+export function setCodeHost(key: string, host: CodeHost | null) {
   const cur = get().codeHosts;
-  if (!!cur[key] === on) return;
+  if (cur[key]?.list === host?.list) return;
   const next = { ...cur };
-  if (on) next[key] = true;
+  if (host) next[key] = host;
   else delete next[key];
   set({ codeHosts: next });
 }

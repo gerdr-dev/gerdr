@@ -283,16 +283,38 @@ declare module "@gerdr/core" {
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
   /**
-   * Code in this panel's place: while the panel is shown, Gerdr shows Code's own layout (the list of workspaces, tabs,
-   * split panes, terminals: the same one Code mode shows, not a copy) and draws `sidebar` at the top of that list.
-   * For a panel that is "Code plus something of its own". The rest of the page isn't drawn while this is mounted.
-   * Experimental (2026-11): not in released Gerdr yet.
+   * Code in this panel's place: while the panel is shown, Gerdr shows Code's own layout (tabs, split panes,
+   * terminals, the list beside them: the same one Code mode shows, not a copy). Code isn't a special view, it is
+   * this with Code's default list; a panel makes its own Code from the same parts:
+   * - `list="add"` (default): `sidebar` is drawn above Code's own list (its workspaces);
+   * - `list="replace"`: `sidebar` is the whole list. Group the same panes your own way (by a task's status, by
+   *   person…) from useCodeRows and draw each with CodeRow, so rows look and behave as in Code.
+   * The rest of the page isn't drawn while this is mounted. Experimental (2026-11).
    */
-  export function CodeView(props: { sidebar?: ReactNode }): ReactNode;
+  export function CodeView(props: { sidebar?: ReactNode; list?: "add" | "replace" }): ReactNode;
+  /** A row of Code's list: one pane of the current project. */
+  export type CodeRowInfo = {
+    /** The pane's id: what CodeRow takes. */
+    pane: string;
+    kind: "session" | "terminal" | "file" | "browser" | "subagent" | "new";
+    /** Its conversation (kind "session"; a subagent's pane: the conversation it belongs to). */
+    session?: string;
+    cwd?: string;
+    /** The workspace its tab is in (Code's own grouping). */
+    workspace: { id: string; name: string; cwd?: string };
+    /** The pane in front. */
+    current: boolean;
+  };
+  /** With CodeView: the current project's panes as Code lists them. Follow the conversations' state with useSessions. */
+  export function useCodeRows(): CodeRowInfo[];
+  /** With CodeView: Code's own row for a pane (icon, status, unread, its menu, dragging). `where`: shown at its end instead of the folder. */
+  export function CodeRow(props: { pane: string; where?: string }): ReactNode;
+  /** With CodeView: a new tab in Code (the "new conversation" page), in `cwd` when given. */
+  export function newCodeTab(opts?: { cwd?: string }): void;
   /**
    * With CodeView: show a conversation as a pane of Code (its pane, else a new tab in the workspace for its directory).
    * Call it from onShowSession too, so this panel's conversations brought up from a notification open as panes.
-   * This panel's conversations aren't listed in Code's workspaces while the panel shows: list them in `sidebar`.
+   * Under list="add", this panel's conversations aren't listed in Code's workspaces while the panel shows: list them in `sidebar`.
    */
   export function showInCodeView(session: string): void;
   /** With CodeView: the conversation in Code's focused pane, to mark its row in `sidebar`. */
