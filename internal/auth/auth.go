@@ -48,8 +48,11 @@ const codeLen = 8
 const flushEvery = 30 * time.Second
 
 type Device struct {
-	ID       string    `json:"id"`
-	Label    string    `json:"label"`
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	// Note: the person's own name for the device ("my Pixel", "work iPad"), set in Settings or with gerdr remote
+	// note. Label is what the device said it is at pairing, which is often the same for every phone.
+	Note     string    `json:"note,omitempty"`
 	Hash     string    `json:"hash"` // sha256(令牌明文)，明文只在签发那一刻存在
 	Created  time.Time `json:"created"`
 	LastSeen time.Time `json:"lastSeen"`
@@ -442,6 +445,27 @@ func (s *Store) RequireReverify(id string) (string, bool) {
 	for _, d := range s.devs {
 		if d.ID == id {
 			d.VerifiedAt = time.Unix(1, 0) // not zero: zero means "before this existed" and falls back to Created
+			s.flushLocked()
+			return d.Label, true
+		}
+	}
+	return "", false
+}
+
+// NoteMax caps a device note: it is a name, not a document.
+const NoteMax = 100
+
+// SetNote sets (or, empty, clears) a device's note. Returns the device's label.
+func (s *Store) SetNote(id, note string) (string, bool) {
+	note = strings.TrimSpace(note)
+	if r := []rune(note); len(r) > NoteMax {
+		note = string(r[:NoteMax])
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.devs {
+		if d.ID == id {
+			d.Note = note
 			s.flushLocked()
 			return d.Label, true
 		}

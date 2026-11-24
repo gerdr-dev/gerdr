@@ -55,6 +55,31 @@ func TestRedeemOnceAndHashOnly(t *testing.T) {
 	}
 }
 
+// A note survives a restart (it is written to devices.json), is trimmed and capped, and empty clears it.
+func TestSetNote(t *testing.T) {
+	dir := t.TempDir()
+	s := newStore(t, Config{Dir: dir, TTL: 24 * time.Hour})
+	code, _ := s.MintCode()
+	dev, _, _ := s.Redeem(code, "Android · App", "")
+	if label, ok := s.SetNote(dev.ID, "  my Pixel  "); !ok || label != dev.Label {
+		t.Fatalf("SetNote: %q %v", label, ok)
+	}
+	if _, ok := s.SetNote("nope", "x"); ok {
+		t.Fatal("an unknown device should not take a note")
+	}
+	if got := newStore(t, Config{Dir: dir, TTL: 24 * time.Hour}).Devices()[0].Note; got != "my Pixel" {
+		t.Fatalf("note after reload: %q", got)
+	}
+	s.SetNote(dev.ID, strings.Repeat("长", NoteMax+10))
+	if got := []rune(s.Devices()[0].Note); len(got) != NoteMax {
+		t.Fatalf("note should be capped at %d runes, got %d", NoteMax, len(got))
+	}
+	s.SetNote(dev.ID, " ")
+	if s.Devices()[0].Note != "" {
+		t.Fatal("an empty note should clear it")
+	}
+}
+
 // 远程那条路只认设备 cookie：Bearer（本机令牌那种）一律不认。
 func TestNoBearer(t *testing.T) {
 	s := newStore(t, Config{})

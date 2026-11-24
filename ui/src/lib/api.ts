@@ -589,6 +589,7 @@ export const api = {
   remotePairCode: () => req<{ code: string; expires: string; url: string; qr?: string }>("POST", "/api/remote/pair-code", {}),
   remoteDevices: () => req<{ devices: RemoteDevice[]; me: string }>("GET", "/api/remote/devices"),
   remoteRevoke: (id: string) => req<{ revoked: number; label: string }>("DELETE", `/api/remote/devices/${encodeURIComponent(id)}`),
+  remoteSetNote: (id: string, note: string) => req<{ label: string }>("PUT", `/api/remote/devices/${encodeURIComponent(id)}/note`, { note }),
   remoteReverify: (id: string) => req<{ label: string; passkeys: number }>("POST", `/api/remote/devices/${encodeURIComponent(id)}/reverify`),
   /** 全部踢掉：设备 + passkey 一起（只清设备的话，留着的 passkey 能立刻换回一份新凭据） */
   remoteRevokeAll: () => req<{ revoked: number; passkeys: number }>("DELETE", "/api/remote/devices"),
@@ -702,6 +703,8 @@ export type RemoteCertInput = { dns: string; email: string; staging: boolean; en
 export type RemoteDevice = {
   id: string;
   label: string;
+  /** The person's own name for it, shown before the label */
+  note?: string;
   created: string;
   lastSeen: string;
   lastIp: string;

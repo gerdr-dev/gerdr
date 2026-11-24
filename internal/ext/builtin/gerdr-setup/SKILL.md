@@ -236,6 +236,8 @@ Opening this Gerdr from a phone or another computer (the same is in Settings →
   forward) or `gerdr remote join <relay-url> <host> <invite>` (a dialhome relay). `gerdr remote direct --help` explains.
 
 These aren't auto-approved, and a pairing code (`gerdr remote pair`) lets a new device in: leave issuing one to the user.
+`gerdr remote devices` lists the paired devices; `gerdr remote note <device-id> <note>` gives one the user's own name
+("my Pixel", shown in Settings too; no note clears it).
 
 With a domain and a DNS provider, local ports come along: a server you start on `http://localhost:8765` opens on a
 paired phone at `https://8765.<host>/` (Gerdr signs the phone in, then proxies; ports 1024–65535). Links like

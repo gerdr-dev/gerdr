@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type PasskeyInfo, type RemoteDevice, type RemoteStatus } from "@/lib/api";
 import { isCancel, isStepUp, passkeySupported, registerPasskey } from "@/lib/passkey";
 import { androidCan, biometricName, enrollAppKey, isIOSApp, openInBrowser, shellReady } from "@/lib/android";
+import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { t } from "@/lib/i18n";
 import { useStore } from "@/lib/store";
@@ -43,6 +45,18 @@ export function RemoteSettings({ open }: { open: boolean }) {
   }, []);
   // Devices just asked to re-verify: the button itself says so (the message at the top is often scrolled away)
   const [asked, setAsked] = useState<Record<string, boolean>>({});
+  // The device whose note is being edited, and the text so far
+  const [noting, setNoting] = useState<{ id: string; text: string } | null>(null);
+  const saveNote = () => {
+    if (!noting) return;
+    const { id, text } = noting;
+    setNoting(null);
+    if (text.trim() === (devs.find((d) => d.id === id)?.note ?? "")) return;
+    run(async () => {
+      await api.remoteSetNote(id, text);
+      setDevs((ds) => ds.map((d) => (d.id === id ? { ...d, note: text.trim() } : d)));
+    });
+  };
 
   const load = useCallback(async () => {
     try {
@@ -285,18 +299,53 @@ export function RemoteSettings({ open }: { open: boolean }) {
             // On a phone the buttons go under the name (beside it they squeezed it to a few characters)
             <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
               <div className="min-w-0 flex-1 max-md:basis-full">
-                <div className="truncate">
-                  {d.label}
-                  {d.id === me && <span className="ml-2 text-[11px] text-brand">{t("remoteSettings.thisDevice")}</span>}
-                  {/* 配对码进来的临时设备：到点就掉，在那台设备上过一次 passkey 才转正（auth.Device.Temp） */}
-                  {keyCount(d.id) > 0 && <span className="ml-2 text-[11px] text-muted-foreground">Passkey</span>}
-                  {d.appKey && <span className="ml-2 text-[11px] text-muted-foreground">{t("remoteSettings.appKey")}</span>}
-                  {d.temp && (
-                    <span className="ml-2 text-[11px] text-warn">
-                      {t("remoteSettings.temp", { time: new Date(d.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
-                    </span>
-                  )}
-                </div>
+                {noting?.id === d.id ? (
+                  <Input
+                    autoFocus
+                    className="h-7 max-w-72 text-[13px]"
+                    maxLength={100}
+                    placeholder={t("remoteSettings.notePlaceholder")}
+                    value={noting.text}
+                    onChange={(e) => setNoting({ id: d.id, text: e.target.value })}
+                    onBlur={saveNote}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveNote();
+                      if (e.key === "Escape") setNoting(null);
+                    }}
+                  />
+                ) : (
+                  <div className="group flex min-w-0 items-center">
+                    <div className="truncate">
+                      {d.note ? (
+                        <>
+                          {d.note}
+                          <span className="ml-2 text-muted-foreground">{d.label}</span>
+                        </>
+                      ) : (
+                        d.label
+                      )}
+                      {d.id === me && <span className="ml-2 text-[11px] text-brand">{t("remoteSettings.thisDevice")}</span>}
+                      {/* 配对码进来的临时设备：到点就掉，在那台设备上过一次 passkey 才转正（auth.Device.Temp） */}
+                      {keyCount(d.id) > 0 && <span className="ml-2 text-[11px] text-muted-foreground">Passkey</span>}
+                      {d.appKey && <span className="ml-2 text-[11px] text-muted-foreground">{t("remoteSettings.appKey")}</span>}
+                      {d.temp && (
+                        <span className="ml-2 text-[11px] text-warn">
+                          {t("remoteSettings.temp", { time: new Date(d.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
+                        </span>
+                      )}
+                    </div>
+                    {/* The person's own name for it (auth.Device.Note): several phones all pair as "Android · App" */}
+                    <button
+                      type="button"
+                      title={t("remoteSettings.note")}
+                      aria-label={t("remoteSettings.note")}
+                      className="ml-1.5 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 max-md:opacity-100"
+                      onClick={() => setNoting({ id: d.id, text: d.note ?? "" })}
+                    >
+                      <Pencil className="size-3" />
+                    </button>
+                  </div>
+                )}
                 <div className="truncate text-[11px] text-muted-foreground">
                   {t("remoteSettings.deviceMeta", { seen: when(d.lastSeen), ip: d.lastIp, created: when(d.created) })}
                 </div>

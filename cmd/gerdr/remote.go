@@ -126,7 +126,11 @@ func remoteCmd() *cobra.Command {
 				return nil
 			}
 			for _, d := range devs {
-				fmt.Printf(i18n.S("  %s  %-22s 最后 %s（%s）\n", "  %s  %-22s last seen %s (%s)\n"), d.ID, d.Label, d.LastSeen.Local().Format("01-02 15:04"), d.LastIP)
+				name := d.Label
+				if d.Note != "" {
+					name = d.Note + " (" + d.Label + ")"
+				}
+				fmt.Printf(i18n.S("  %s  %-22s 最后 %s（%s）\n", "  %s  %-22s last seen %s (%s)\n"), d.ID, name, d.LastSeen.Local().Format("01-02 15:04"), d.LastIP)
 			}
 			return nil
 		},
@@ -209,6 +213,36 @@ func remoteCmd() *cobra.Command {
 			fmt.Printf(i18n.S("  %s 下次访问时要重新验证\n", "  %s will re-verify on its next request\n"), out.Label)
 			if out.Passkeys == 0 && !out.AppKey {
 				fmt.Println(i18n.S("  （还没注册 passkey，这台设备也没有 App 密钥，所以眼下不会要求它验证）", "  (no passkey registered and the device has no App key, so it won't be asked for now)"))
+			}
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   i18n.S("note <设备 id> [备注]", "note <device-id> [note]"),
+		Short: i18n.S("给一台设备写个备注（比如「我的 Pixel」），设置和 gerdr remote devices 里显示；不给备注 = 清掉", "Name a device for yourself (e.g. \"my Pixel\"), shown in Settings and gerdr remote devices; no note clears it"),
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			id, note := args[0], strings.Join(args[1:], " ")
+			var out struct{ Label string }
+			if c, err := newAPIClient(); err == nil {
+				if err := c.do("PUT", "/api/remote/devices/"+url.PathEscape(id)+"/note", map[string]string{"note": note}, &out); err != nil {
+					return err
+				}
+			} else {
+				s, err := offlineRemote()
+				if err != nil {
+					return err
+				}
+				label, ok := s.Auth.SetNote(id, note)
+				if !ok {
+					return fmt.Errorf(i18n.S("没有这台设备：%s", "no such device: %s"), id)
+				}
+				out.Label = label
+			}
+			if strings.TrimSpace(note) == "" {
+				fmt.Printf(i18n.S("  清掉了 %s 的备注\n", "  Cleared the note on %s\n"), out.Label)
+			} else {
+				fmt.Printf(i18n.S("  %s 的备注：%s\n", "  Note on %s: %s\n"), out.Label, strings.TrimSpace(note))
 			}
 			return nil
 		},

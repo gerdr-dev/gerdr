@@ -486,6 +486,20 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"label": label, "passkeys": s.Remote.Passkeys.Count(), "appKey": appKey})
 	})
+	// The person's own name for a device (auth.Device.Note); empty clears it.
+	mux.HandleFunc("PUT /api/remote/devices/{id}/note", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Note string }
+		if err := decode(r, &in); err != nil {
+			httpError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		label, ok := s.Remote.Auth.SetNote(r.PathValue("id"), in.Note)
+		if !ok {
+			httpError(w, 404, i18n.S("没有这台设备", "No such device"))
+			return
+		}
+		writeJSON(w, map[string]any{"label": label})
+	})
 	mux.HandleFunc("GET /api/remote/passkeys", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"passkeys": s.Remote.Passkeys.List(), "available": s.passkeyOK(r), "url": s.Remote.URL()})
 	})
