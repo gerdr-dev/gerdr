@@ -327,6 +327,12 @@ declare module "@gerdr/core" {
    */
   export type CodeMenuItem = { id: string; label: string; icon?: ReactNode; disabled?: boolean; onSelect: () => void };
   export function useCodeRowMenu(fn: (row: { pane: string; session?: string }) => CodeMenuItem[]): void;
+  /**
+   * With CodeView: close the phone's drawer (Code's list over the page), after something in your part of the list
+   * opened what shows behind it. Overlays you open over Code (a sheet, a dialog) need `visible pointer-events-auto`
+   * on themselves: the panel's page is hidden under Code, and they are part of it.
+   */
+  export function closeCodeDrawer(): void;
   /** With CodeView: a new tab in Code (the "new conversation" page), in `cwd` when given. */
   export function newCodeTab(opts?: { cwd?: string }): void;
   /**

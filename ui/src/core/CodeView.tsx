@@ -5,7 +5,7 @@ import { addTab, addTabForSession, focusPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
 import { type CodeMenuFn, setCodeMenu } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
-import { focusedSession, get, markRead, setCodeHost, useStore } from "@/lib/store";
+import { focusedSession, get, markRead, set, setCodeHost, useStore } from "@/lib/store";
 import { PanelKeyContext } from "./visible";
 
 /**
@@ -150,3 +150,11 @@ export function useCodeRowMenu(fn: CodeMenuFn) {
 }
 
 export type { CodeMenuItem } from "@/lib/codeMenu";
+
+/**
+ * Close the phone's drawer (Code's list over the page): after something in the panel's part of the list opened what
+ * shows behind it (its settings). Code's own rows do it when picked; nothing to do on a wide screen.
+ */
+export function closeCodeDrawer() {
+  if (get().drawer) set({ drawer: false });
+}

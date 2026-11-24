@@ -20,6 +20,7 @@ export {
   useCodeRowMenu,
   type CodeMenuItem,
   showInCodeView,
+  closeCodeDrawer,
   newCodeTab,
   useCodeRows,
   useCodeSession,
