@@ -401,19 +401,23 @@ export function UnifiedSidebar({ className }: { className?: string }) {
           <PanelPhoneMenu items={panelMenu} />
         ) : (
           <>
-            {roomy && (
-              <div className="relative shrink-0 px-2 pt-2">
-                <Search className="pointer-events-none absolute top-1/2 left-4.5 mt-1 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
-                <input
-                  className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
-                  placeholder={t("unifiedSidebar.filterPlaceholder")}
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              </div>
-            )}
-            <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+            {/* scroll-pt: a row scrolled into view stops under the search box, not behind it */}
+            <div ref={scroller} className={cn("min-h-0 flex-1 overflow-y-auto px-1.5 pb-2", roomy && "scroll-pt-12")}>
+              {/* The drawer's search, inside the scrolling area and stuck to its top, so it is exactly as wide as the
+                  rows under it: beside the area it had its own padding and ignored the scrollbar's width, and a row's
+                  highlight stood a few px left of the box above it (reported on the row right under it) */}
+              {roomy && (
+                <div className="sticky top-0 z-10 bg-sidebar pt-2 pb-0.5">
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 mt-[3px] size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
+                  <input
+                    className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
+                    placeholder={t("unifiedSidebar.filterPlaceholder")}
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                </div>
+              )}
               {kw ? (
                 <div className="flex flex-col pt-1.5">
                   {hits.map((x) => (
