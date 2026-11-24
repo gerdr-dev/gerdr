@@ -3,6 +3,7 @@ package hub
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -90,6 +91,40 @@ func TestSameProcessIgnoresName(t *testing.T) {
 	b.Prompt = "q"
 	if sameProcess(a, b) {
 		t.Fatal("a prompt change should restart the host")
+	}
+}
+
+// agentOrder controls the display order of Agents(), mixing built-in agents and custom roles; unknown ids are
+// ignored and unlisted agents follow in their default order.
+func TestAgentOrder(t *testing.T) {
+	h, err := New(Options{
+		Dir: t.TempDir(),
+		ExtraAgents: []AgentDef{
+			{ID: "r1", Name: "Role 1", Base: "claude"},
+			{ID: "r2", Name: "Role 2", Command: []string{"x"}},
+		},
+		AgentOrder: []string{"r2", "codex", "missing", "r2"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := func() []string {
+		var out []string
+		for _, m := range h.Agents() {
+			out = append(out, m["id"].(string))
+		}
+		return out
+	}
+	if got := ids(); !slices.Equal(got, []string{"r2", "codex", "claude", "r1"}) {
+		t.Fatalf("initial order = %v, want [r2 codex claude r1]", got)
+	}
+	h.SetAgentOrder([]string{"r1", "claude", "r2", "codex"})
+	if got := ids(); !slices.Equal(got, []string{"r1", "claude", "r2", "codex"}) {
+		t.Fatalf("updated order = %v, want [r1 claude r2 codex]", got)
+	}
+	h.SetAgentOrder(nil)
+	if got := ids(); !slices.Equal(got, []string{"claude", "codex", "r1", "r2"}) {
+		t.Fatalf("default order = %v, want [claude codex r1 r2]", got)
 	}
 }
 

@@ -289,6 +289,13 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		_ = json.Unmarshal(cfg.Get(), &c)
 		return c.Agents
 	}
+	cfgAgentOrder := func() []string {
+		var c struct {
+			Order []string `json:"agentOrder"`
+		}
+		_ = json.Unmarshal(cfg.Get(), &c)
+		return c.Order
+	}
 	em := ext.New(env.Dir)
 	mcpauth.Default = mcpauth.New(env.Dir)
 	native.SetSharedMCP(agentwire.Auth{}, agentwire.ChildEnv) // Work functions' ctx.mcp and Settings → MCP's reconnect
@@ -354,7 +361,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	asvc := addons.NewServices(am, log)
 	asvc.Env = func() []string { return sysenv.ChildEnv() }
 	artsOf := server.SessionArtifacts(sessionProject(env.Dir, layout))
-	h, err := hub.New(hub.Options{Routes: asvc, Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
+	h, err := hub.New(hub.Options{Routes: asvc, Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), AgentOrder: cfgAgentOrder(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
 		Artifacts: func(rec hub.Record) string { d, _, _ := artsOf(rec); return d },
 		// config.json skillUpdates: tell sessions their skill files changed (hub skillnote.go); left out = on
 		SkillUpdates: func() bool {
@@ -399,6 +406,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		applyBins()
 		sysenv.SetSecretEnv(cfgLLM().KeyEnvs())
 		h.SetAgents(cfgAgents())
+		h.SetAgentOrder(cfgAgentOrder())
 		h.Broadcast("agents", h.Agents())
 		applyAwake()
 	}

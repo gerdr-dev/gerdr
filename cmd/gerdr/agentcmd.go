@@ -146,7 +146,8 @@ func agentCmd() *cobra.Command {
 		Use:   "agent",
 		Short: "Create, show or remove an agent (role) together with its skills, MCP servers and defaults",
 		Long: `Create, show or remove an agent (role in Settings → Agent) together with its skills, MCP servers and
-new-session defaults, in one step. Open windows update within seconds. List the agents with ` + "`gerdr session agents`" + `.
+new-session defaults, in one step. Open windows update within seconds. List the agents with ` + "`gerdr session agents`" + `,
+and reorder them with ` + "`gerdr config set agentOrder '[\"id1\",\"id2\",…]'`" + `.
 
 ` + agentSpecHelp,
 	}
@@ -575,6 +576,19 @@ func removeAgent(id string, prune bool) error {
 	root, _ = setPath(root, []string{"defaultConfig", id}, nil, true)
 	if d, _ := getPath(root, []string{"defaultAgent"}); d == id {
 		root, _ = setPath(root, []string{"defaultAgent"}, nil, true)
+	}
+	if cur, ok := getPath(root, []string{"agentOrder"}); ok {
+		if arr, ok := cur.([]any); ok {
+			kept := make([]any, 0, len(arr))
+			for _, x := range arr {
+				if x != id {
+					kept = append(kept, x)
+				}
+			}
+			if len(kept) != len(arr) {
+				root, _ = setPath(root, []string{"agentOrder"}, kept, false)
+			}
+		}
 	}
 	if err := saveConfig(st, sec, root, false); err != nil {
 		return err

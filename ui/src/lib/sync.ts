@@ -16,6 +16,7 @@ import {
   loadView,
   mergeConfig,
   onLayoutChange,
+  orderAgents,
   removeSession,
   restartingNow,
   set,
@@ -89,6 +90,7 @@ async function start() {
     if (stopped) return; // 等 hello 的时候被新实例收掉了
     const sessions: Record<string, SessionSummary> = {};
     for (const s of h.sessions) sessions[s.id] = s;
+    const config = mergeConfig(h.config);
     set({
       ready: true,
       authError: false,
@@ -96,9 +98,9 @@ async function start() {
       installedAt: h.installedAt ?? 0,
       home: h.home,
       addonsDir: h.addonsDir,
-      agents: h.agents,
+      agents: orderAgents(h.agents, config.agentOrder),
       sessions,
-      config: mergeConfig(h.config),
+      config,
       remoteConns: h.remoteConns ?? [],
       hosts: h.hosts ?? [],
     });
@@ -389,10 +391,18 @@ async function refreshHello() {
     const h = await api.hello();
     const sessions: Record<string, SessionSummary> = {};
     for (const s of h.sessions) sessions[s.id] = s;
+    const config = mergeConfig(h.config);
     // version / installedAt too: a reconnect is usually the backend restarting onto a newly installed binary
-    set({ sessions, agents: h.agents, remoteConns: h.remoteConns ?? [], hosts: h.hosts ?? [], version: h.version, installedAt: h.installedAt ?? 0 });
-    // Changed on another device meanwhile (config holds who is in 进行中 too); the backend may be a new one now
-    set({ config: mergeConfig(h.config) });
+    set({
+      sessions,
+      agents: orderAgents(h.agents, config.agentOrder),
+      remoteConns: h.remoteConns ?? [],
+      hosts: h.hosts ?? [],
+      version: h.version,
+      installedAt: h.installedAt ?? 0,
+      // Changed on another device meanwhile (config holds who is in 进行中 too); the backend may be a new one now
+      config,
+    });
     unreadSync.server = !!h.unread;
     gotUnread(h.unread);
     setPortDomain(h.portDomain);
@@ -441,14 +451,17 @@ function handle(m: any) {
       if (m.data?.client !== clientId) applyRemoteLayout(m.data?.data);
       break;
     case "config":
-      if (m.data?.client !== clientId) set({ config: mergeConfig(m.data?.data) });
+      if (m.data?.client !== clientId) {
+        const config = mergeConfig(m.data?.data);
+        set((s) => ({ config, agents: orderAgents(s.agents, config.agentOrder) }));
+      }
       break;
     case "unread":
       // Our own changes too: the backend sends the whole set in the order it applied the changes, so the last frame is right
       gotUnread(m.data?.data);
       break;
     case "agents":
-      if (Array.isArray(m.data)) set({ agents: m.data });
+      if (Array.isArray(m.data)) set({ agents: orderAgents(m.data, get().config.agentOrder) });
       break;
     case "remote_conns":
       if (Array.isArray(m.data)) set({ remoteConns: m.data });

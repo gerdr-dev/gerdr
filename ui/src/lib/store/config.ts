@@ -71,6 +71,8 @@ export type Config = {
    *  Read by the backend (cmd/gerdr's applyBins). */
   agentBins?: Record<string, string>;
   agents?: AgentDef[];
+  /** Display order of agents (built-in and roles) by id; unlisted ones follow in default order. */
+  agentOrder?: string[];
   /** Per project (layout space id): skills / MCP servers its sessions don't get (ProjectExtDialog). Read by the backend
    *  (cmd/gerdr: ext.Manager.ForProject), whatever the agent's own settings. */
   projects?: Record<string, ProjectConf>;
@@ -147,6 +149,15 @@ export function showThinkingFor(c: Config, agent?: string): ThinkingDisplay {
     if (def?.showThinking !== undefined) return thinkingMode(def.showThinking);
   }
   return thinkingMode(c.showThinking);
+}
+
+/** Sort agents by config.agentOrder; unlisted ones follow in their existing order. */
+export function orderAgents<T extends { id: string }>(list: T[], order?: string[]): T[] {
+  if (!order?.length || list.length <= 1) return list;
+  const rank = new Map<string, number>();
+  for (const id of order) if (!rank.has(id)) rank.set(id, rank.size);
+  const tail = rank.size;
+  return [...list].sort((a, b) => (rank.get(a.id) ?? tail) - (rank.get(b.id) ?? tail));
 }
 
 export const DEFAULT_CONFIG: Config = {

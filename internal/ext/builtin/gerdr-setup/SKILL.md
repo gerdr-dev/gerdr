@@ -129,7 +129,9 @@ The built-in agents (`claude`, `codex`, `native`) are edited the same way: an en
 its name, icon, prompt, skills / MCP, `showThinking` (`expanded` | `latest` | `collapsed`), launch settings (its
 engine is always itself; `gerdr config set agents.codex.showThinking latest` seeds the entry if needed, or
 `gerdr agent create` adds one). `gerdr agent rm claude` only takes it off the lists — sessions on it and roles on its
-engine keep working — and `gerdr agent restore claude` puts it back.
+engine keep working — and `gerdr agent restore claude` puts it back. To change the display order in Settings → Agent
+and the new-session picker, set `agentOrder` to the ordered list of agent ids (`gerdr config set agentOrder '["reviewer","claude","codex"]'`;
+unlisted ones follow in default order).
 
 MCP tokens (headers, env) are secrets like API keys: put in only what the user hands you; `list` / `show` print them as
 `<hidden>`, and `create` fills a `<hidden>` back from the pool entry of the same name.

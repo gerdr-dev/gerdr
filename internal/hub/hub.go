@@ -140,7 +140,10 @@ type Options struct {
 	Dir         string // ~/.gerdr
 	ClaudeIdle  time.Duration
 	ExtraAgents []AgentDef
-	Log         *slog.Logger
+	// AgentOrder: display order of agents (config.json agentOrder), by id (claude, codex, native, or role ids).
+	// Unlisted agents follow in default order; unknown ids are ignored.
+	AgentOrder []string
+	Log        *slog.Logger
 	Ext         *ext.Manager // skill / MCP 从哪来；nil = 全用 agent 自己的
 	// Routes: model API addresses add-ons' services serve locally (internal/addons/routes.go); agents pointed at one
 	// talk to the service instead. nil = none.
@@ -230,6 +233,20 @@ func (h *Hub) extra() []AgentDef {
 	h.defsMu.RLock()
 	defer h.defsMu.RUnlock()
 	return h.defs
+}
+
+func (h *Hub) agentOrder() []string {
+	h.defsMu.RLock()
+	defer h.defsMu.RUnlock()
+	return h.order
+}
+
+// SetAgentOrder updates the display order of Agents() (config.json agentOrder). Display-only: running hosts stay up.
+func (h *Hub) SetAgentOrder(order []string) {
+	cp := append([]string(nil), order...)
+	h.defsMu.Lock()
+	h.order = cp
+	h.defsMu.Unlock()
 }
 
 // SetAgents：设置里改了 agents。定义变了（或被删掉）的那几个，已经起着的连接收掉 —— 下次用到时按新配置起，
@@ -329,6 +346,7 @@ type Hub struct {
 
 	defsMu sync.RWMutex
 	defs   []AgentDef // config.json 里的 agents（变体 + 外部 agent）
+	order  []string   // config.json agentOrder: display order by agent id
 
 	usageOnce sync.Once
 	usage     *usageCache // 用量额度的缓存（usage.go）
@@ -353,6 +371,7 @@ func New(opt Options) (*Hub, error) {
 		resetAt: map[string]int64{}, drafts: map[string]Draft{},
 	}
 	h.defs = ValidAgentDefs(opt.ExtraAgents)
+	h.order = append([]string(nil), opt.AgentOrder...)
 	h.cmds = newCmdCache(opt.Dir)
 	if opt.Dir != "" {
 		h.turns = newTurnLog(opt.Dir)
@@ -397,6 +416,26 @@ func (h *Hub) Agents() []map[string]any {
 		if !builtinAgent(a.ID) {
 			list = append(list, a)
 		}
+	}
+	if order := h.agentOrder(); len(order) > 0 && len(list) > 1 {
+		rank := make(map[string]int, len(order))
+		for _, id := range order {
+			if _, dup := rank[id]; !dup {
+				rank[id] = len(rank)
+			}
+		}
+		tail := len(rank)
+		sort.SliceStable(list, func(i, j int) bool {
+			ri, oki := rank[list[i].ID]
+			if !oki {
+				ri = tail
+			}
+			rj, okj := rank[list[j].ID]
+			if !okj {
+				rj = tail
+			}
+			return ri < rj
+		})
 	}
 	for _, a := range list {
 		m := map[string]any{"id": a.ID, "name": a.Name, "available": true}

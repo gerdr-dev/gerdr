@@ -116,3 +116,27 @@ func TestConfigBuiltinAgentShowThinking(t *testing.T) {
 		t.Fatal("bool showThinking accepted")
 	}
 }
+
+func TestAgentOrderConfig(t *testing.T) {
+	agentEnv(t)
+	if err := createAgent(mustSpec(t, `{"id":"rev","name":"Rev","base":"claude"}`), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := editConfig("agentOrder", []any{"rev", "codex", "claude"}, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := editConfig("agentOrder", []any{123}, false, false); err == nil {
+		t.Fatal("non-string agentOrder element accepted")
+	}
+	if err := removeAgent("rev", false); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := openConfig()
+	var cfg struct {
+		AgentOrder []string `json:"agentOrder"`
+	}
+	_ = json.Unmarshal(st.Get(), &cfg)
+	if len(cfg.AgentOrder) != 2 || cfg.AgentOrder[0] != "codex" || cfg.AgentOrder[1] != "claude" {
+		t.Fatalf("agentOrder after rm = %v, want [codex claude]", cfg.AgentOrder)
+	}
+}

@@ -1,5 +1,5 @@
-import { Check, Copy, Loader2, Pencil, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, Copy, GripVertical, Loader2, Pencil, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentIcon, SPRITE } from "@/components/AgentIcon";
 import { AgentGlyph, autoGlyph } from "@/components/AgentGlyph";
@@ -204,6 +204,94 @@ export function AgentSettings() {
   const providers = cfg.llm?.providers ?? NO_PROVIDERS;
   const [edit, setEdit] = useState<Draft | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState<{ id: string; line: number } | null>(null);
+  const canSort = agents.length > 1;
+
+  // Move agent `id` to position `to` in the visible list; keep hidden built-in ids from the previous order so
+  // restoring one remembers its place.
+  const moveAgent = (id: string, to: number) => {
+    const ids = agents.map((a) => a.id);
+    const rest = ids.filter((x) => x !== id);
+    const clamped = Math.max(0, Math.min(rest.length, to));
+    const nextVisible = [...rest.slice(0, clamped), id, ...rest.slice(clamped)];
+    if (nextVisible.every((x, i) => x === ids[i])) return;
+    const keptHidden = (cfg.agentOrder ?? []).filter((x) => BUILTIN.has(x) && !nextVisible.includes(x));
+    setConfig({ agentOrder: [...nextVisible, ...keptHidden] });
+  };
+
+  // Pointer drag reordering (same model as SpaceDrag.tsx): card tracks the pointer, a brand line marks the gap,
+  // other cards stay put so drop targets don't jump under the pointer. Mouse / pen work anywhere on the card
+  // (except buttons and error text); touch starts from the grip handle (touch-none) so scrolling still works.
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>, id: string) => {
+    if (!canSort) return;
+    const fromHandle = !!(e.target as HTMLElement | null)?.closest("[data-drag-handle]");
+    if (!fromHandle) {
+      if (e.pointerType === "touch") return;
+      if ((e.target as HTMLElement | null)?.closest("button, a, input, [data-no-drag]")) return;
+    }
+    if (e.pointerType !== "touch" && e.button !== 0) return;
+    const el = e.currentTarget;
+    const list = listRef.current;
+    if (!list) return;
+    const pid = e.pointerId;
+    const sy = e.clientY;
+    let on = false;
+    let target = -1;
+    let prevSelect = "";
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
+      if (!on) {
+        if (Math.abs(ev.clientY - sy) < 4) return;
+        on = true;
+        prevSelect = document.body.style.userSelect;
+        document.body.style.userSelect = "none";
+        try {
+          el.setPointerCapture(pid);
+        } catch {}
+        el.style.zIndex = "10";
+        el.style.pointerEvents = "none";
+      }
+      el.style.transform = `translateY(${ev.clientY - sy}px)`;
+      const others = [...list.querySelectorAll<HTMLElement>("[data-agent-id]")].filter((x) => x !== el);
+      const rects = others.map((x) => x.getBoundingClientRect());
+      let to = rects.findIndex((r) => ev.clientY < r.top + r.height / 2);
+      if (to < 0) to = others.length;
+      target = to;
+      const lr = list.getBoundingClientRect();
+      const a = rects[to - 1];
+      const b = rects[to];
+      const at = a && b ? (a.bottom + b.top) / 2 : a ? a.bottom + 3 : b ? b.top - 3 : 0;
+      setDrag({ id, line: at - lr.top });
+    };
+    const finish = (drop: boolean) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", key, true);
+      el.style.transform = el.style.zIndex = el.style.pointerEvents = "";
+      if (on) {
+        document.body.style.userSelect = prevSelect;
+        const eat = (ev: MouseEvent) => (ev.stopPropagation(), ev.preventDefault());
+        window.addEventListener("click", eat, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener("click", eat, true), 0);
+        if (drop && target >= 0) moveAgent(id, target);
+      }
+      setDrag(null);
+    };
+    const up = (ev: PointerEvent) => ev.pointerId === pid && finish(true);
+    const cancel = (ev: PointerEvent) => ev.pointerId === pid && finish(false);
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape" || !on) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      finish(false);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", key, true);
+  };
 
   const taken = new Set(["claude", "codex", "native", ...defs.map((d) => d.id)]);
   const blank = (kind: Kind, name: string, env = ""): Draft => ({
@@ -265,8 +353,8 @@ export function AgentSettings() {
         <div className="font-medium">Agent</div>
         <div className="text-[12px] text-muted-foreground">{t("agentSettings.intro")}</div>
       </div>
-      <div className="space-y-1.5">
-        {agents.map((a) => {
+      <div ref={listRef} className="relative space-y-1.5">
+        {agents.map((a, idx) => {
           const def = defs.find((d) => d.id === a.id);
           const base = def?.base ?? a.id;
           const summary = defaultsSummary(agents, a.id, base, defaultsOf(a.id));
@@ -275,65 +363,101 @@ export function AgentSettings() {
             ...(def && def.base ? roleChips(def, providers) : []),
             ...(thinking === "latest" ? [t("agentSettings.chip.thinkingLatest")] : thinking === "collapsed" ? [t("agentSettings.chip.thinkingCollapsed")] : []),
           ];
+          const dragging = drag?.id === a.id;
           return (
-            <div key={a.id} className="rounded-md border px-3 py-2">
-              {/* 第一行只放短的（名字、引擎、可用没有），都不换行；不可用的原因放到下面一行 —— 原来原因塞在这一行里，
-                  一长就把名字和引擎挤成两三行（用户报的） */}
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <AgentIcon agent={a.id} className="size-4" />
-                {/* The engine label gives way first, the name only past 60% (on phones it got cut to "Claude…") */}
-                <span className="max-w-[60%] shrink-0 truncate font-medium">{a.name}</span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-                  {t("agentSettings.engineOf", { name: kindName((def ? (def.base ?? "command") : a.id) as Kind) })}
-                  {BUILTIN.has(a.id) && t("agentSettings.builtinSuffix")}
-                </span>
-                <span className={cn("shrink-0 text-[12px]", a.available ? "text-ok" : "text-bad")}>
-                  {a.available ? t("agentSettings.available") : t("agentSettings.unavailable")}
-                </span>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
-                    title={t("common.edit")}
-                    onClick={() => open(def ? toDraft(def) : builtinDraft(a.id, a.name), false)}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  {BUILTIN.has(a.id) ? (
-                    // A built-in one is only taken off the list: its engine stays (sessions on it, roles built on it)
-                    <ConfirmDelete
-                      title={t("agentSettings.hideTitle")}
-                      onConfirm={() =>
-                        setConfig({
-                          agents: def
-                            ? defs.map((x) => (x.id === a.id ? { ...x, hidden: true } : x))
-                            : [...defs, { id: a.id, name: a.name, base: a.id as AgentDef["base"], hidden: true }],
-                        })
-                      }
-                    />
-                  ) : (
-                    def && (
-                      <ConfirmDelete
-                        title={t("agentSettings.deleteTitle")}
-                        onConfirm={() => setConfig({ agents: defs.filter((x) => x.id !== def.id), ...withoutDefaults(def.id) })}
-                      />
-                    )
-                  )}
-                </div>
-              </div>
-              {!a.available && a.error && <div className="mt-1 pl-6 text-[12px] text-bad">{a.error}</div>}
-              {(summary || chips.length > 0) && (
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-6 text-[12px] text-muted-foreground">
-                  {chips.map((c) => (
-                    <span key={c}>{c}</span>
-                  ))}
-                  {summary && <span>{t("agentSettings.defaultsSummary", { summary })}</span>}
-                </div>
+            <div
+              key={a.id}
+              data-agent-id={a.id}
+              onPointerDown={(e) => startDrag(e, a.id)}
+              className={cn("relative flex items-start gap-2 rounded-md border px-3 py-2", dragging && "bg-background shadow-md")}
+            >
+              {canSort && (
+                <button
+                  type="button"
+                  data-drag-handle
+                  title={t("agentSettings.dragToReorder")}
+                  aria-label={t("agentSettings.dragToReorder")}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    moveAgent(a.id, idx + (e.key === "ArrowUp" ? -1 : 1));
+                  }}
+                  className="-ml-1 mt-1 flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing"
+                >
+                  <GripVertical className="size-3.5" />
+                </button>
               )}
+              <div className="min-w-0 flex-1">
+                {/* 第一行只放短的（名字、引擎、可用没有），都不换行；不可用的原因放到下面一行 —— 原来原因塞在这一行里，
+                    一长就把名字和引擎挤成两三行（用户报的） */}
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <AgentIcon agent={a.id} className="size-4" />
+                  {/* The engine label gives way first, the name only past 60% (on phones it got cut to "Claude…") */}
+                  <span className="max-w-[60%] shrink-0 truncate font-medium">{a.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                    {t("agentSettings.engineOf", { name: kindName((def ? (def.base ?? "command") : a.id) as Kind) })}
+                    {BUILTIN.has(a.id) && t("agentSettings.builtinSuffix")}
+                  </span>
+                  <span className={cn("shrink-0 text-[12px]", a.available ? "text-ok" : "text-bad")}>
+                    {a.available ? t("agentSettings.available") : t("agentSettings.unavailable")}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-7"
+                      title={t("common.edit")}
+                      onClick={() => open(def ? toDraft(def) : builtinDraft(a.id, a.name), false)}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    {BUILTIN.has(a.id) ? (
+                      // A built-in one is only taken off the list: its engine stays (sessions on it, roles built on it)
+                      <ConfirmDelete
+                        title={t("agentSettings.hideTitle")}
+                        onConfirm={() =>
+                          setConfig({
+                            agents: def
+                              ? defs.map((x) => (x.id === a.id ? { ...x, hidden: true } : x))
+                              : [...defs, { id: a.id, name: a.name, base: a.id as AgentDef["base"], hidden: true }],
+                          })
+                        }
+                      />
+                    ) : (
+                      def && (
+                        <ConfirmDelete
+                          title={t("agentSettings.deleteTitle")}
+                          onConfirm={() =>
+                            setConfig({
+                              agents: defs.filter((x) => x.id !== def.id),
+                              ...(cfg.agentOrder ? { agentOrder: cfg.agentOrder.filter((x) => x !== def.id) } : {}),
+                              ...withoutDefaults(def.id),
+                            })
+                          }
+                        />
+                      )
+                    )}
+                  </div>
+                </div>
+                {!a.available && a.error && (
+                  <div data-no-drag className="mt-1 pl-6 text-[12px] text-bad">
+                    {a.error}
+                  </div>
+                )}
+                {(summary || chips.length > 0) && (
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-6 text-[12px] text-muted-foreground">
+                    {chips.map((c) => (
+                      <span key={c}>{c}</span>
+                    ))}
+                    {summary && <span>{t("agentSettings.defaultsSummary", { summary })}</span>}
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
+        {drag && <div className="pointer-events-none absolute inset-x-1 z-20 h-0.5 rounded-full bg-brand" style={{ top: drag.line - 1 }} />}
       </div>
 
       {hidden.length > 0 && (

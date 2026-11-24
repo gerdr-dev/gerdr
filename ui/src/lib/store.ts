@@ -9,7 +9,7 @@ import type { AppUpdateStatus } from "./native";
 import { loadOverview, overviewFocus, overviewIds, phonePages, type Overview } from "./overviewState";
 import { isPhone } from "./phone";
 import type { AgentInfo, HostInfo, RemoteConn, SessionSummary } from "./types";
-import { DEFAULT_CONFIG, type Config, type SharedDraft } from "./store/config";
+import { DEFAULT_CONFIG, orderAgents, type Config, type SharedDraft } from "./store/config";
 import { type DevicePrefs, loadDevice, loadLocalFont, loadMode, loadSidebar, loadSidebarW, loadSpaceModes, loadUnread } from "./store/prefs";
 
 export * from "./store/config";
@@ -237,13 +237,16 @@ export const closeDialog = () => set({ dialog: null });
 
 export function setConfig(patch: Partial<Config>) {
   const next = { ...get().config, ...patch };
-  set({ config: next });
+  set({
+    config: next,
+    ...("agentOrder" in patch ? { agents: orderAgents(get().agents, next.agentOrder) } : {}),
+  });
   const put = api.putConfig(next, clientId);
   put.catch(() => {});
   // The agent list normally arrives as an "agents" frame right after the save; if that frame is lost (the socket
   // reconnecting at that moment), Settings → Agent kept showing the old list although the agent was saved. The
   // backend applies the new agents before it answers the PUT, so fetching the list then always gets the new one.
-  if ("agents" in patch) put.then(refreshAgents, () => {});
+  if ("agents" in patch || "agentOrder" in patch) put.then(refreshAgents, () => {});
 }
 
 /** Fetch the agent list again: the fallback for a lost "agents" frame (setConfig above, Settings → Agent opening). */
@@ -251,7 +254,7 @@ export function refreshAgents() {
   return api
     .agents()
     .then((h) => {
-      if (Array.isArray(h.agents)) set({ agents: h.agents });
+      if (Array.isArray(h.agents)) set({ agents: orderAgents(h.agents, get().config.agentOrder) });
     })
     .catch(() => {});
 }

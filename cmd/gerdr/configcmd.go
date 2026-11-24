@@ -54,6 +54,7 @@ var configKeys = map[string]configKey{
 	"defaultConfig":   {kind: "object", desc: `per agent id: option id → value for new sessions, e.g. {"claude": {"model": "opus", "effort": "high"}}`},
 	"pinnedCommands":  {kind: "array", desc: "slash commands (no /) pinned beside the input box"},
 	"agents":          {kind: "array", desc: "agents (roles) from Settings → Agent: {id, name, base: claude|codex|native, prompt, skills, mcp, providers, showThinking, env…}; address one as agents.<id>; `gerdr config keys agents` for every field", more: agentsHelp},
+	"agentOrder":      {kind: "array", desc: "display order of agents in Settings → Agent and the new-session picker: list of agent ids (claude, codex, native, or role ids); unlisted ones follow in default order"},
 	"projects":        {kind: "object", desc: "per project id (default, or the id of a project you made): skills / MCP servers its sessions don't get, {\"default\": {\"disabledSkills\": [...], \"disabledMcp\": [...]}}; `gerdr config keys projects` for more", more: projectsHelp},
 	"agentBins":       {kind: "object", desc: "which claude / codex executable to run: {\"claude\": \"/path/to/claude\"}"},
 	"llm":             {kind: "object", desc: "Gerdr Agent's model providers: {providers: [{id, name, api (omit = OpenAI-compatible, \"anthropic\" = Anthropic Messages, \"gemini\" = Google's native Gemini API), baseUrl, apiKey, apiKeyEnv, models: [{id, kind, window, compactAt, efforts, maxOutput, images, thinking}]}], defaultModel: \"provider/model\", imageModel: \"provider/model\"}; a model needs only its id, the rest is guessed from it: kind = \"chat\" or \"image\" (an image generation model such as gemini-2.5-flash-image or gpt-image-1: not offered as a session's model), window = context window in tokens, compactAt = token count at which the context is auto-compacted (default 90% of window); imageModel = the image model for generate_image / gerdr image gen (omit = the first image model, Gemini first: gerdr image models); apiKey is stored in secrets.json and reads back as <hidden>"},
@@ -91,14 +92,16 @@ or the engine's own (Claude Code's / Codex's), whatever the global source says. 
 The names: ` + "`gerdr skill list`" + ` / ` + "`gerdr mcp list`" + `. A name that isn't there is ignored.
 To set up an agent with new skills / MCP in one go, use ` + "`gerdr agent create`" + ` instead.
 
-New sessions' defaults are stored per agent id, outside agents:
+New sessions' defaults and display order are stored outside agents:
   defaultModes.<id>    mode, e.g. bypassPermissions (Full access), acceptEdits, default, plan
   defaultConfig.<id>   option id → value, e.g. {"model": "opus", "effort": "high"}
   defaultAgent         the agent id the new-session screen picks first
+  agentOrder           list of agent ids in display order (unlisted ones follow in default order)
 
   gerdr config add agents '{"id":"reviewer","name":"Reviewer","base":"claude","prompt":"Review only, don't edit","skills":["code-review"],"mcp":[]}'
   gerdr config set agents.reviewer.mcp '["github"]'
   gerdr config set agents.codex.showThinking latest
+  gerdr config set agentOrder '["reviewer","claude","codex"]'
   gerdr config set defaultModes.reviewer plan
   gerdr config unset agents.reviewer`
 
@@ -311,11 +314,34 @@ func appendConfig(path string, v any) error {
 }
 
 func writeConfig(st *config.Store, sec *config.Secrets, root any, path string) error {
-	if err := saveConfig(st, sec, root, splitPath(path)[0] == "agents"); err != nil {
+	top := splitPath(path)[0]
+	if top == "agentOrder" {
+		if err := checkAgentOrder(root); err != nil {
+			return err
+		}
+	}
+	if err := saveConfig(st, sec, root, top == "agents"); err != nil {
 		return err
 	}
 	out, _ := getPath(mustDecode(st.Get()), splitPath(path))
 	printJSON(map[string]any{"ok": true, "path": path, "value": out})
+	return nil
+}
+
+func checkAgentOrder(root any) error {
+	v, _ := getPath(root, []string{"agentOrder"})
+	if v == nil {
+		return nil
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return fmt.Errorf("agentOrder takes a list of agent ids")
+	}
+	for i, x := range arr {
+		if s, ok := x.(string); !ok || s == "" {
+			return fmt.Errorf("agentOrder[%d] must be a non-empty agent id string", i)
+		}
+	}
 	return nil
 }
 
