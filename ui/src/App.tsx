@@ -32,7 +32,7 @@ import { watchCopyOnSelect } from "./lib/copysel";
 import { watchNavButtons } from "./lib/actions/nav";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
 import { AddonSlot as AddonSlotView } from "./components/AddonSlot";
-import { focusedSession, fontSizeOf, get, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
+import { focusedSession, fontSizeOf, get, hostsCode, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import { BrowserWindow, browserOnly } from "./core/SessionBrowser";
 import type { SessionSummary } from "./lib/types";
@@ -264,7 +264,10 @@ export default function App() {
   // Read unconditionally: `phone && useStore(...)` skipped the hook on wide screens, so a phone crossing the width
   // (rotating, split screen, the WebView resizing on resume) changed the hook count and crashed with React #311.
   const overviewOn = useStore((s) => s.overview.on);
-  const overview = phone && overviewOn && mode !== "work";
+  // A panel that hosts Code (core CodeView) is shown: Code's layout is on screen, the panel's page stays under it
+  const hosted = useStore((s) => hostsCode(s));
+  const codeOn = mode !== "work" || hosted;
+  const overview = phone && overviewOn && codeOn;
   const unified = !phone;
   const [overviewMounted, setOverviewMounted] = useState(overview);
   if (overview && !overviewMounted) setOverviewMounted(true);
@@ -323,7 +326,7 @@ export default function App() {
               beside it. Work mode has no list: the rest is the Work site's, then its agent */}
           {!phone && <Rail />}
           {!phone && <RailCorner />}
-          {sidebar && !phone && mode !== "work" && <UnifiedSidebar />}
+          {sidebar && !phone && codeOn && <UnifiedSidebar />}
           {/* 手机上侧栏是盖在上面的抽屉（并排放的话对话只剩一百多 px 宽） */}
           {phone && drawer && (
             <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex">
@@ -336,8 +339,10 @@ export default function App() {
                 The same the other way: once opened the Work view stays mounted, only hidden in Code mode — unmounting it
                 would throw away the Work page's state, everything the user had open there (reported, back when it was a frame). */}
             {workKept && (
-              <div className={cn("absolute inset-0 z-30", mode !== "work" && "pointer-events-none invisible")} aria-hidden={mode !== "work"}>
-                <TabActive.Provider value={mode === "work"}>
+              // Hosting Code: the page stays mounted and counts as shown (its hooks run, its sidebar part is portaled
+              // into Code's list), but it must not cover the panes. Its own overlays opt back in with `visible`.
+              <div className={cn("absolute inset-0 z-30", codeOn && "pointer-events-none invisible")} aria-hidden={codeOn}>
+                <TabActive.Provider value={mode === "work" && !hosted}>
                   <WorkView />
                 </TabActive.Provider>
               </div>

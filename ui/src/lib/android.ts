@@ -16,7 +16,7 @@ import { hasAsk, watchAsks } from "@gerdr/chat/askkeys";
 import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
 import { toggleOverview } from "./overview";
-import { get, prefOf, set, useStore, visibleSessions } from "./store";
+import { codeShown, get, prefOf, set, useStore, visibleSessions } from "./store";
 import { dialogOver, dialogsOnScreen, isPhone, keyboardUp } from "./phone";
 import { watchImeLift } from "./imeLift";
 
@@ -342,7 +342,7 @@ function closeTop(): boolean {
   // The overview (进行中) covers the main view like a page of its own, with a ← in its bar: back does what that ← does.
   // Only while Code is what's shown: on a panel the overview is still on behind it, and back there closed Code's
   // overview out of sight (reported: switched to the Superagent panel, back left 进行中 in Code)
-  if (s.overview.on && s.mode !== "work") return (toggleOverview(false), true);
+  if (s.overview.on && codeShown(s)) return (toggleOverview(false), true);
   return false;
 }
 

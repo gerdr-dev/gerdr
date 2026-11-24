@@ -3,7 +3,7 @@
 // which conversation is in front of the user, which composer is theirs. Each view's keys are in runAction.ts.
 import { currentSpace } from "../layout";
 import { overviewFocus, toggleOverview } from "../overview";
-import { get, overviewShown, setMode } from "../store";
+import { codeShown, get, overviewShown, setMode } from "../store";
 import { workProject, workSessionOf } from "../work";
 import { focusedLeaf } from "./shared";
 
@@ -52,7 +52,7 @@ const overview: View = {
 
 export function currentView(): View {
   if (overviewShown()) return overview;
-  return get().mode === "work" ? work : code;
+  return codeShown() ? code : work;
 }
 
 /**
@@ -60,5 +60,5 @@ export function currentView(): View {
  * after the layout change, so a jump to another project records the mode of the project landed in, not this one.
  */
 export function showCode() {
-  if (get().mode === "work") setMode("agents");
+  if (!codeShown()) setMode("agents");
 }

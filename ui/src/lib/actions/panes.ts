@@ -28,7 +28,7 @@ import {
   type Tab,
   type Workspace,
 } from "../layout";
-import { get, set, setLayout } from "../store";
+import { codeShown, get, set, setLayout } from "../store";
 import { addActive, focusTile, joinActiveOnStart, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter, toggleOverview } from "../overview";
 import { spaceOfKey, workProjectOf } from "../work";
 import { ownerOf } from "../panelRoute";
@@ -232,7 +232,7 @@ export function addImportedWorkspaces(list: { label: string; tabs: { label: stri
 /** 在旁边开一个子 agent 的只读面板；已经开着就切过去。 */
 export function openSubagent(sessionId: string, toolCallId: string, title?: string) {
   // A panel is shown and its chat of this session is on it: open there, not in a Code tab out of sight (lib/subagents)
-  const mounted = get().mode === "work" ? subagentOpener(sessionId) : undefined;
+  const mounted = !codeShown() ? subagentOpener(sessionId) : undefined;
   if (mounted) return mounted(toolCallId, title);
   const hit = allLeaves(get().layout).find((x) => x.pane.sub?.sessionId === sessionId && x.pane.sub.toolCallId === toolCallId);
   if (hit) return focusPane(hit.pane.id);

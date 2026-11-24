@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import type { KeyAction } from "../keys";
 import { activeTab, activeWs } from "../layout";
-import { get, set, setMode, toggleSidebar } from "../store";
+import { codeShown, get, set, setMode, toggleSidebar } from "../store";
 import { closeTile, focusTileDir, stepTile, swapTileDir, toggleOverview, toggleTileZoom } from "../overview";
 import { activeAt } from "../modHeld";
 import {
@@ -50,7 +50,7 @@ const numbered = <P extends string>(prefix: P, f: (i: number) => void) =>
 const APP = {
   sessions: () => set({ dialog: { kind: "sessions" } }),
   overview: () => {
-    if (get().mode === "work") setMode("agents");
+    if (!codeShown()) setMode("agents");
     toggleOverview();
   },
   help: () => set({ dialog: { kind: "help" } }),

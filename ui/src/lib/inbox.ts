@@ -6,7 +6,7 @@ import { systemNotify } from "./notify";
 import { currentSpace, locateSession, mutedSession, spaceInitials, spaceList, spaceOf } from "./layout";
 import { nativeFocusSession } from "./native";
 import { isPhone } from "./phone";
-import { get as getApp, useStore, visibleSessions, workViewSessions } from "./store";
+import { codeShown, get as getApp, useStore, visibleSessions, workViewSessions } from "./store";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
 import { cn } from "./utils";
@@ -337,7 +337,7 @@ function seen(id: string) {
   // A page's own chat (a board drawing a task's conversation with SessionChat) isn't in either: asked of the element.
   if (chatOnScreen(id)) return true;
   const l = getApp().layout;
-  if (getApp().mode === "work") return workViewSessions(l).includes(id);
+  if (!codeShown()) return workViewSessions(l).includes(id);
   return visibleSessions(l, isPhone()).includes(id);
 }
 

@@ -283,6 +283,14 @@ declare module "@gerdr/core" {
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
   /**
+   * Code in this panel's place: while the panel is shown, Gerdr shows Code's own layout (the list of workspaces, tabs,
+   * split panes, terminals: the same one Code mode shows, not a copy) and draws `sidebar` at the top of that list.
+   * For a panel that is "Code plus something of its own". The rest of the page isn't drawn while this is mounted.
+   * Experimental (2026-11): not in released Gerdr yet.
+   */
+  export function CodeView(props: { sidebar?: ReactNode }): ReactNode;
+
+  /**
    * How a card's question was settled outside the card (on your page, an answer given before), for DefaultCard: drawn
    * answered — `value` picked (several: one per line), a green edge, the choices closed — or, `dropped`, closed and
    * grey. `note`: the status line under the choices; `action`: at its end (e.g. a button to change the answer).

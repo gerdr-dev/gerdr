@@ -122,6 +122,13 @@ type State = {
    * work.Runner panels). Per device, in localStorage, like the mode.
    */
   workPanels: Record<string, string>;
+  /**
+   * Panels whose page hosts Code (core CodeView), by key. While one of them is the panel shown, what the person sees
+   * is Code's own layout (sidebar, tabs, panes) with the panel's part in it, not the panel's page over Code: codeShown.
+   */
+  codeHosts: Record<string, true>;
+  /** Where a hosting panel's sidebar part is drawn: an element at the top of Code's list (UnifiedSidebar), while it shows. */
+  codeSlot: HTMLElement | null;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
   overview: Overview;
   /**
@@ -192,6 +199,8 @@ export const useStore = create<State>(() => ({
   workPeek: null,
   mountWatch: {},
   workPanels: loadWorkPanels(),
+  codeHosts: {},
+  codeSlot: null,
   overview: loadOverview(),
   localFont: loadLocalFont(),
   drawer: false,
@@ -322,6 +331,31 @@ export function setWorkPanel(space: string, panel: string) {
   } catch {}
 }
 
+/** The panel on screen hosts Code (core CodeView): Work mode, yet Code's layout is what shows. */
+export function hostsCode(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): boolean {
+  if (s.mode !== "work") return false;
+  const space = currentSpace(s.layout);
+  const panel = s.workPanels[space];
+  return !!s.codeHosts[panel ? `${space}/${panel}` : space];
+}
+
+/**
+ * Code's layout is on screen: Code mode, or a panel that hosts Code. What used to ask `mode !== "work"` to mean "the
+ * panes are what the person sees" (keys, which sessions count as shown, the overview) asks this instead; `mode` alone
+ * still says which rail button is lit.
+ */
+export const codeShown = (s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()) => s.mode !== "work" || hostsCode(s);
+
+/** core CodeView mounting / unmounting in panel `key`. */
+export function setCodeHost(key: string, on: boolean) {
+  const cur = get().codeHosts;
+  if (!!cur[key] === on) return;
+  const next = { ...cur };
+  if (on) next[key] = true;
+  else delete next[key];
+  set({ codeHosts: next });
+}
+
 export function setMode(mode: "agents" | "work") {
   set(modePatch(mode));
   saveMode(currentSpace(get().layout), mode);
@@ -377,7 +411,7 @@ export function visibleSessions(l: Layout, phone = false): string[] {
 }
 
 /** The overview is on screen (it covers everything but the Work view). */
-export const overviewShown = () => get().overview.on && get().mode !== "work";
+export const overviewShown = () => get().overview.on && codeShown();
 
 /** 要订阅日志的会话：看得见的 + 留在页面里没卸载的 tab 里的（它们切回来时不用整份重推、组件不用重建）。 */
 /**

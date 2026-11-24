@@ -94,7 +94,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { get, markRead, set, useStore } from "@/lib/store";
+import { get, hostsCode, markRead, set, useStore } from "@/lib/store";
 import { whenCaughtUp } from "@/lib/catchup";
 import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
 import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
@@ -129,6 +129,11 @@ import { PanelPhoneMenu } from "./PhoneMenu";
  *
  * Kept out of SidebarChrome.tsx so the experiment can be dropped (or promoted) by touching a few lines in App.tsx.
  */
+
+/** The slot element, kept in the store for core CodeView to portal into; cleared when the list unmounts. */
+const setCodeSlot = (el: HTMLDivElement | null) => {
+  if (get().codeSlot !== el) set({ codeSlot: el });
+};
 
 const FOLD_KEY = "gerdr.unified.folded";
 const ACTIVE_FOLD_KEY = "gerdr.unified.activeFolded";
@@ -263,7 +268,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   // A panel on screen in the phone drawer: its own items (core/phoneMenu.ts) instead of Code's tabs, when it gives any
   const mode = useStore((s) => s.mode);
   const workKey = useWorkProject();
-  const panelMenu = usePanelPhoneMenu(roomy && mode === "work" ? workKey : null);
+  const hosted = useStore((s) => hostsCode(s));
+  const panelMenu = usePanelPhoneMenu(roomy && mode === "work" && !hosted ? workKey : null);
   // The drawer's search: not kept, it's "what am I looking for right now" (the drawer remounts on every open)
   const [q, setQ] = useState("");
   // The "3m" column's clock: minutes are its smallest step, a tick every 15s is plenty (statuses come over the socket)
@@ -410,6 +416,8 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                 </div>
               ) : (
                 <>
+                  {/* A panel that hosts Code (core CodeView) draws its own part here, above Code's lists */}
+                  {hosted && <div ref={setCodeSlot} data-code-slot />}
                   {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
                   <div className="pt-1.5" data-ws-groups>
                     {(active.length > 0 || gridOn || allProjects || dragAgent) && (
