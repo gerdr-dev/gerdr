@@ -3,9 +3,11 @@ import { GRID_TILES, gridMax } from "@/lib/overview";
 import {
   Activity,
   Bell,
+  BookOpen,
   Bot,
   Brain,
   CircleArrowUp,
+  ExternalLink,
   FlaskConical,
   Globe,
   Keyboard,
@@ -33,7 +35,7 @@ import { GAP, pageX, useSwipePager } from "@/lib/swipePager";
 import { closeDialog, fontSizeOf, set, setConfig, setFontSize, setPref, useStore, type Theme } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LoaderSelect } from "./LoaderSelect";
-import { languagePref, setLanguage, t, type LanguagePref } from "@/lib/i18n";
+import { languagePref, locale, setLanguage, t, type LanguagePref } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages";
 import { AddonSettings } from "./AddonSettings";
 import { AgentSettings } from "./AgentSettings";
@@ -293,6 +295,7 @@ export function SettingsDialog({ open }: { open: boolean }) {
               </div>
             ))}
       </div>
+      <HelpLink className="mx-2 mb-3" />
     </div>
   );
 
@@ -319,6 +322,8 @@ export function SettingsDialog({ open }: { open: boolean }) {
       case "general":
         return (
           <div className="space-y-6 pt-1">
+            {/* -mx: the link keeps its padding (hover / tap area) but its icon and text line up with the rows below */}
+            {phone && <HelpLink className="-mx-2.5" />}
             {/* Grouped by what a setting is about. Where it's stored (gerdr's config.json, shared by every device, or this
               device only: localStorage / the Android shell) is a tag on the few device-only rows: grouping by storage put
               font size a screen away from the theme (and without saying it, people can't guess whether a change on the
@@ -624,6 +629,28 @@ export function SettingsDialog({ open }: { open: boolean }) {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The website's docs (gerdr.dev/docs, in the interface's language): how-tos, recipes, and each page as Markdown to
+ * hand an agent. At the foot of the desktop nav, on top of General on a phone (no nav column there).
+ */
+function HelpLink({ className }: { className?: string }) {
+  return (
+    <a
+      href={locale() === "zh" ? "https://gerdr.dev/zh/docs" : "https://gerdr.dev/docs"}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(
+        "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+        className,
+      )}
+    >
+      <BookOpen className="size-4 shrink-0" />
+      <span className="flex-1">{t("settings.help")}</span>
+      <ExternalLink className="size-3.5 shrink-0 opacity-60" />
+    </a>
   );
 }
 

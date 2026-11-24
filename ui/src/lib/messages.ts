@@ -19,6 +19,7 @@ import * as browser from "./text/browser";
 
 const settingsZh = {
   "settings.title": "设置",
+  "settings.help": "帮助与文档",
   "settings.tab.general": "通用",
   "settings.tab.keys": "快捷键",
   "settings.tab.addons": "扩展",
@@ -138,6 +139,7 @@ export type MessageKey = keyof typeof zh;
 
 const settingsEn: Record<keyof typeof settingsZh, string> = {
   "settings.title": "Settings",
+  "settings.help": "Help & docs",
   "settings.tab.general": "General",
   "settings.tab.keys": "Shortcuts",
   "settings.tab.addons": "Add-ons",
