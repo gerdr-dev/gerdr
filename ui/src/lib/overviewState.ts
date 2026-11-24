@@ -123,15 +123,16 @@ export function openSessionsWithProject(
 }
 
 /**
- * Joins "active" by its status: waiting on you or errored, always; finished unseen or running, unless taken out since
- * (it rejoins when it starts or ends a turn). Unseen has to honour the dismissal too: unread is per device while
+ * Joins "active" by its status (waiting on you, errored, finished unseen, running) unless taken out since: it rejoins
+ * when its state moves on (sessionSince: a turn starts or ends, a new question or error comes). Waiting and errored
+ * honour the dismissal too: they used to join always, so closing a failed one's tile did nothing — it was pinned back
+ * at once and only the focus moved (reported on the phone). Unseen has to honour it as well: unread is per device while
  * "active" is shared, so another device that hasn't seen it would otherwise pin back what you just took out.
  */
 export function joinsOnItsOwn(s: SessionSummary, st: Pick<ActiveSrc, "config" | "unread">, conf = activeConf(st.config)): boolean {
-  const rank = sessionRank(s, st.unread);
-  if (rank < 2) return true;
+  if (sessionRank(s, st.unread) > 3) return false;
   const d = conf.dismissed[s.id];
-  return rank <= 3 && !(d !== undefined && sessionSince(s) <= d);
+  return !(d !== undefined && sessionSince(s) <= d);
 }
 
 /**
@@ -154,8 +155,7 @@ export function toPin(st: ActiveSrc): string[] {
 /**
  * "Active" (in progress): the agents worth keeping in view, in the agents list's order (lib/order.ts). Who's in:
  * - put in by hand (stays until taken out);
- * - needs you: waiting, errored, finished unseen (always: taking one out marks it read);
- * - running, unless taken out since its current turn started.
+ * - needs you (waiting, errored, finished unseen) or running, unless taken out since its state last moved on.
  * Whatever joins on its status is then pinned (lib/overview.ts, toPin), so finishing doesn't take it out: it stays until
  * you take it out. Nothing joins for being recent (asked for: status and your own picks only).
  * Both the desktop sidebar and the overview grid show this list: the current project's agents, or every
