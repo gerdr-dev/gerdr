@@ -143,6 +143,10 @@ src/lib/
   只有前端能算出来的直接在组件里算。放在哪：左边窄条 `Rail.tsx`（插件面板 / 图标按钮）、pane 标题栏 `Panes.tsx`、输入框下面（`src/lib/chatHost.tsx` 的 composerBar 插槽）。
 - **加一个弹窗**：新建一个组件文件（照 `NameDialogs.tsx` 的写法，关掉用 `closeDialog()`），在 store 的 `Dialog` 类型里加一种 `kind`，
   再到 `Dialogs.tsx` 里挂上；用 `@/components/ui/dialog`。
+- **"Is a dialog open?"** (before focusing a composer / terminal, before taking a key): `dialogOver(el)` /
+  `dialogsOnScreen()` from `@/lib/phone`, never `document.querySelector("[role=dialog]")`. Views kept mounted out of
+  sight (a panel while Code shows, another project's panel) keep their open drawers in the DOM, invisible; the raw
+  check counted them and auto-focus stopped everywhere (new tab, split, copy-on-select).
 - **加一个页面**：新建 `src/pages/<名字>.tsx`（default export 一个组件），用 `import { Link } from "react-router"` 链过去。
 - **手机上的样子**：判断用 `usePhone()`（JS 里要分岔的）或 `max-md:` class（纯样式）。手机上没有 hover，
   只在悬停时露出来的按钮要加 `[@media(hover:none)]:opacity-100` 之类让它常显。

@@ -15,7 +15,7 @@ import type { ChatSession } from "../types";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionContext } from "./sessionContext";
 import { askKey } from "../askkeys";
-import { isCoarse } from "../device";
+import { dialogOver, isCoarse, onScreen } from "../device";
 import { ChatList, type ListHandle } from "./ChatList";
 import { FindBar } from "./FindBar";
 
@@ -97,7 +97,7 @@ export function ChatView({
   useEffect(() => {
     if (!focused || sub || isCoarse()) return;
     const f = () => {
-      if (!document.querySelector("[role=dialog]")) composer.current?.focus();
+      if (!dialogOver(scrollerEl.current)) composer.current?.focus();
     };
     f();
     window.addEventListener("gerdr:refocus", f);
@@ -112,7 +112,7 @@ export function ChatView({
       if (e.defaultPrevented || e.isComposing) return;
       const a = document.activeElement as HTMLElement | null;
       if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
-      if (document.querySelector("[role=dialog]")) return;
+      if (dialogOver(scrollerEl.current)) return;
       // Ctrl+C 不管焦点在哪都算数（在对话区选着字、点过别处）：和输入框里按一样，清空 / 打断 / 连按两次退出。
       // mac 上复制是 ⌘C，不冲突；Windows / Linux 上 Ctrl+C 就是复制，选着字时让给复制
       const copying = !/Mac/.test(navigator.platform) && window.getSelection()?.isCollapsed === false;
@@ -144,15 +144,10 @@ export function ChatView({
       if (e.defaultPrevented || e.code !== "KeyF" || e.altKey || e.shiftKey || (mac ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey)) return;
       // A dialog over the chat takes the key, but not one the chat is in (a panel's drawer holding it, SessionChat):
       // that check used to skip every ⌘F there, and the browser's own find, blind to the virtual list, came up.
-      // Only the topmost dialog on screen counts (dialogs are portaled in the order they open; another panel kept
-      // mounted out of sight, made invisible, can hold an open one), and a chat hidden under another view of its
-      // drawer doesn't answer.
-      const seen = (el: Element) => el.getClientRects().length > 0 && getComputedStyle(el).visibility === "visible";
+      // A chat hidden under another view of its drawer doesn't answer.
       const me = scrollerEl.current;
-      if (me && !seen(me)) return;
-      const dialogs = [...document.querySelectorAll("[role=dialog]")].filter(seen);
-      const top = dialogs[dialogs.length - 1];
-      if (top && !(me && top.contains(me))) return;
+      if (me && !onScreen(me)) return;
+      if (dialogOver(me)) return;
       e.preventDefault();
       setFind((n) => n + 1);
     };

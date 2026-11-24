@@ -28,6 +28,31 @@ export function usePhone() {
 /** 触屏（没有实体指针）。判「要不要自动聚焦」看这个，不看屏幕多宽 —— 平板也是手指。 */
 export const isCoarse = () => window.matchMedia("(pointer: coarse)").matches;
 
+/** On screen: laid out and not made invisible (an element under `display: none` has no client rects). */
+export const onScreen = (el: Element) => el.getClientRects().length > 0 && getComputedStyle(el).visibility === "visible";
+
+/**
+ * The dialogs (`role=dialog` / `alertdialog`) on screen, bottom to top (they are portaled in the order they open).
+ *
+ * "In the DOM" is not "open over the page": a view kept mounted out of sight (a panel while Code shows, another
+ * project's panel) keeps an open drawer of its own, invisible. Every "is a dialog open" check that just did
+ * querySelector("[role=dialog]") stopped working while one sat there: no focus in the composer after a new tab, a split,
+ * a copy, no typing into the chat. Ask this (or dialogOver) instead.
+ */
+export function dialogsOnScreen(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>("[role=dialog], [role=alertdialog]")].filter(onScreen);
+}
+
+/**
+ * Whether a dialog on screen stands between the user and `el`, so focus / keys must stay with it: the topmost one
+ * doesn't contain `el` (a chat inside a panel's drawer is the dialog's own content). Without `el`: any dialog on screen.
+ */
+export function dialogOver(el?: Element | null): boolean {
+  const all = dialogsOnScreen();
+  const top = all[all.length - 1];
+  return !!top && !(el && top.contains(el));
+}
+
 /**
  * Keeps the page as tall as the visual viewport: writes its height, rounded, into `--vvh` on html for the host's CSS
  * (html / body / #root's height), or with `{ height: true }` straight into html's own `height` (the host's body and

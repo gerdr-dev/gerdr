@@ -17,7 +17,7 @@ import { lightboxOpen } from "@/components/Lightbox";
 import { focusSession } from "./actions";
 import { toggleOverview } from "./overview";
 import { get, prefOf, set, useStore, visibleSessions } from "./store";
-import { isPhone, keyboardUp } from "./phone";
+import { dialogOver, dialogsOnScreen, isPhone, keyboardUp } from "./phone";
 import { watchImeLift } from "./imeLift";
 
 export type AndroidMsg = { t: string; [k: string]: unknown };
@@ -322,7 +322,10 @@ function closeTop(): boolean {
     return true;
   }
   // 弹窗（设置、命令面板、查看器……都是 Radix 的 Dialog）：发一个 Esc 给它，它自己关
-  const dlg = document.querySelector<HTMLElement>('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]');
+  // The topmost one on screen: a panel kept mounted out of sight can hold an open drawer of its own
+  const dlg = dialogsOnScreen()
+    .filter((d) => d.dataset.state === "open")
+    .pop();
   if (dlg) {
     const esc = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true });
     dlg.dispatchEvent(esc);
@@ -370,7 +373,7 @@ const openList = () => document.querySelector<HTMLElement>('[role="listbox"][dat
  */
 let arrows: boolean | undefined;
 function syncArrows() {
-  const now = keyboardUp() || !!openList() || (!document.querySelector("[role=dialog]") && visibleSessions(get().layout, isPhone()).some(hasAsk));
+  const now = keyboardUp() || !!openList() || (!dialogOver() && visibleSessions(get().layout, isPhone()).some(hasAsk));
   if (now === arrows) return;
   arrows = now;
   postAndroid({ t: "arrows", on: now });

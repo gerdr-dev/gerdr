@@ -20,6 +20,7 @@ import { get, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
 import { allLeaves, locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
+import { dialogOver } from "@/lib/phone";
 import { workProjectOf } from "@/lib/work";
 import { AgentIcon, StatusDot } from "./AgentIcon";
 import { t } from "@/lib/i18n";
@@ -408,7 +409,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
       if (e.defaultPrevented || e.key !== "d" || !e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       const a = document.activeElement as HTMLElement | null;
       if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
-      if (get().dialog || document.querySelector("[role=dialog]")) return;
+      if (get().dialog || dialogOver(startRef.current)) return;
       e.preventDefault();
       focusPane(pane.id);
       closeFocusedPane();

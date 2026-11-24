@@ -10,7 +10,7 @@ import { closePaneById, reopenTerminal } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
 import { copyOnSelectOn, copySelected } from "@/lib/copysel";
 import { eventKey } from "@/lib/keys";
-import { isCoarse } from "@/lib/phone";
+import { dialogOver, isCoarse } from "@/lib/phone";
 import { get } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -245,7 +245,7 @@ export function TerminalView({
   useEffect(() => {
     if (!focused) return;
     const f = () => {
-      if (!get().dialog && !document.querySelector("[role=dialog]") && !isCoarse()) xt.current?.focus();
+      if (!get().dialog && !dialogOver(box.current) && !isCoarse()) xt.current?.focus();
     };
     f();
     // 按两下前缀：把前缀键本身（比如 ^B）发给 shell

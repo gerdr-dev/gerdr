@@ -7,7 +7,7 @@
 //   - 复制完光标回到这个 pane 的输入框（终端本来就在终端里）。
 // 对话等普通页面看 DOM 选区（document 上的 mouseup）；终端是 xterm 自己画的选区，不进 DOM，Terminal.tsx 里单独接。
 // 输入框 / 可编辑区域里的选区不管：在那里选字是为了改、为了删，复制走了还清掉选区就没法改了。
-import { isCoarse } from "./phone";
+import { dialogOver, isCoarse } from "./phone";
 import { get, prefOf } from "./store";
 import { t } from "./i18n";
 
@@ -103,10 +103,8 @@ export function watchCopyOnSelect(): () => void {
           // 焦点已经在输入框里（用户等不及自己点进去了）时别清：这时的页面选区就是输入框的光标
           if (editable(document.activeElement)) return;
           sel.removeAllRanges();
-          // A dialog covering the chat keeps the focus where it is; one the chat sits in (a panel's drawer, a
-          // non-modal Sheet around core's SessionChat) doesn't count.
-          const dlg = [...document.querySelectorAll("[role=dialog]")].find((d) => !box || !d.contains(box)) ?? null;
-          if (box?.isConnected && !isCoarse() && !dlg) box.focus();
+          // A dialog on screen over the chat keeps the focus (not one the chat sits in: a panel's drawer)
+          if (box?.isConnected && !isCoarse() && !dialogOver(box)) box.focus();
         },
         { x: e.clientX, y: e.clientY },
       );

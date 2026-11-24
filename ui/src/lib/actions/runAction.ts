@@ -26,7 +26,7 @@ import { openBrowserPane } from "./browser";
 import { closeWorkspace, selectWorkspaceN, stepWorkspace } from "./workspaces";
 import { currentView, type ViewName } from "./views";
 import { t } from "../i18n";
-import { isPhone } from "../phone";
+import { dialogOver, isPhone } from "../phone";
 
 // ---- 快捷键动作 ----
 //
@@ -180,7 +180,7 @@ export function refocusAfterDialog() {
   const start = performance.now();
   const tick = () => {
     if (get().dialog) return;
-    if (document.querySelector("[role=dialog]") && performance.now() - start < 1000) return void requestAnimationFrame(tick);
+    if (dialogOver() && performance.now() - start < 1000) return void requestAnimationFrame(tick);
     window.dispatchEvent(new Event("gerdr:refocus"));
   };
   requestAnimationFrame(tick);
