@@ -41,6 +41,7 @@ import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
 import { BrowserOutCard, PopOutItem } from "./browser/BrowserOut";
 import { NewsDot } from "./browser/NewsDot";
+import { codeMenuItems } from "@/lib/codeMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -1114,6 +1115,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const unread = useStore((s) => (pane.sessionId ? !!s.unread[pane.sessionId] : false));
   const starting = useStore((s) => !!s.starting[pane.id]);
   const inTodo = useStore((s) => !!pane.sessionId && activeIds(s).includes(pane.sessionId));
+  // Asked on every draw of the title bar: the panel's answer changes with its own data, which nothing here follows
+  const panelItems = codeMenuItems(pane.id, pane.sessionId);
   const agents = useStore((s) => s.agents);
   const home = useStore((s) => s.home);
   // The tab's only pane on a phone: the top bar (PhoneBar) already says its title and status, so this bar says where
@@ -1252,6 +1255,17 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               <DropdownMenuItem onClick={() => paneToTab(pane.id)}>
                 <ExternalLink /> {t("panes.toNewTab")}
               </DropdownMenuItem>
+            )}
+            {/* The hosting panel's own items for this pane (lib/codeMenu.ts): a task's status and the like */}
+            {panelItems.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                {panelItems.map((it) => (
+                  <DropdownMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
+                    {it.icon} {it.label}
+                  </DropdownMenuItem>
+                ))}
+              </>
             )}
             {session && (
               <>

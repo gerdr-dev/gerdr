@@ -98,6 +98,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { codeHost, get, markRead, set, useStore } from "@/lib/store";
 import { showInCodeView } from "@/core/CodeView";
+import { codeMenuItems } from "@/lib/codeMenu";
 import { whenCaughtUp } from "@/lib/catchup";
 import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
 import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
@@ -1062,6 +1063,12 @@ const Row = memo(function Row({
             <Pencil /> {t("unifiedSidebar.renameSession")}
           </ContextMenuItem>
         )}
+        {/* The hosting panel's own items for this pane (lib/codeMenu.ts) */}
+        {codeMenuItems(pane.id, s?.id).map((it) => (
+          <ContextMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
+            {it.icon} {it.label}
+          </ContextMenuItem>
+        ))}
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={close}>
           <CircleX /> {inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}

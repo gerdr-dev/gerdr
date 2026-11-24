@@ -320,6 +320,13 @@ declare module "@gerdr/core" {
    * dropped, `fn` gets the pane and its conversation. Nothing moves in Code's layout: what it means is yours.
    */
   export function useCodeRowDrop(fn: (row: { pane: string; session?: string }) => void): (el: HTMLElement | null) => void;
+  /**
+   * With CodeView: your own items for a pane's menus (its ⋯ menu and its row's right-click menu): a task's status
+   * and the like. `fn` is asked each time a menu is drawn; return [] for none. On a phone the ⋯ menu is the only
+   * place for it: give there whatever your list does by hover, drag or right click.
+   */
+  export type CodeMenuItem = { id: string; label: string; icon?: ReactNode; disabled?: boolean; onSelect: () => void };
+  export function useCodeRowMenu(fn: (row: { pane: string; session?: string }) => CodeMenuItem[]): void;
   /** With CodeView: a new tab in Code (the "new conversation" page), in `cwd` when given. */
   export function newCodeTab(opts?: { cwd?: string }): void;
   /**

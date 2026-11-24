@@ -3,6 +3,7 @@ import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
 import { addTab, addTabForSession, focusPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
+import { type CodeMenuFn, setCodeMenu } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
 import { focusedSession, get, markRead, setCodeHost, useStore } from "@/lib/store";
 import { PanelKeyContext } from "./visible";
@@ -131,3 +132,21 @@ export function useCodeRowDrop(fn: (row: { pane: string; session?: string }) => 
     el.addEventListener(ROW_DROP, on);
   }).current;
 }
+
+/**
+ * The panel's own items for a pane's menus: its ⋯ menu and its row's right-click menu (a task's status: 移到待验收).
+ * `fn` is asked each time a menu is drawn, with the pane and its conversation; return [] for none. On a phone the ⋯
+ * menu is the only place for such a thing: give there whatever your list does by hover, drag or right click.
+ */
+export function useCodeRowMenu(fn: CodeMenuFn) {
+  const key = useContext(PanelKeyContext);
+  const f = useRef(fn);
+  f.current = fn;
+  useEffect(() => {
+    if (!key) return;
+    setCodeMenu(key, (row) => f.current(row));
+    return () => setCodeMenu(key, null);
+  }, [key]);
+}
+
+export type { CodeMenuItem } from "@/lib/codeMenu";
