@@ -189,11 +189,13 @@ const ComposerImpl = forwardRef<
   const [, setRootW] = useState(0); // a render counter, bumped on resize
   const optsRow = useRef<HTMLDivElement>(null);
   const needW = useRef(0); // the box width the full row needed when it last overflowed
+  // What sat on the compact row when it was last measured (null = just went compact, record without retrying)
+  const narrowKey = useRef<string | null>(null);
   const compact = phone || narrow;
   // Further steps for a compact row that still overflows (a phone with the context meter and a background task up):
-  // 1 = the task chip drops to icon + count and the options menu loses the effort; 2 = it loses the mode too, naming only
-  // the model. One step at a time, each measured like `narrow`: going straight to 2 hid a loud mode ("Full access")
-  // that had room once the effort was gone
+  // 1 = the task chip drops to icon + count and the options menu loses an everyday mode (Auto, Default: the effort
+  // outranks it, asked for); 2 = the effort goes too; 3 = even a loud mode, naming only the model. One step at a time,
+  // each measured like `narrow`: going straight to the last step hid things that had room once the step before was taken
   const [tight, setTight] = useState(0);
   const tightKey = useRef("");
   const imgs = drafts.useImages(paneId);
@@ -353,7 +355,10 @@ const ComposerImpl = forwardRef<
     return () => ro.disconnect();
   }, []);
   // Every render (the row also changes with running / the options): full row overflowing → compact, remembering how wide
-  // the box would have to be; compact → back to full once the box is that wide again
+  // the box would have to be; compact → back to full once the box is that wide again, or try the full row again when
+  // what sits on the row changes. needW alone stuck: it was measured with something passing on the row (the stop button
+  // mid-turn, the task chip), and once that went the full row fit but stayed compact until the window grew (reported).
+  // The retry is redone before paint, so a full row that still overflows never shows
   useLayoutEffect(() => {
     const o = optsRow.current;
     const r = root.current;
@@ -362,9 +367,19 @@ const ComposerImpl = forwardRef<
       const over = o.scrollWidth - o.clientWidth;
       if (over > 1) {
         needW.current = r.clientWidth + over;
+        narrowKey.current = null;
         setNarrow(true);
       }
-    } else if (r.clientWidth >= needW.current) setNarrow(false);
+      return;
+    }
+    if (r.clientWidth >= needW.current) return setNarrow(false);
+    // Not the width (needW covers that, and a drag would retry every frame): the chips / buttons and the chosen options
+    const key = `${o.parentElement?.childElementCount}|${optsKey}`;
+    if (narrowKey.current === null) narrowKey.current = key;
+    else if (key !== narrowKey.current) {
+      narrowKey.current = key;
+      setNarrow(false);
+    }
   });
   useLayoutEffect(() => {
     const o = optsRow.current;
@@ -384,7 +399,7 @@ const ComposerImpl = forwardRef<
         return;
       }
     }
-    if (tight < 2 && o.scrollWidth - o.clientWidth > 1) setTight(tight + 1);
+    if (tight < 3 && o.scrollWidth - o.clientWidth > 1) setTight(tight + 1);
   });
 
   useLayoutEffect(() => {

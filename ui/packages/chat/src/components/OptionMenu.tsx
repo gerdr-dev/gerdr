@@ -105,14 +105,16 @@ export type OptGroup = {
   actual?: string;
 };
 
-// 值得一直看得见的模式：只做计划 / 只读（agent 不动文件，以为它在改其实没改）、全放开（不再问就动手）。
-// 其它模式（默认、自动、接受编辑）平时就那样，收起来不占地方
+// Modes worth keeping in sight longest: plan / read-only (the agent changes no files while you think it does) and the
+// wide-open ones (acts without asking). The everyday ones (default, auto, accept edits) are the first to go when the row
+// runs out of room
 const LOUD_MODE = /plan|read-?only|bypass|full-access|dontAsk/i;
 
 // The model and effort as one button (desktop: the mode stays its own dropdown); on a phone the mode folds in too.
 // 手机上输入框底栏放不下模式 / 模型 / 思考强度三个下拉（挤得要横着滑）：收成一个按钮，
 // 点开是一张按组排的单列菜单 —— 不用子菜单，触屏上子菜单往右弹会出屏幕。
-// 按钮上写模型和思考强度（「Opus 5.5 · medium」，要一眼看得到在用哪个）；模式平时就那样，只有落在 LOUD_MODE 里才写出来。
+// The button names the mode, model and effort ("Auto  Opus 5.5 · medium") while they fit; with no room they drop out
+// one step at a time (`short`), a LOUD_MODE mode staying longer than an everyday one.
 export function OptionsMenu({
   groups,
   mode,
@@ -125,15 +127,17 @@ export function OptionsMenu({
   chevron?: boolean;
   mode?: OptGroup;
   onSetDefault?: () => void;
-  /** No room on the row: 1 = model and a loud mode, 2 = only the model (the rest is one tap away in the menu) */
+  /** No room on the row: 1 = an everyday mode goes (the effort says more, asked for), 2 = the effort
+   *  goes, 3 = a loud mode goes, leaving only the model (the rest is one tap away in the menu) */
   short?: number;
 }) {
   const all = mode ? [mode, ...groups] : groups;
   const nameOf = (g: OptGroup) => g.options.find((o) => o.value === g.value)?.name ?? g.value;
-  // At 2 the mode goes too: "Full access" takes half a phone's row
+  // At 3 even a loud mode goes: "Full access" takes half a phone's row
   // A mode not in effect yet shows whatever it is, as "Auto*": the menu says which one is running
-  const modeName = !mode ? undefined : actualOf(mode) ? `${nameOf(mode)}*` : (short ?? 0) < 2 && LOUD_MODE.test(mode.value) ? nameOf(mode) : undefined;
-  const shown = short ? groups.filter((g) => g.id === "model").slice(0, 1) : groups;
+  const lvl = short ?? 0;
+  const modeName = !mode ? undefined : actualOf(mode) ? `${nameOf(mode)}*` : lvl < 1 || (lvl < 3 && LOUD_MODE.test(mode.value)) ? nameOf(mode) : undefined;
+  const shown = lvl >= 2 ? groups.filter((g) => g.id === "model").slice(0, 1) : groups;
   const summary = (shown.length ? shown : groups.slice(0, 1)).map(nameOf).filter(Boolean).join(" · ");
   if (!all.length) return null;
   return (
@@ -145,6 +149,8 @@ export function OptionsMenu({
       >
         {!summary && !modeName && <SlidersHorizontal className="size-4" />}
         {modeName && <span className={cn("max-w-28 shrink-0 truncate", mode && actualOf(mode) && "text-warn")}>{modeName}</span>}
+        {/* The same separator as between the model and its effort: without it "Auto Opus 5.5" reads as one name */}
+        {modeName && summary && <span className="-mx-0.5 shrink-0">·</span>}
         {summary && <span className="truncate">{summary}</span>}
         {chevron && <ChevronDown className="-ml-0.5 size-3 shrink-0 opacity-60" />}
       </DropdownMenuTrigger>
