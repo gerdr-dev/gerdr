@@ -5,6 +5,7 @@ import { hostFor, useChatHost } from "../host";
 import { bareFileName, fileExists, localHref, onFileExists, rehypePaths } from "../paths";
 import { ChatMedia, imageGroup, localPath, MediaGrid, nonMediaPath, rehypeImageGroups } from "./ChatMedia";
 import { SessionContext } from "./sessionContext";
+import { useStreamFade } from "./streamFade";
 import type { ChatSession } from "../types";
 
 /**
@@ -273,8 +274,9 @@ const pluginsKey = (plugins?: StreamdownProps["plugins"]) =>
     })
     .join();
 
-export function Markdown({ children }: { children: string }) {
+export function Markdown({ children, streaming = false }: { children: string; streaming?: boolean }) {
   const plugins = useChatHost().useMarkdownPlugins?.(children);
+  const fade = useStreamFade(streaming);
   return (
     <MessageResponse
       // MessageResponse redraws only when the text changes: other plugins from the host (one it loaded afterwards) need
@@ -285,6 +287,7 @@ export function Markdown({ children }: { children: string }) {
       rehypePlugins={rehypePlugins}
       components={components}
       urlTransform={urlTransform}
+      {...fade}
     >
       {fixWindowsPaths(children)}
     </MessageResponse>

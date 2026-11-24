@@ -12,6 +12,7 @@ import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
+import { useStreamFade } from "../components/streamFade";
 import { Shimmer } from "./shimmer";
 
 // Ask before opening links unless the host turned it off (Streamdown's link safety).
@@ -162,10 +163,14 @@ export type ReasoningContentProps = ComponentProps<
   typeof CollapsibleContent
 > & {
   children: string;
+  /** The thinking is still arriving: its text fades in like a reply's (components/streamFade.ts) */
+  streaming?: boolean;
 };
 
 export const ReasoningContent = memo(
-  ({ className, children, ...props }: ReasoningContentProps) => (
+  ({ className, children, streaming = false, ...props }: ReasoningContentProps) => {
+    const fade = useStreamFade(streaming);
+    return (
     <CollapsibleContent
       className={cn(
         "mt-4 text-sm",
@@ -174,9 +179,10 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown linkSafety={useLinkSafety()}>{children}</Streamdown>
+      <Streamdown linkSafety={useLinkSafety()} {...fade}>{children}</Streamdown>
     </CollapsibleContent>
-  )
+    );
+  }
 );
 
 Reasoning.displayName = "Reasoning";

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLinger } from "./streamFade";
 import { flushSync } from "react-dom";
 import { ArrowDown, CornerDownRight } from "lucide-react";
 import { Button } from "../ui/button";
@@ -81,6 +82,10 @@ export function ChatView({
   const t = host.useTranscript(session.id, sub);
   const subTask = sub ? session.tasks?.find((x) => x.toolCallId === sub) : undefined;
   const running = sub ? subTask?.status === "running" : t.running;
+  // The last stretch of a reply often reaches the page in the same batch as the end of the turn (seen on a phone: a
+  // whole closing paragraph appeared at once, the turn already over), so the latest text still counts as arriving
+  // for a moment after the turn ends, and fades in too
+  const justStopped = useLinger(!!running, 1500);
   const loaded = t.loaded;
   const agentName = host.agentName?.(session.agent) ?? session.agent;
   const composer = useRef<ComposerHandle>(null);
@@ -209,10 +214,10 @@ export function ChatView({
     // Tools the host renders its own way don't fold into "ran N commands" groups (they're cards meant to be seen)
     const own = host.renderTool ? (p: ToolPart) => host.renderTool!(p, { sessionId: session.id, running: false }) !== undefined : undefined;
     return [
-      buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking, own, expandEdits),
+      buildRows(msgs, running, openGroups, new Set(liveTaskIds.split(" ").filter(Boolean)), Date.now(), out, showThinking, own, expandEdits, justStopped),
       out.wake,
     ] as const;
-  }, [msgs, running, openGroups, liveTaskIds, tick, showThinking, expandEdits, host]);
+  }, [msgs, running, openGroups, liveTaskIds, tick, showThinking, expandEdits, host, justStopped]);
   // The host's focus: scroll there once the rows have it, then flash the row (data-chat-key) for a moment.
   // A long chat opens with only its latest part loaded (older parts come in on scrolling up), so the card asked for may
   // not be in the rows yet: a panel's "waiting to send" line pointing at a reply card from an hour ago did nothing until

@@ -265,3 +265,37 @@
 ::highlight(gerdr-find-current) {
   background-color: color-mix(in oklch, var(--warn) 80%, transparent);
 }
+
+/* Streamed text fading in (components/streamFade.ts): the text of each recent batch sits in one of these highlights,
+   moving up a step as it fades. A highlight can't read the element's own colour (currentColor there is not the
+   text's), so fading text is the foreground colour until done. */
+::highlight(gerdr-fade-0) {
+  color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+::highlight(gerdr-fade-1) {
+  color: color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+::highlight(gerdr-fade-2) {
+  color: color-mix(in srgb, var(--foreground) 25%, transparent);
+}
+::highlight(gerdr-fade-3) {
+  color: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+::highlight(gerdr-fade-4) {
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+::highlight(gerdr-fade-5) {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+::highlight(gerdr-fade-6) {
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+::highlight(gerdr-fade-7) {
+  color: color-mix(in srgb, var(--foreground) 75%, transparent);
+}
+::highlight(gerdr-fade-8) {
+  color: color-mix(in srgb, var(--foreground) 85%, transparent);
+}
+::highlight(gerdr-fade-9) {
+  color: color-mix(in srgb, var(--foreground) 95%, transparent);
+}

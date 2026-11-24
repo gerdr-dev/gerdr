@@ -423,7 +423,10 @@ function KeptReasoning({
       </ReasoningTrigger>
       {/* Expanded / latest modes use foreground text when opened: muted text is hard to read over long thinking,
           and the left rule + smaller size separate it from the reply. Collapsed keeps muted text. */}
-      <ReasoningContent className={cn("gerdr-md mt-1 mb-1 ml-[7px] border-l pl-4 text-[0.92em]", mode !== "collapsed" && "text-foreground")}>
+      <ReasoningContent
+        className={cn("gerdr-md mt-1 mb-1 ml-[7px] border-l pl-4 text-[0.92em]", mode !== "collapsed" && "text-foreground")}
+        streaming={streaming}
+      >
         {text}
       </ReasoningContent>
     </Reasoning>
@@ -579,7 +582,7 @@ export function renderPart(p: GPart, i: number, ctx: PartCtx): ReactNode {
       return (
         // data-message: the host finds a message's text on screen by it (MessageInfo)
         <div key={i} className="gerdr-md" data-message={ctx.turnId}>
-          <Markdown>{p.text}</Markdown>
+          <Markdown streaming={ctx.streaming}>{p.text}</Markdown>
         </div>
       );
     case "reasoning": {

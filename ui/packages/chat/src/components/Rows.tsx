@@ -190,6 +190,9 @@ export function buildRows(
   showThinking = true,
   ownTool?: (p: ToolPart) => boolean,
   expandEdits = true,
+  // The turn is running or ended a moment ago (ChatView): the latest text still counts as arriving, so text that
+  // came in the same batch as the turn's end fades in too
+  justStopped = false,
 ): Row[] {
   const rows: Row[] = [];
   const young = youngTest(now, out);
@@ -257,7 +260,7 @@ export function buildRows(
         msgId: m.id,
         kids: tp ? children.get(tp.toolCallId) : undefined,
         first: false,
-        streaming: live && running && i === lastPart,
+        streaming: live && (running || justStopped) && i === lastPart,
         live,
         latest: p.type === "data-turnStat" && `${m.id}:${i}` === latestStat,
         turnBlocks,
