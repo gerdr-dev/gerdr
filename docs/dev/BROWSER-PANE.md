@@ -36,11 +36,13 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   `streamPictures` takes a `pictureSource`: the display (`desktopSource`) or a tab (`browserSource`). So the pane works
   the same in the App, a plain browser, over remote access and on a phone.
 - **Opening**: an agent's `open` broadcasts `browser_open`, and the UI puts a Browser pane beside that agent's
-  pane (`actions/browser.ts browserOpened`, without moving the focus). **Floating** by default, in a corner as
-  pictures at a desktop's size (asked for: an agent testing its own work only needs watching, and a docked pane took
-  half the screen each time). When the user has to act in the page (sign in, a captcha) the agent runs `gerdr browser
+  pane (`actions/browser.ts browserOpened`, without moving the focus). **Minimized** by default: a chip in the
+  tab's corner, which opens the floating box (pictures at a desktop's size) when clicked. Asked for: first a docked
+  pane took half the screen each time, then a floating box still covered the chat. A chip whose page is new or went
+  elsewhere since the user looked has a dot (`useBrowserNews`, per device); "went elsewhere" needs the page list
+  pushed on navigation too (`Tab.onNav` → `tabsChanged`), as nothing else streams a minimized page. When the user has to act in the page (sign in, a captcha) the agent runs `gerdr browser
   show` (or `open --show`): `POST /api/browser/show` broadcasts `browser_open` with `show`, and the pane docks as the
-  App's real page. A panel's browser does the same (`PanelFloat` in core/SessionBrowser.tsx, over the panel's corner;
+  App's real page. A panel's browser floats the same way when the user picks it (`PanelFloat` in core/SessionBrowser.tsx, over the panel's corner;
   its title bar has the float / dock switch). An agent's `close` (not `--keep`) broadcasts `browser_close` and the
   panes showing the page close with it (`browserClosed`; not one alone in its tab, nor the user's own "close page"). The user opens one from the pane menu or
   `prefix+i` and types an address. A pane remembers its page's last URL (`PaneLeaf.browser.url`): pages don't
@@ -50,8 +52,8 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
 - **A panel's agents** (its agent column, the workers it started: `tags.panel`) are in no pane, so `browserOpened`
   has nowhere to put a page. Each page records the session that opened it (`chromeext Tab.Session`, inherited by
   the pages it opens and by its move into the App's browser), and the panel gets a browser column at its right
-  (`core/SessionBrowser.tsx PanelBrowser`, opened by itself on the next open, × closes it until then; a third tab on
-  a phone). Asked for: one place for the whole panel, not a tab beside each chat (the first cut). Its "open in new
+  (`core/SessionBrowser.tsx PanelBrowser`, folded until the user opens it from its globe button, which gets the
+  same dot when a page opens or moves; `show` opens it; a third tab on a phone). Asked for: one place for the whole panel, not a tab beside each chat (the first cut). Its "open in new
   window" asks the App for a window on `/<project>?browser=<tab>` (internal/desktop `newWindow` with a `path`), which
   App.tsx draws as that page alone (`BrowserWindow`); the App's real page moves there (one window per page).
   It is a move, not a copy (asked for: the window turned to pictures when the column was opened again, and each click

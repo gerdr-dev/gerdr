@@ -155,6 +155,7 @@ func (b *Bridge) OpenNative(ctx context.Context, project, profile, raw string, w
 // nativeTab registers one of the App's pages and turns its logs on.
 func (b *Bridge) nativeTab(c *Conn, id int, project, raw string, opener, replaces int) (*Tab, error) {
 	t := newTab(id, raw)
+	t.onNav = b.tabsChanged
 	t.Project, t.Native, t.Opener, t.Replaces = project, true, opener, replaces
 	t.send = func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 		return cdp(ctx, c, id, method, params)

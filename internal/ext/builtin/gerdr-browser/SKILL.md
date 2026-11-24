@@ -19,9 +19,9 @@ installed version's exact flags.
 Two browsers, the same actions on both:
 
 - **The project's browser** (default): a Chrome Gerdr runs in the background with a profile per project, so a site
-  signed in to once stays signed in for that project. A page you open shows **floating in a corner** of Gerdr (beside
-  your chat, or over the panel when you are a panel's agent or one of its workers): the user watches you work without
-  it taking half the screen. When the user has to act in it (a sign-in, a captcha, a choice of theirs), run
+  signed in to once stays signed in for that project. A page you open comes up **minimized**: a chip in the corner of
+  Gerdr (beside your chat), or the browser button of the panel when you are a panel's agent or one of its workers,
+  with a dot saying there is something new; it opens only when the user clicks it, so don't assume they saw it. When the user has to act in it (a sign-in, a captcha, a choice of theirs), run
   `gerdr browser show` first: it docks as the **Browser pane** beside the chat, the real page they can click and type
   in; then ask them, and carry on when they say so. To show the user a page (a dev server you started, a report):
   `open --show`. `close` when done: its pane goes too.

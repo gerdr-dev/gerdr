@@ -55,6 +55,9 @@ type Tab struct {
 	watch  *watchers
 	cast   *caster       // the screencast its viewers share (view.go)
 	cur    *atomic.Value // CurrentURL
+	// onNav runs when the main frame's address changed (the bridge's tabsChanged): the UI marks a page it isn't
+	// showing as changed (a minimized Browser pane's dot, ui/src/lib/actions/browser.ts)
+	onNav func()
 	// phone layout for remote viewers of an App page (phone.go)
 	phoneOnce *sync.Once
 	phoneL    *phoneLayout
@@ -116,8 +119,11 @@ func (t *Tab) event(method string, params json.RawMessage) {
 			if u == "" && p.Frame.ParentID == "" {
 				u = p.Frame.URL + p.Frame.Fragment
 			}
-			if u != "" && !strings.HasPrefix(u, "about:") && !strings.HasPrefix(u, "data:") {
+			if u != "" && !strings.HasPrefix(u, "about:") && !strings.HasPrefix(u, "data:") && u != t.CurrentURL() {
 				t.cur.Store(u)
+				if t.onNav != nil {
+					t.onNav()
+				}
 			}
 		}
 	}
@@ -196,6 +202,7 @@ func (b *Bridge) Open(ctx context.Context, o OpenOptions) (*Tab, error) {
 		return nil, err
 	}
 	t := newTab(tabID, o.URL)
+	t.onNav = b.tabsChanged
 	t.Profile = conn.ID
 	t.send = func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 		return cdp(ctx, conn, tabID, method, params)

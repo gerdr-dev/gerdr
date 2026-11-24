@@ -41,6 +41,7 @@ func (b *Bridge) Adopt(p Page) *Owned {
 		id = ownedBase + b.nextOwned
 	}
 	t := newTab(id, p.URL)
+	t.onNav = b.tabsChanged
 	t.Project, t.Opener = p.Project, p.Opener
 	t.send = p.Send
 	t.resize = p.Resize

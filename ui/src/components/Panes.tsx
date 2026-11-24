@@ -40,6 +40,7 @@ import { FileActions, FileContent } from "./FileViewer";
 import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
 import { BrowserOutCard, PopOutItem } from "./browser/BrowserOut";
+import { NewsDot } from "./browser/NewsDot";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -62,6 +63,7 @@ import {
   fitPaneWidth,
   useBrowserWindows,
   useBrowserTabs,
+  useBrowserNews,
 } from "@/lib/actions";
 import {
   dockedRoot,
@@ -291,6 +293,8 @@ function MinChips({ panes }: { panes: PaneLeaf[] }) {
 function MinChip({ pane }: { pane: PaneLeaf }) {
   const b = pane.browser!;
   const url = useBrowserTabs((s) => s.tabs.find((x) => x.tab === b.tab)?.url) ?? b.url;
+  // its page opened or went elsewhere since the user last looked (lib/actions/browser.ts useBrowserNews)
+  const news = useBrowserNews((s) => !!s[pane.id]);
   let name = t("browser.tag"); // no page yet: the short word, as the sidebar tag (asked for)
   try {
     if (url) name = new URL(url).host || url;
@@ -302,10 +306,11 @@ function MinChip({ pane }: { pane: PaneLeaf }) {
       type="button"
       title={t("panes.restoreMin", { name })}
       onClick={() => minimizePane(pane.id, false)}
-      className="flex h-8 max-w-56 items-center gap-1.5 rounded-full border bg-background px-3 text-xs shadow-lg hover:bg-accent"
+      className="relative flex h-8 max-w-56 items-center gap-1.5 rounded-full border bg-background px-3 text-xs shadow-lg hover:bg-accent"
     >
       <Globe className="size-3.5 shrink-0 text-brand" />
       <span className="truncate">{name}</span>
+      {news && <NewsDot />}
     </button>
   );
 }

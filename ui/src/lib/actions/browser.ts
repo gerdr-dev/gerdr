@@ -9,6 +9,7 @@ import {
   FLOAT_FITS,
   floatable,
   leaves,
+  minimizeFloat,
   locateSession,
   rects,
   restoreFloat,
@@ -25,7 +26,7 @@ import {
   type PaneNode,
   type PaneSplit,
 } from "../layout";
-import { get, setLayout } from "../store";
+import { get, onLayoutChange, setLayout } from "../store";
 import { isNative, nativeAskBrowserWindows, nativeBrowserWindow, nativeNewPathWindow } from "../native";
 
 // ---- Browser panes: a page of the project's own browser beside the chat (components/browser/, docs/dev/BROWSER-PANE.md) ----
@@ -102,7 +103,58 @@ export function setBrowserTabs(tabs: BrowserTab[] | null | undefined) {
   const prev = useBrowserTabs.getState();
   const next = tabs ?? [];
   useBrowserTabs.setState({ tabs: next, loaded: true });
-  if (prev.loaded) followNewTabs(prev.tabs, next);
+  if (!prev.loaded) return;
+  followNewTabs(prev.tabs, next);
+  noteMinimizedChanges(prev.tabs, next);
+}
+
+/**
+ * Browser panes folded to a chip whose page changed since the user last looked: the chip carries a dot (Panes.tsx
+ * MinChip). Agents' pages open minimized (browserOpened: asked for, a page popping up over the work each time was
+ * too loud), so the dot is how the user learns there is something new to look at. Per device, like the focus: the
+ * user who looked is the one in front of this screen.
+ */
+export const useBrowserNews = create<Record<string, true>>(() => ({}));
+
+export function markBrowserNews(paneId: string) {
+  if (!useBrowserNews.getState()[paneId]) useBrowserNews.setState({ [paneId]: true });
+}
+
+export function clearBrowserNews(paneId: string) {
+  if (!useBrowserNews.getState()[paneId]) return;
+  const { [paneId]: _, ...rest } = useBrowserNews.getState();
+  useBrowserNews.setState(rest, true);
+}
+
+// a pane no longer folded (restored here, from another device or `gerdr pane restore`) or gone: its dot goes, so the
+// next time it is folded it doesn't come back with an old one
+if (typeof window !== "undefined")
+  setTimeout(
+    () =>
+      onLayoutChange((_, l) => {
+        const ids = Object.keys(useBrowserNews.getState());
+        if (!ids.length) return;
+        const min = new Set(l.workspaces.flatMap((w) => w.tabs.flatMap((t) => Object.keys(t.float ?? {}).filter((id) => t.float![id].min))));
+        for (const id of ids) if (!min.has(id)) clearBrowserNews(id);
+      }),
+    0,
+  );
+
+/** Where a page is, for "it went somewhere else": its address without the #fragment (an in-page jump isn't news). */
+export const pageKey = (url?: string) => (url ?? "").split("#")[0];
+
+/** A minimized pane's page went elsewhere, or the pane followed its page to a new one (followNewTabs): mark it. */
+function noteMinimizedChanges(prev: BrowserTab[], next: BrowserTab[]) {
+  const l = get().layout;
+  for (const t of l.workspaces.flatMap((w) => w.tabs)) {
+    for (const p of leaves(t.root)) {
+      const n = p.browser?.tab;
+      if (!n || !t.float?.[p.id]?.min) continue;
+      const was = prev.find((x) => x.tab === n);
+      const now = next.find((x) => x.tab === n);
+      if (now && !now.gone && (!was || pageKey(was.url) !== pageKey(now.url))) markBrowserNews(p.id);
+    }
+  }
 }
 
 /**
@@ -279,30 +331,39 @@ export const useBrowserOpens = create<Record<string, { tab: number; at: number; 
 /**
  * An agent opened a page (`gerdr browser open`) or wants the user in it (`gerdr browser show`, show): put it beside that
  * agent's pane, without taking the focus from where the user is. A tab that already has a Browser pane switches it to
- * the new page. A new pane floats in a corner (the page's pictures, laid out at a desktop's size): an agent testing
- * its own work only needs to be watched (asked for: a pane taking half the screen each time). show docks it, as the
- * App's real page, which the user can sign in and type into. An agent no pane shows (a panel's, a closed one) gets no
- * pane: a panel shows its conversation's pages itself (core/SessionBrowser.tsx), and the project's pages are in any
- * Browser pane's page list.
+ * the new page. A new pane comes minimized, a chip in the tab's corner with a dot (useBrowserNews) that opens its
+ * floating box when clicked: asked for, opening silently (first a docked pane took half the screen each time, then a
+ * floating box still covered the chat). A minimized pane stays so, its dot on; one the user has on screen just
+ * switches page. show docks it, as the App's real page, which the user can sign in and type into: the agent asked for
+ * them. An agent no pane shows (a panel's, a closed one) gets no pane: a panel shows its conversation's pages itself
+ * (core/SessionBrowser.tsx), and the project's pages are in any Browser pane's page list.
  */
 export function browserOpened(m: { tab: number; project: string; session?: string; show?: boolean }) {
   if (!m.session) return;
   useBrowserOpens.setState({ [m.session]: { tab: m.tab, at: Date.now(), show: !!m.show } });
   const loc = locateSession(get().layout, m.session);
   if (!loc) return;
+  let paneId = "";
   setLayout((l) => {
     const old = leaves(loc.tab.root).find((p) => p.browser);
     if (old) {
+      paneId = old.id;
       const out = setPane(l, old.id, { browser: { project: m.project, tab: m.tab } });
       // docked for the user to act in; a pane they placed themselves stays where it is otherwise
       return m.show && loc.tab.float?.[old.id] ? updateTab(out, loc.tab.id, (t) => ({ ...toggleFloat(t, old.id), focus: t.focus })) : out;
     }
     const fresh: PaneLeaf = { type: "pane", id: rid("p"), browser: { project: m.project, tab: m.tab } };
+    paneId = fresh.id;
     return updateTab(l, loc.tab.id, (tab) => {
       const docked = { ...split(tab, loc.pane.id, "row", fresh), focus: tab.focus };
-      return m.show || !floatable(docked, fresh.id) ? docked : { ...toggleFloat(docked, fresh.id), focus: tab.focus };
+      if (m.show || !floatable(docked, fresh.id)) return docked;
+      // floated first, so the chip opens it as a floating box, not docked (minimizeFloat's `docked`)
+      return { ...minimizeFloat(toggleFloat(docked, fresh.id), fresh.id), focus: tab.focus };
     });
   });
+  const at = allLeaves(get().layout).find((x) => x.pane.id === paneId);
+  if (at?.tab.float?.[paneId]?.min) markBrowserNews(paneId);
+  else clearBrowserNews(paneId);
 }
 
 /**

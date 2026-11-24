@@ -4,9 +4,10 @@ import { Check, Globe, Minus, Monitor, PanelRight, PictureInPicture2, Smartphone
 import { BrowserScreen } from "@/components/browser/BrowserScreen";
 import { FloatEdges } from "@/components/FloatEdges";
 import { BrowserOutCard } from "@/components/browser/BrowserOut";
+import { NewsDot } from "@/components/browser/NewsDot";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { loadBrowserTabs, openBrowserWindow, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
+import { loadBrowserTabs, openBrowserWindow, pageKey, tabMoves, useBrowserOpens, useBrowserTabs, useBrowserWindows } from "@/lib/actions";
 import type { BrowserTab } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { FLOAT_FITS, FLOAT_OPERABLE, type FloatEdge, type FloatFit } from "@/lib/layout";
@@ -18,7 +19,8 @@ import { spaceOfKey } from "@/lib/work";
 // pane beside the agent's pane (lib/actions/browser.ts browserOpened). A panel's agents are in no pane, so their pages
 // came up nowhere: the user was asked to sign in "in the Browser pane" and couldn't find one (user report). Here:
 //   - PanelBrowser: a column at the right of the whole panel, for every conversation of that panel (asked for: not a
-//     tab beside one chat), opened on its own when one of them opens a page;
+//     tab beside one chat). It stays folded when one of them opens a page, and its globe button gets a dot (asked
+//     for: a page popping up over the panel each time was too loud); `gerdr browser show` opens it;
 //   - BrowserWindow: the same page in a window of its own (the column's "open in new window"), App.tsx ?browser=;
 //   - SessionBrowser / useSessionBrowser: for a page that wants one conversation's browser in its own layout.
 
@@ -164,7 +166,9 @@ function useStickyProject(tab: number | undefined, pages: BrowserTab[]): string 
 // float: over the panel's corner instead of a column (box: its place, px from the panel's right / top, and width)
 // fit: the floating box's page size (unset = pc)
 // open: the user opened the column themselves (PanelBrowserButton) before any page was there: it shows the address bar
+// news: a page opened or went elsewhere while the column was folded / minimized: its button / chip has a dot (NewsDot)
 type Column = {
+  news?: boolean;
   tab?: number;
   closed: boolean;
   open?: boolean;
@@ -195,8 +199,8 @@ function usePanelColumn(panel: string, sessions: Set<string>) {
     const o = opens[id];
     if (o && (!last || o.at > last.at)) last = o;
   }
-  // first seen: what was opened before isn't news (it doesn't open the column again)
-  const st = useColumns((c) => c[panel]) ?? { closed: false, seen: last?.at ?? 0 };
+  // first seen: what was opened before isn't news. Folded until the user opens it (pages open silently)
+  const st = useColumns((c) => c[panel]) ?? { closed: true, seen: last?.at ?? 0 };
   const save = (next: Column) => useColumns.setState({ [panel]: next });
   const alive = (n?: number) => !!n && all.some((x) => x.tab === n && !x.gone);
   const tab = st.tab !== undefined && (alive(st.tab) || !pages.length) ? st.tab : pages.at(-1)?.tab;
@@ -223,9 +227,12 @@ export function PanelBrowserButton({ panel, sessions, className }: { panel: stri
       size="icon"
       className={cn("size-7", className)}
       title={t("browser.showColumn")}
-      onClick={() => save({ ...st, closed: false, open: true, min: false })}
+      onClick={() => save({ ...st, closed: false, open: true, min: false, news: false })}
     >
-      <Globe className="size-3.5" />
+      <span className="relative">
+        <Globe className="size-3.5" />
+        {st.news && <NewsDot />}
+      </span>
     </Button>
   );
 }
@@ -279,11 +286,30 @@ export function PanelBrowser({
     if (outIn && !st.outSeen) save({ ...st, outSeen: true });
     else if (!outIn && st.outSeen) save({ ...st, tab: st.out, closed: false, out: undefined, outSeen: false });
   }, [outIn]); // eslint-disable-line react-hooks/exhaustive-deps
-  // one of its agents opened a page: show it, the column coming back if it was closed
+  // one of its agents opened a page. It wants the user in it (`gerdr browser show`): the column comes up docked on it.
+  // Otherwise silently: a column on screen switches to it, a folded / minimized one stays so with a dot on its button
+  // (asked for, as Code's minimized chip: lib/actions/browser.ts browserOpened)
   useEffect(() => {
-    // floating while the agent works alone, docked when it wants the user in it (`gerdr browser show`), as in Code
-    if (last && last.at > st.seen) save({ ...st, tab: last.tab, closed: false, min: false, seen: last.at, float: !last.show, out: undefined, outSeen: false });
+    if (!last || last.at <= st.seen) return;
+    if (last.show) save({ ...st, tab: last.tab, closed: false, min: false, seen: last.at, float: false, out: undefined, outSeen: false, news: false });
+    else save({ ...st, tab: last.tab, seen: last.at, news: st.news || st.closed || !!st.min });
   }, [last?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  // its page went elsewhere (or it followed the page to a new one) while folded: a dot too. Phones (no width) show the
+  // column as a tab of their own, with no button to put a dot on
+  const at = `${tab ?? ""}|${pageKey(cur?.url)}`;
+  const was = useRef(at);
+  useEffect(() => {
+    const before = was.current;
+    was.current = at;
+    // from no page: the pages just loaded (not news), or an agent's open, which the effect above handles
+    if (before === at || before.startsWith("|") || !width || !cur) return;
+    const c = useColumns.getState()[panel] ?? st;
+    if ((c.closed || c.min) && !inWindow && !c.news) save({ ...c, news: true });
+  }, [at]); // eslint-disable-line react-hooks/exhaustive-deps
+  // on screen: whatever was new has been seen
+  useEffect(() => {
+    if (st.news && shown && !st.min && width) save({ ...st, news: false });
+  }, [st.news, shown, st.min]); // eslint-disable-line react-hooks/exhaustive-deps
   // not shown: its way back is a PanelBrowserButton in the row beside it (WorkView); a phone's tab (only there with a
   // page) shows it anyway
   if (width ? !shown : !has) return null;
@@ -360,7 +386,7 @@ export function PanelBrowser({
         })}
       </>
     );
-    if (st.min) return <MinChip tab={tab} onRestore={() => save({ ...st, min: false })} />;
+    if (st.min) return <MinChip tab={tab} news={!!st.news} onRestore={() => save({ ...st, min: false, news: false })} />;
     return (
       <PanelFloat
         fit={fit}
@@ -528,7 +554,7 @@ function PanelFloat({
 const SHRINK_TO_MIN = 40;
 
 /** A minimized floating browser: a chip at the panel's top right with the page's host; a click puts the box back. */
-function MinChip({ tab, onRestore }: { tab?: number; onRestore: () => void }) {
+function MinChip({ tab, news, onRestore }: { tab?: number; news: boolean; onRestore: () => void }) {
   const url = useBrowserTabs((s) => s.tabs.find((x) => x.tab === tab)?.url);
   let name = t("browser.tag");
   try {
@@ -545,6 +571,7 @@ function MinChip({ tab, onRestore }: { tab?: number; onRestore: () => void }) {
     >
       <Globe className="size-3.5 shrink-0 text-brand" />
       <span className="truncate">{name}</span>
+      {news && <NewsDot />}
     </button>
   );
 }
