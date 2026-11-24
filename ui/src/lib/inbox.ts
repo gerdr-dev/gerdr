@@ -90,6 +90,9 @@ function add(items: InboxItem[], quiet: boolean, notify = !quiet) {
   if (!items.length) return;
   useInbox.setState((s) => ({ items: [...items, ...s.items].slice(0, MAX), fresh: s.fresh || !quiet }));
   save();
+  // Being looked at here: other windows / devices don't pop a card for it either (closeCards keeps the id a moment,
+  // as the item may reach them after this does)
+  if (quiet) userClosedMany(items.map(cardId));
   if (!notify) return;
   // A system notification per item, carrying what it actually is (the command, the question, the error), so it can be
   // judged without opening Gerdr. In a browser the session id is the tag, so a newer one from the same session replaces the older.
@@ -114,11 +117,28 @@ const quietly = new Set<string>();
  * request's / panel item's id), only the battery one is per device, as its alert is.
  */
 function userClosed(card: string) {
-  import("./sync").then((s) => s.sendCardsClosed([card]));
+  userClosedMany([card]);
 }
+function userClosedMany(cards: string[]) {
+  const ids = [...new Set(cards)].filter((c) => !c.startsWith("inbox:bat:"));
+  if (ids.length) import("./sync").then((s) => s.sendCardsClosed(ids));
+}
+
+/** An item's card id: one per conversation (a newer item replaces its card), else the item's own. */
+const cardId = (it: InboxItem) => `inbox:${it.sessionId ?? it.id}`;
+
+/**
+ * Cards closed elsewhere lately, card id → when: an item seen in another window can be announced closed before it
+ * reaches this one, which would then pop the card anyway.
+ */
+const closedAt = new Map<string, number>();
+const CLOSED_HOLD = 15_000;
 
 /** Cards closed elsewhere ("cards_closed"): drop them here. The items stay in the inbox until answered. */
 export function closeCards(ids: string[]) {
+  const now = Date.now();
+  for (const [k, at] of closedAt) if (now - at > CLOSED_HOLD) closedAt.delete(k);
+  for (const id of ids) closedAt.set(id, now);
   const want = new Set(ids);
   dropCards((k) => !want.has(toasts.get(k)!));
 }
@@ -129,7 +149,9 @@ export function closeCards(ids: string[]) {
  * ×'d in the panel) and when the inbox is opened (dropCards): it's a pointer to the inbox, not a second copy of it.
  */
 function toastItem(it: InboxItem, title: string) {
-  const id = `inbox:${it.sessionId ?? it.id}`;
+  const id = cardId(it);
+  const closed = closedAt.get(id);
+  if (closed && Date.now() - closed < CLOSED_HOLD) return;
   for (const [k, v] of toasts) if (v === id) toasts.delete(k);
   toasts.set(it.id, id);
   quietly.delete(id);
@@ -265,10 +287,16 @@ useInbox.subscribe((s) => {
 function dropSeenCards() {
   if (!toasts.size) return;
   const byId = new Map(get().items.map((x) => [x.id, x]));
+  const gone: string[] = [];
   dropCards((k) => {
     const sid = byId.get(k)?.sessionId;
-    return !sid || !seen(sid);
+    const keep = !sid || !seen(sid);
+    if (!keep) gone.push(toasts.get(k)!);
+    return keep;
   });
+  // Seen here is seen: the same card goes in the other windows too (one window per project: the card stayed up in
+  // the project the user came back to)
+  userClosedMany(gone);
 }
 
 export function dismiss(id: string) {
@@ -289,6 +317,8 @@ export function clearAll() {
 
 /** Opened: the red dot and the cards go. */
 export function markSeen() {
+  // Handled once: the inbox opened in one window clears the cards in all of them (one person, several projects)
+  userClosedMany([...toasts.values()]);
   dropCards();
   if (!get().fresh) return;
   useInbox.setState({ fresh: false });
