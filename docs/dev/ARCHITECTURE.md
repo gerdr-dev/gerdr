@@ -774,11 +774,15 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `ctx.sessions.start({ reportTo: "work" })` resolves "work" to that conversation (`config.workSessions`), so a function
   can hand a task out and have the result come back to the Work agent.
 - **Screen context** (`ui/src/core/screen.ts`): what the user has on screen in a panel goes in front of what they send
-  to its conversations, so "this paragraph" / "the file I have open" reaches the agent with no path pasted (the content
+  to its conversations, so "this one" / "the file I have open" reaches the agent with no path pasted (the content
   panel's user asked whether the AI knew which content was open; it knew the content, not the file or the selection).
-  Three sources per panel: the page's `useScreenContext({ title, text })`, the file open in a `Folder` (ArtifactsFolder)
-  inside that panel (`PanelKeyContext`), and the text selected in the panel's mount (`selectionchange`, kept when focus
-  moves to the composer, which collapses it; cleared by a collapsed selection inside the page). chatHost's `send` adds
+  Only for a panel whose ui.json says `"screen": true` (`optedIn`): it started as every panel's, and a board offered
+  to send the card text the user had selected, which nobody there means by "this". Two sources per panel: the page's
+  `useScreenContext({ title, text })` and the file open in a `Folder` (ArtifactsFolder) inside that panel
+  (`PanelKeyContext`). The selected text was a third and is gone: a drag is usually a copy (with copy-on-select it is
+  copied and its highlight cleared at once), selections inside a chat the page embeds are the agent's own words, and
+  keeping a selection past the composer's focus meant a chip offering to send text the user had already taken away.
+  Pointing at a passage needs its own explicit gesture (e.g. an "ask about this" button on a selection). chatHost's `send` adds
   a `<gerdr-screen summary="…">` block (English for the agent) to a conversation that is the panel's (tags.panel, or its
   agent column's `workSessions`) while that panel is shown, only when the block differs from the last one that
   conversation got: the same context on every message is noise and tokens. The chat draws the block as a notice line

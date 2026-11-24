@@ -138,7 +138,7 @@ declare module "@gerdr/core" {
    * as a tree with a preview; Markdown is edited in place, other files previewed. Drop files in to add them. It fills
    * its box (give it a height) and re-reads the folder every few seconds while shown, so a worker's new files appear.
    * A folder that doesn't exist yet shows as empty with its path.
-   * The file open in its preview counts as what the user has on screen (useScreenContext).
+   * The file open in its preview counts as what the user has on screen (useScreenContext; ui.json "screen": true).
    */
   export function ArtifactsFolder(props: { dir: string }): ReactNode;
 
@@ -146,10 +146,12 @@ declare module "@gerdr/core" {
    * Say what the user has open on this page (the item a detail page shows: its name, id, folder, which tab), so the
    * agents they talk to know what "this" means. Gerdr puts it in front of the next message the user sends to this
    * panel's conversations (the agent column and conversations this panel started), together with the file open in an
-   * ArtifactsFolder and any text selected on the page, only when it changed since the last message; the composer shows
+   * ArtifactsFolder (not the text selected on the page), only when it changed since the last message; the composer shows
    * a chip saying what goes along, with × to leave it out. `title` is short, for the person (the chip, a line in the
    * chat); `text` is for the agent, plain lines. The latest mounted caller wins (a detail page over its list); null or
    * unmounting takes it back.
+   * Off unless the panel's ui.json says "screen": true (neither this nor the folder's file is sent without
+   * it): turn it on for a page people read and talk about ("shorten this one"), not for a board or a dashboard.
    */
   export function useScreenContext(ctx: { title: string; text?: string } | null): void;
 

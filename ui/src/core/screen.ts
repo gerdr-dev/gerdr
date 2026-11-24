@@ -1,17 +1,17 @@
 import { useContext, useEffect, useSyncExternalStore } from "react";
-import { mountName } from "@/lib/mounts";
+import { mountInfo } from "@/lib/mounts";
 import { get as getApp, useStore } from "@/lib/store";
 import { workSessionOf } from "@/lib/work";
-import { t } from "@/lib/i18n";
 import { PanelKeyContext, isPanelShown } from "./visible";
 
 /**
  * What the user has on screen in a panel, handed to that panel's conversations with the message they send, so "this
- * paragraph" / "the file I have open" reaches the agent without anyone pasting a path (docs/dev/ARCHITECTURE.md,
- * "Screen context"). Three sources, per panel:
+ * one" / "the file I have open" reaches the agent without anyone pasting a path (docs/dev/ARCHITECTURE.md,
+ * "Screen context"). Only for a panel whose ui.json says "screen": true. Two sources, per panel:
  *  - the page's own words (useScreenContext): which content / task / item is open;
- *  - the artifacts folder view (Folder.tsx): the file open in its preview;
- *  - the text selected anywhere in the panel's page (tracked here from `selectionchange`).
+ *  - the artifacts folder view (Folder.tsx): the file open in its preview.
+ * Not the selected text: a drag is usually a copy (with copy-on-select it is copied and cleared at once), and sending
+ * it along surprised people; removed until there is an explicit "ask about this" gesture.
  * chatHost's send puts it in front of a message as a `<gerdr-screen>` block when it changed since the last one that
  * conversation got (the chat draws the block as a notice line); the composer shows a chip saying what will go along.
  */
@@ -23,7 +23,7 @@ export type ScreenContext = {
   text?: string;
 };
 
-type PanelScreen = { page: ScreenContext[]; file?: string; selection?: string };
+type PanelScreen = { page: ScreenContext[]; file?: string };
 
 const screens = new Map<string, PanelScreen>();
 const skipped = new Map<string, string>(); // session → the block the person dismissed (the chip's ×)
@@ -69,35 +69,25 @@ export function setScreenFile(key: string, path: string | null) {
   emit();
 }
 
-const MAX_SELECTION = 4000;
-
-// The selection inside a panel's page, kept after focus moves to the composer (which collapses it): cleared only by a
-// new collapsed selection inside that page (a click elsewhere in it), replaced by a new one.
-let tracking = false;
-function track() {
-  if (tracking) return;
-  tracking = true;
-  document.addEventListener("selectionchange", () => {
-    const sel = document.getSelection();
-    const node = sel?.anchorNode;
-    const el = node && (node.nodeType === 1 ? (node as Element) : node.parentElement);
-    const mount = el?.closest("[data-gerdr-mount]")?.getAttribute("data-gerdr-mount");
-    if (!mount) return;
-    const key = [...screens.keys()].find((k) => mountName(k) === mount);
-    if (!key) return;
-    const text = sel && !sel.isCollapsed ? sel.toString().trim() : "";
-    const s = of(key);
-    if ((s.selection ?? "") === text) return;
-    s.selection = text || undefined;
-    emit();
-  });
+// A hot update can change a ui.json, and with it the opt-in
+let watching = false;
+function watchConfig() {
+  if (watching) return;
+  watching = true;
+  window.addEventListener("gerdr:ui", emit);
 }
 
-/** Which shown panel a conversation belongs to: one it started (tags.panel), or the one whose agent column shows it. */
+/**
+ * Opted in with "screen": true in its ui.json. Off by default: a board's or a dashboard's page isn't something the user
+ * talks about as "this".
+ */
+const optedIn = (key: string) => mountInfo(key)?.config?.screen === true;
+
+/** Which shown, opted-in panel a conversation belongs to: one it started (tags.panel), or the one whose agent column shows it. */
 function panelOf(session: string): string | undefined {
   const tag = getApp().sessions[session]?.tags?.panel;
   for (const key of screens.keys()) {
-    if (!isPanelShown(key)) continue;
+    if (!isPanelShown(key) || !optedIn(key)) continue;
     if (tag === key || workSessionOf(key) === session) return key;
   }
   return undefined;
@@ -116,15 +106,13 @@ function build(session: string): { block: string; summary: string } {
   const s = key && screens.get(key);
   if (!s) return { block: "", summary: "" };
   const page = s.page[s.page.length - 1];
-  if (!page && !s.file && !s.selection) return { block: "", summary: "" };
-  const sel = s.selection && s.selection.length > MAX_SELECTION ? s.selection.slice(0, MAX_SELECTION) + "…" : s.selection;
-  const summary = [page?.title, s.file && base(s.file), sel && t("screen.selected", { n: s.selection!.length })].filter(Boolean).join(" · ");
+  if (!page && !s.file) return { block: "", summary: "" };
+  const summary = [page?.title, s.file && base(s.file)].filter(Boolean).join(" · ");
   const lines = [
     `<gerdr-screen summary="${attr(summary)}">`,
-    'What the user had on screen in this panel when sending the message below. It is what they mean by "this", "here", "this file", "this paragraph":',
+    'What the user had on screen in this panel when sending the message below. It is what they mean by "this", "here", "this file":',
     ...(page ? [`- Page: ${page.title}`, ...(page.text ? page.text.split("\n").map((l) => `  ${l}`) : [])] : []),
     ...(s.file ? [`- File open in the folder view: ${s.file}`] : []),
-    ...(sel ? ["- Text they selected:", "```", sel, "```"] : []),
     "</gerdr-screen>",
   ];
   return { block: lines.join("\n"), summary };
@@ -141,7 +129,7 @@ export function screenBlockFor(session: string): string {
 
 /** The composer chip: what goes along with the next message to `session` ("" = nothing), and × to leave it out. */
 export function useScreenChip(session: string): { summary: string; skip: () => void } {
-  track();
+  watchConfig();
   useSyncExternalStore(subscribe, () => version);
   // Which panel shows which conversation can change too
   useStore((st) => st.config.workSessions);

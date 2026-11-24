@@ -73,7 +73,10 @@ and their choices are what they set or wrote down, not what the code says.
     bar, its traffic lights sit over the page's top-left, so by default Gerdr puts a strip of their height above the
     page; with `"titleBar": true` the page reaches the window's top instead, starts its header row
     `var(--titlebar-inset, 0px)` from its left edge and `var(--titlebar-h, 0px)` tall (unset outside the App), and makes the
-    row's empty space drag the window with `-webkit-app-region: drag` (`no-drag` on its buttons). These are
+    row's empty space drag the window with `-webkit-app-region: drag` (`no-drag` on its buttons), and `"screen": true`
+    when what the user has on screen should go along with what they say to this panel's conversations (`useScreenContext`,
+    the file open in an `ArtifactsFolder`; not the selected text): for a page people read and point at ("this one"),
+    not a board or a dashboard; off, none of it is sent. These are
     the panel's own, for everyone who installs it. What the user picks from the button's right-click (or `gerdr panel
     rename` / `icon`) is kept in `user/ui.json` and wins over them, for this user only: to change the name they see
     after they picked one, change it there.

@@ -4,7 +4,7 @@ import { t } from "@/lib/i18n";
 
 /**
  * Above a panel conversation's composer: what goes along with the next message from what the user has on screen
- * (core/screen.ts: the open item, the file, the selected text), so nothing is sent out of sight; × leaves it out.
+ * (core/screen.ts: the open item, the file), so nothing is sent out of sight; × leaves it out.
  */
 export function ScreenChip({ sessionId }: { sessionId: string }) {
   const { summary, skip } = useScreenChip(sessionId);
