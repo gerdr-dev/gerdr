@@ -67,6 +67,7 @@ import {
   spaceList,
   spaceOf,
   spaceWorkspaces,
+  type Layout,
   type PaneLeaf,
   type SideRow,
   type Tab,
@@ -244,10 +245,10 @@ function eatNextClick() {
 }
 
 /**
- * Code's row for one pane, on its own (core CodeRow): for a panel that draws Code's list itself (CodeView
- * list="replace"). The same row as in the groups below — icon, status, unread, the menu, dragging it onto a pane —
- * minus what belongs to a workspace group (pinning, its place in the group). `where`: shown at its end instead of
- * the folder.
+ * Code's row for one pane, on its own (core CodeRow): the part every list is made of — the frame's search results, a
+ * panel's own grouping (CodeView list="replace"). The same Row CodeList draws in its groups — icon, status, unread,
+ * the menu, dragging it onto a pane — minus what belongs to a workspace group (pinning, its place in the group).
+ * `where`: shown at its end instead of the folder.
  */
 export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
   const layout = useStore((s) => s.layout);
@@ -258,9 +259,12 @@ export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
   const inActive = useActiveIds()
     .split(",")
     .includes(sid ?? "\0");
+  // The phone's grid covers the panes: no row is "the one in front" then (as in CodeList)
+  const phone = usePhone();
+  const gridOn = useStore((st) => st.overview.on) && phone;
   if (!loc) return null;
   const cur = activeWs(layout);
-  const here = loc.ws.id === cur.id && loc.tab.id === cur.activeTab;
+  const here = !gridOn && loc.ws.id === cur.id && loc.tab.id === cur.activeTab;
   const inSplit = leaves(loc.tab.root).length > 1;
   return (
     <Row
@@ -278,36 +282,37 @@ export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
   );
 }
 
-/** `className`: the phone drawer, which sets its own width (no resize edge there). */
+/** A workspace's name as a row says it out of its group: with its project's when that isn't the one on screen. */
+function wsLabelOf(layout: Layout, ws: Workspace) {
+  const here = currentSpace(layout);
+  const i = spaceWorkspaces(layout).indexOf(ws);
+  const label = i >= 0 ? applyWorkspaceLabel(ws, i, ws.name) : ws.name;
+  return spaceOf(ws) === here ? label : `${spaceList(layout).find((sp) => sp.id === spaceOf(ws))?.name ?? spaceOf(ws)} · ${label}`;
+}
+
+/**
+ * The list beside Code's panes, as a frame: the header, the phone drawer's search, the scrolling area and the buttons
+ * under it. What is listed is a part put into it, and Code has no special place there: Code mode puts in CodeList
+ * (Code's default: "active" and the workspaces); a panel that hosts Code (core CodeView) puts in its own part, above
+ * CodeList (list="add") or instead of it (list="replace": its own grouping of the same panes, drawn with PaneRow).
+ *
+ * `className`: the phone drawer, which sets its own width (no resize edge there).
+ */
 export function UnifiedSidebar({ className }: { className?: string }) {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
-  const unread = useStore((s) => s.unread);
   const sidebarW = useStore((s) => s.sidebarW);
   const phone = usePhone();
   // Unconditional for the same reason as App's overviewOn: a skipped hook crashes when `phone` flips.
   const overviewOn = useStore((s) => s.overview.on);
   const gridOn = phone && overviewOn;
-  const gridFocus = useStore((s) => s.overview.focus);
-  useStore((s) => s.addonVersion);
-  const tiles = useOverviewIds().split(",").filter(Boolean);
-  // Held still while ⌘ is down, so the numbers don't move under ⌘1–9 (lib/modHeld.ts)
-  const frozen = useModFrozen();
-  const activeIds = frozenOrder(useActiveIds().split(",").filter(Boolean), frozen);
-  const numbers = useModShown();
-  // Counts for the ⋯ menu; recomputed on every render of the sidebar, which already follows sessions and the overview
-  const doneN = useStore((s) => doneActiveIds(s).length);
-  const outN = useStore((s) => workingOutIds(s).length);
-  const allProjects = useStore((s) => activeAllProjects(s));
-  const [folded, setFolded] = useFolded();
-  const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
   const roomy = !!className;
   // A panel on screen in the phone drawer: its own items (core/phoneMenu.ts) instead of Code's tabs, when it gives any
   const mode = useStore((s) => s.mode);
   const workKey = useWorkProject();
   const host = useStore((s) => codeHost(s));
   const hosted = !!host;
-  // The hosting panel draws the whole list (core CodeView list="replace"): Code's own groups and "active" aren't drawn
+  // The hosting panel draws the whole list (core CodeView list="replace"): Code's default list isn't put in
   const replaced = host?.list === "replace";
   const panelMenu = usePanelPhoneMenu(roomy && mode === "work" && !hosted ? workKey : null);
   // The drawer's search: not kept, it's "what am I looking for right now" (the drawer remounts on every open)
@@ -319,6 +324,147 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     const t = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(t);
   }, [roomy]);
+  const cur = activeWs(layout);
+  const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
+  const scroller = useRef<HTMLDivElement>(null);
+
+  // Keep the row you're on in sight when it changes from elsewhere (⌘1–9, next-needs-you). A running tab is drawn twice
+  // (under "active" and in its group): if either copy is already in view, stay put, or clicking the group's copy jumped
+  // the list up to the "active" one. Only when none is visible, scroll to the copy closest to where the list is.
+  // Whatever part drew the rows: it goes by data-row-current, which every row (Row) carries.
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box) return;
+    const rows = [...box.querySelectorAll<HTMLElement>("[data-row-current]")];
+    if (!rows.length) return;
+    const view = box.getBoundingClientRect();
+    const dist = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      return r.top < view.top ? view.top - r.top : r.bottom > view.bottom ? r.bottom - view.bottom : 0;
+    };
+    if (rows.some((el) => dist(el) === 0)) return;
+    rows.reduce((a, b) => (dist(b) < dist(a) ? b : a)).scrollIntoView({ block: "nearest" });
+  }, [curTab?.id, curTab?.focus, gridOn]);
+
+  const here = currentSpace(layout);
+  // Searching swaps the parts for one flat list of this project's panes that match
+  const kw = q.trim().toLowerCase();
+  const hits = !kw
+    ? []
+    : allLeaves(layout)
+        .filter((x) => spaceOf(x.ws) === here)
+        .filter(({ ws, tab, pane }) => {
+          const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
+          return [
+            s?.title,
+            s?.agent,
+            s?.cwd,
+            wsLabelOf(layout, ws),
+            tabName(tab),
+            pane.sub?.title,
+            pane.term ? `${t("unifiedSidebar.terminal")} ${pane.term.cwd}` : "",
+            pane.file?.path,
+            pane.browser?.url,
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(kw);
+        });
+
+  return (
+    <Roomy.Provider value={roomy ? { now } : null}>
+      <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
+        {!className && <SidebarEdge />}
+        {/* Beside the rail the project switcher, mode switch, add-ons and settings are on the rail (Rail.tsx); the phone's
+          drawer has no rail and keeps them in its own top and bottom rows */}
+        {className ? <SidebarHeader /> : <ListHeader />}
+        {panelMenu?.length ? (
+          <PanelPhoneMenu items={panelMenu} />
+        ) : (
+          <>
+            {roomy && (
+              <div className="relative shrink-0 px-2 pt-2">
+                <Search className="pointer-events-none absolute top-1/2 left-4.5 mt-1 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
+                <input
+                  className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
+                  placeholder={t("unifiedSidebar.filterPlaceholder")}
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              </div>
+            )}
+            <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+              {kw ? (
+                <div className="flex flex-col pt-1.5">
+                  {hits.map((x) => (
+                    <PaneRow key={x.pane.id} pane={x.pane.id} where={wsLabelOf(layout, x.ws)} />
+                  ))}
+                  {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{t("unifiedSidebar.noMatch")}</p>}
+                </div>
+              ) : (
+                <>
+                  {/* The hosting panel's part (core CodeView portals it here) */}
+                  {hosted && <div ref={setCodeSlot} data-code-slot />}
+                  {/* Code's default list: all there is in Code mode; under the panel's part, or left out, when hosted */}
+                  {!replaced && <CodeList />}
+                  <div className="mt-1 flex gap-1 px-0.5">
+                    <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
+                      <Plus className="size-3.5" /> {t("unifiedSidebar.newTab")}
+                    </FootButton>
+                    <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
+                      <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
+                    </FootButton>
+                    {/* A new workspace is a new group of Code's default list: nothing to show for it without that list */}
+                    {!replaced && (
+                      <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
+                        <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
+                      </FootButton>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+        {className && <SidebarBottom sidebarToggle />}
+        <TabDragLayer />
+      </div>
+    </Roomy.Provider>
+  );
+}
+
+/**
+ * Code's default list, a part like any a panel puts into the frame (core CodeList): "active" on top (the agents at
+ * work, across workspaces), then the project's workspaces as groups, each row a pane. In Code mode it is the whole
+ * list; a panel hosting Code gets it under its own part (list="add"), or leaves it out and groups the same panes its
+ * own way (list="replace").
+ */
+export function CodeList() {
+  const layout = useStore((s) => s.layout);
+  const sessions = useStore((s) => s.sessions);
+  const unread = useStore((s) => s.unread);
+  const phone = usePhone();
+  // Unconditional for the same reason as App's overviewOn: a skipped hook crashes when `phone` flips.
+  const overviewOn = useStore((s) => s.overview.on);
+  const gridOn = phone && overviewOn;
+  const gridFocus = useStore((s) => s.overview.focus);
+  useStore((s) => s.addonVersion);
+  const tiles = useOverviewIds().split(",").filter(Boolean);
+  // Held still while ⌘ is down, so the numbers don't move under ⌘1–9 (lib/modHeld.ts)
+  const frozen = useModFrozen();
+  const activeIds = frozenOrder(useActiveIds().split(",").filter(Boolean), frozen);
+  const numbers = useModShown();
+  // Counts for the ⋯ menu; recomputed on every render of the list, which already follows sessions and the overview
+  const doneN = useStore((s) => doneActiveIds(s).length);
+  const outN = useStore((s) => workingOutIds(s).length);
+  const allProjects = useStore((s) => activeAllProjects(s));
+  const [folded, setFolded] = useFolded();
+  const [activeFolded, setActiveFolded] = useLocal(ACTIVE_FOLD_KEY, false);
+  // In the phone drawer (the frame says so): roomier rows and titles
+  const roomy = !!useContext(Roomy);
+  const workKey = useWorkProject();
+  const hosted = useStore((s) => !!codeHost(s));
   const list = spaceWorkspaces(layout);
   // A hosting panel lists its own conversations in its part above (the secretary's workers): not again in the
   // workspace their pane sits in, nor under "active". The workspace's title says how many of them work in its folder.
@@ -339,8 +485,6 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     return dir ? panelLive.filter((s) => s.cwd === dir || s.cwd?.startsWith(dir + "/")).map((s) => s.id) : [];
   };
   const cur = activeWs(layout);
-  const curTab = cur.tabs.find((t) => t.id === cur.activeTab);
-  const scroller = useRef<HTMLDivElement>(null);
   // An agent being dragged: "active" turns into a drop target, shown even when empty
   const dragAgent = useDrag()?.session;
 
@@ -348,27 +492,9 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   useEffect(() => {
     if (folded.includes(cur.id)) setFolded(folded.filter((x) => x !== cur.id));
   }, [cur.id]);
-  // Keep the row you're on in sight when it changes from elsewhere (⌘1–9, next-needs-you). A running tab is drawn twice
-  // (under "active" and in its group): if either copy is already in view, stay put, or clicking the group's copy jumped
-  // the list up to the "active" one. Only when none is visible, scroll to the copy closest to where the list is.
-  useEffect(() => {
-    const box = scroller.current;
-    if (!box) return;
-    const rows = [...box.querySelectorAll<HTMLElement>("[data-row-current]")];
-    if (!rows.length) return;
-    const view = box.getBoundingClientRect();
-    const dist = (el: HTMLElement) => {
-      const r = el.getBoundingClientRect();
-      return r.top < view.top ? view.top - r.top : r.bottom > view.bottom ? r.bottom - view.bottom : 0;
-    };
-    if (rows.some((el) => dist(el) === 0)) return;
-    rows.reduce((a, b) => (dist(b) < dist(a) ? b : a)).scrollIntoView({ block: "nearest" });
-  }, [curTab?.id, curTab?.focus, gridOn]);
 
   const toggleFold = (id: string) => setFolded(folded.includes(id) ? folded.filter((x) => x !== id) : [...folded, id]);
 
-  const spaces = spaceList(layout);
-  const here = currentSpace(layout);
   // "active" can reach other projects (allProjects): find each one's place
   const active = activeIds.flatMap((id) => {
     const loc = locateSession(layout, id);
@@ -376,35 +502,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
     const item: Item = { ws: loc.ws, tab: loc.tab, pane: loc.pane, split: leaves(loc.tab.root).length > 1, s: sessions[id] };
     return [item];
   });
-  const wsLabel = (ws: Workspace) => {
-    const i = list.indexOf(ws);
-    const label = i >= 0 ? applyWorkspaceLabel(ws, i, ws.name) : ws.name;
-    return spaceOf(ws) === here ? label : `${spaces.find((sp) => sp.id === spaceOf(ws))?.name ?? spaceOf(ws)} · ${label}`;
-  };
   const gridFocusId = gridFocus && tiles.includes(gridFocus) ? gridFocus : tiles[0];
-  // Searching swaps the sections for one flat list of this project's panes that match
-  const kw = q.trim().toLowerCase();
-  const hits: Item[] = !kw
-    ? []
-    : allLeaves(layout)
-        .filter((x) => spaceOf(x.ws) === here)
-        .map(({ ws, tab, pane }) => ({ ws, tab, pane, split: leaves(tab.root).length > 1, s: pane.sessionId ? sessions[pane.sessionId] : undefined }))
-        .filter(({ ws, tab, pane, s }) =>
-          [
-            s?.title,
-            s?.agent,
-            s?.cwd,
-            wsLabel(ws),
-            tabName(tab),
-            pane.sub?.title,
-            pane.term ? `${t("unifiedSidebar.terminal")} ${pane.term.cwd}` : "",
-            pane.file?.path,
-            pane.browser?.url,
-          ]
-            .join(" ")
-            .toLowerCase()
-            .includes(kw),
-        );
 
   const flatRow = (x: Item, top = false, num?: number) => {
     const p = rowProps(x.ws, x.tab, x.pane, x.split);
@@ -413,7 +511,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
       <Row
         key={x.pane.id}
         {...p}
-        where={wsLabel(x.ws)}
+        where={wsLabelOf(layout, x.ws)}
         top={top}
         num={num}
         // In the grid, a row of "active" picks its tile instead of leaving the grid
@@ -443,153 +541,93 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   };
 
   return (
-    <Roomy.Provider value={roomy ? { now } : null}>
-      <div className={cn("relative flex h-full shrink-0 flex-col border-r bg-sidebar", className)} style={className ? undefined : { width: sidebarW }}>
-        {!className && <SidebarEdge />}
-        {/* Beside the rail the project switcher, mode switch, add-ons and settings are on the rail (Rail.tsx); the phone's
-          drawer has no rail and keeps them in its own top and bottom rows */}
-        {className ? <SidebarHeader /> : <ListHeader />}
-        {panelMenu?.length ? (
-          <PanelPhoneMenu items={panelMenu} />
-        ) : (
-          <>
-            {roomy && (
-              <div className="relative shrink-0 px-2 pt-2">
-                <Search className="pointer-events-none absolute top-1/2 left-4.5 mt-1 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
-                <input
-                  className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
-                  placeholder={t("unifiedSidebar.filterPlaceholder")}
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              </div>
+    // data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag)
+    <div className="pt-1.5" data-ws-groups>
+      {(active.length > 0 || gridOn || allProjects || dragAgent) && (
+        // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
+        <div data-active-drop className="mb-1 border-b pb-1.5">
+          <div
+            role="button"
+            className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md pr-1 pl-1.5 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
+            title={t("unifiedSidebar.activeHint")}
+            onClick={() => setActiveFolded(!activeFolded)}
+          >
+            {/* The margin lines the title up with the rows' titles below (row icon + gap-2 vs chevron + gap-1) */}
+            <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", roomy ? "mr-1.5" : "mr-1", !activeFolded && "rotate-90")} />
+            <span className="flex-1 truncate text-left">
+              {t("unifiedSidebar.active")}
+              {allProjects && <span className="font-normal">{t("unifiedSidebar.allProjects")}</span>}
+            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
+                  title={t("unifiedSidebar.activeSettings")}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Ellipsis className="size-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
+                  {t("unifiedSidebar.showAllProjects")}
+                </DropdownMenuCheckboxItem>
+                <div className="px-2 pb-1 text-[11px] text-muted-foreground">{t("unifiedSidebar.perProject")}</div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
+                  <ListPlus /> {outN ? t("unifiedSidebar.restoreWorkingN", { n: outN }) : t("unifiedSidebar.restoreWorking")}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
+                  <Eraser /> {doneN ? t("unifiedSidebar.clearDoneN", { n: doneN }) : t("unifiedSidebar.clearDone")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {phone && (
+              <button
+                className={cn("flex h-5 items-center gap-1 rounded-sm px-1", gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground")}
+                title={gridOn ? t("unifiedSidebar.gridOff") : t("unifiedSidebar.gridOn", { n: MAX_TILES })}
+                // On a phone the overview sits behind the drawer: close it
+                onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
+              >
+                <GalleryHorizontalEnd className={cn("size-3", gridOn && "text-brand")} />
+                {t("unifiedSidebar.grid")}
+              </button>
             )}
-            <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
-              {kw ? (
-                <div className="flex flex-col pt-1.5">
-                  {hits.map((x) => flatRow(x))}
-                  {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{t("unifiedSidebar.noMatch")}</p>}
-                </div>
-              ) : (
-                <>
-                  {/* A panel that hosts Code (core CodeView) draws its own part here, above Code's lists */}
-                  {hosted && <div ref={setCodeSlot} data-code-slot />}
-                  {/* data-ws-groups: the groups a dragged group title reorders among (TabDrag.tsx startWsDrag) */}
-                  <div className={cn("pt-1.5", replaced && "hidden")} data-ws-groups>
-                    {(active.length > 0 || gridOn || allProjects || dragAgent) && (
-                      // data-active-drop: drop an agent here to put it in (TabDrag.tsx)
-                      <div data-active-drop className="mb-1 border-b pb-1.5">
-                        <div
-                          role="button"
-                          className="group/act flex h-7 w-full cursor-default items-center gap-1 rounded-md pr-1 pl-1.5 text-[11px] font-medium text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground"
-                          title={t("unifiedSidebar.activeHint")}
-                          onClick={() => setActiveFolded(!activeFolded)}
-                        >
-                          {/* The margin lines the title up with the rows' titles below (row icon + gap-2 vs chevron + gap-1) */}
-                          <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", roomy ? "mr-1.5" : "mr-1", !activeFolded && "rotate-90")} />
-                          <span className="flex-1 truncate text-left">
-                            {t("unifiedSidebar.active")}
-                            {allProjects && <span className="font-normal">{t("unifiedSidebar.allProjects")}</span>}
-                          </span>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                className="flex size-5 items-center justify-center rounded-sm hover:bg-muted hover:text-foreground"
-                                title={t("unifiedSidebar.activeSettings")}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Ellipsis className="size-3.5" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenuCheckboxItem checked={allProjects} onCheckedChange={(v) => setActiveAllProjects(!!v)}>
-                                {t("unifiedSidebar.showAllProjects")}
-                              </DropdownMenuCheckboxItem>
-                              <div className="px-2 pb-1 text-[11px] text-muted-foreground">{t("unifiedSidebar.perProject")}</div>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem disabled={!outN} onClick={restoreWorking}>
-                                <ListPlus /> {outN ? t("unifiedSidebar.restoreWorkingN", { n: outN }) : t("unifiedSidebar.restoreWorking")}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled={!doneN} onClick={clearActive}>
-                                <Eraser /> {doneN ? t("unifiedSidebar.clearDoneN", { n: doneN }) : t("unifiedSidebar.clearDone")}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          {phone && (
-                            <button
-                              className={cn(
-                                "flex h-5 items-center gap-1 rounded-sm px-1",
-                                gridOn ? "bg-brand/15 text-foreground" : "hover:bg-muted hover:text-foreground",
-                              )}
-                              title={gridOn ? t("unifiedSidebar.gridOff") : t("unifiedSidebar.gridOn", { n: MAX_TILES })}
-                              // On a phone the overview sits behind the drawer: close it
-                              onClick={(e) => (e.stopPropagation(), toggleOverview(!gridOn), set({ drawer: false }))}
-                            >
-                              <GalleryHorizontalEnd className={cn("size-3", gridOn && "text-brand")} />
-                              {t("unifiedSidebar.grid")}
-                            </button>
-                          )}
-                        </div>
-                        {!activeFolded && <div>{active.map((item, i) => flatRow(item, true, numbers && i < 9 ? i + 1 : undefined))}</div>}
-                        {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
-                        {dragAgent && !active.length && !activeFolded && (
-                          <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.dropToActive")}</div>
-                        )}
-                      </div>
-                    )}
-                    {list.map((ws, wi) =>
-                      onlyTheirs.has(ws.id) ? null : (
-                        <Group
-                          key={ws.id}
-                          ws={ws}
-                          index={wi}
-                          last={wi === list.length - 1}
-                          folded={folded.includes(ws.id)}
-                          onFold={() => toggleFold(ws.id)}
-                          sessions={sessions}
-                          unread={unread}
-                          current={ws.id === cur.id}
-                          rows={groups.get(ws.id) ?? []}
-                          panelLive={liveIn(ws)}
-                        >
-                          {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
+          </div>
+          {!activeFolded && <div>{active.map((item, i) => flatRow(item, true, numbers && i < 9 ? i + 1 : undefined))}</div>}
+          {/* Only when empty: a row appearing mid-drag would push the rows under the pointer */}
+          {dragAgent && !active.length && !activeFolded && (
+            <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.dropToActive")}</div>
+          )}
+        </div>
+      )}
+      {list.map((ws, wi) =>
+        onlyTheirs.has(ws.id) ? null : (
+          <Group
+            key={ws.id}
+            ws={ws}
+            index={wi}
+            last={wi === list.length - 1}
+            folded={folded.includes(ws.id)}
+            onFold={() => toggleFold(ws.id)}
+            sessions={sessions}
+            unread={unread}
+            current={ws.id === cur.id}
+            rows={groups.get(ws.id) ?? []}
+            panelLive={liveIn(ws)}
+          >
+            {/* One row per pane, wherever it was dragged to (layout.sideRows): the panes of a split aren't tied together here,
                   the ones on screen just light up. data-side-row(s) / data-pinned: drag a row among the pinned ones to pin it there (TabDrag.tsx) */}
-                          {groups.get(ws.id)?.map((r) => (
-                            <div key={r.pane.id} data-side-row={r.pane.id} data-pinned={r.pinned || undefined}>
-                              <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} groupId={ws.id} pinned={!!r.pinned} />
-                            </div>
-                          ))}
-                          {!groups.get(ws.id)?.length && (
-                            <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>
-                          )}
-                        </Group>
-                      ),
-                    )}
-                  </div>
-                  <div className="mt-1 flex gap-1 px-0.5">
-                    <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
-                      <Plus className="size-3.5" /> {t("unifiedSidebar.newTab")}
-                    </FootButton>
-                    <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
-                      <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
-                    </FootButton>
-                    {/* A new workspace is a new group of Code's own list: nothing to show for it when a panel draws the list */}
-                    {!replaced && (
-                      <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
-                        <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
-                      </FootButton>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
-        {className && <SidebarBottom sidebarToggle />}
-        <TabDragLayer />
-      </div>
-    </Roomy.Provider>
+            {groups.get(ws.id)?.map((r) => (
+              <div key={r.pane.id} data-side-row={r.pane.id} data-pinned={r.pinned || undefined}>
+                <Row {...rowProps(r.ws, r.tab, r.pane, leaves(r.tab.root).length > 1)} groupId={ws.id} pinned={!!r.pinned} />
+              </div>
+            ))}
+            {!groups.get(ws.id)?.length && <div className="py-1 pl-[26px] text-[12px] text-muted-foreground">{t("unifiedSidebar.emptyGroup")}</div>}
+          </Group>
+        ),
+      )}
+    </div>
   );
 }
 

@@ -56,6 +56,12 @@ type Target =
   | { kind: "ws"; wsId: string; rect: Box }
   /** The sidebar's "active" section (UnifiedSidebar, data-active-drop): the dragged agent joins it, nothing moves. */
   | { kind: "active"; session: string; rect: Box }
+  /**
+   * A place some part of the list offers rows to be dropped on (data-row-drop, core useCodeRowDrop): a panel's own
+   * group of rows — a task's status, a person. Nothing moves in the layout; the element is told (ROW_DROP) and does
+   * what a row landing there means to it.
+   */
+  | { kind: "drop"; el: HTMLElement; pane: string; session?: string; rect: Box }
   /** A sidebar group (workspace) put before the `to`-th group of its session, counted without it (actions.moveWorkspace). */
   | { kind: "wsorder"; to: number; line: Box }
   /** The pointer within EDGE px of the window's `side` edge: the dragged pane of a split leaves as a new tab. `rect`: that pane. */
@@ -83,6 +89,9 @@ type Drag = {
   target: Target | null;
   spring?: string;
 };
+
+/** The event a data-row-drop element gets when a row is dropped on it: detail { pane, session? }. */
+export const ROW_DROP = "gerdr:rowdrop";
 
 const SPRING_MS = 600;
 const EDGE = 12;
@@ -227,6 +236,9 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     // A sidebar row dragged between two others (UnifiedSidebar): list it there, in this group or another one
     // A pane's title bar dropped there too (rowPane): a pane of a split leaves as a new tab listed there (detach)
     const rowPane = sideRow ?? paneId ?? (srcTab.length === 1 ? srcTab[0].pane.id : undefined);
+    // Onto a place a part of the list offers (a panel's own group): that part decides what it means
+    const dropEl = rowPane ? hit?.closest<HTMLElement>("[data-row-drop]") : null;
+    if (dropEl && rowPane) return { kind: "drop", el: dropEl, pane: rowPane, session, rect: box(dropEl.getBoundingClientRect()) };
     const list = rowPane ? hit?.closest<HTMLElement>("[data-side-rows]") : null;
     const rows = list ? [...list.querySelectorAll<HTMLElement>("[data-side-row]")] : [];
     if (rowPane && list && rows.length) {
@@ -335,6 +347,7 @@ function startDrag(e: React.PointerEvent<HTMLElement>, tabId: string, from: numb
     }
     if (!t) restore();
     else if (t.kind === "active") (restore(), addActive([t.session]));
+    else if (t.kind === "drop") (restore(), t.el.dispatchEvent(new CustomEvent(ROW_DROP, { detail: { pane: t.pane, session: t.session } })));
     else if (t.kind === "row") {
       // Out of its split first (a new tab in its own workspace), then listed where it was dropped
       if (detach) movePane(t.pane, { wsId: srcWs });
@@ -486,6 +499,7 @@ export function TabDragLayer() {
       )}
       {t?.kind === "active" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}
       {t?.kind === "ws" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}
+      {t?.kind === "drop" && <div className="fixed rounded-md bg-brand/10 ring-2 ring-brand" style={fixed(t.rect)} />}
       {t?.kind === "edge" && (
         <div className="fixed flex items-center justify-center rounded-md border-2 border-brand bg-brand/15" style={fixed(t.rect)}>
           <span className="rounded-md bg-background/90 px-2 py-1 text-[12px] text-foreground shadow-sm">{tr("tabDrag.newTab")}</span>

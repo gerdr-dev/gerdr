@@ -309,6 +309,17 @@ declare module "@gerdr/core" {
   export function useCodeRows(): CodeRowInfo[];
   /** With CodeView: Code's own row for a pane (icon, status, unread, its menu, dragging). `where`: shown at its end instead of the folder. */
   export function CodeRow(props: { pane: string; where?: string }): ReactNode;
+  /**
+   * With CodeView: Code's default list ("active" and the project's workspaces), the very part Code mode itself puts
+   * beside its panes. Under list="replace", `<><Mine /><CodeList /></>` is what list="add" does.
+   */
+  export function CodeList(): ReactNode;
+  /**
+   * With CodeView: a place in your list that takes rows dropped on it (a group: a status, a person). Put the returned
+   * ref on its element; a CodeRow (or a pane's title bar) dragged over it lights it up as Code's groups do, and
+   * dropped, `fn` gets the pane and its conversation. Nothing moves in Code's layout: what it means is yours.
+   */
+  export function useCodeRowDrop(fn: (row: { pane: string; session?: string }) => void): (el: HTMLElement | null) => void;
   /** With CodeView: a new tab in Code (the "new conversation" page), in `cwd` when given. */
   export function newCodeTab(opts?: { cwd?: string }): void;
   /**

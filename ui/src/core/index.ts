@@ -12,7 +12,7 @@
 export { SessionChat } from "./SessionChat";
 export { FeedChat, type FeedEntry } from "./FeedChat";
 // Code's own layout in the panel's place, with the panel's part at the top of its list (CodeView.tsx)
-export { CodeView, CodeRow, showInCodeView, newCodeTab, useCodeRows, useCodeSession, type CodeRowInfo } from "./CodeView";
+export { CodeView, CodeList, CodeRow, useCodeRowDrop, showInCodeView, newCodeTab, useCodeRows, useCodeSession, type CodeRowInfo } from "./CodeView";
 export { useSession, useSessions, useUnread } from "./sessions";
 // A conversation's waiting approval / question, answered in place (the inbox's buttons), here or on another computer
 export { usePending, PendingActions } from "./pending";

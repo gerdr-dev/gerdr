@@ -1,4 +1,5 @@
-import { type ReactNode, useContext, useEffect, useMemo } from "react";
+import { type ReactNode, useContext, useEffect, useMemo, useRef } from "react";
+import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
 import { addTab, addTabForSession, focusPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
@@ -80,6 +81,13 @@ export function useCodeRows(): CodeRowInfo[] {
 /** Code's own row for a pane (icon, status, unread, its menu, dragging it onto a pane): `where` replaces the folder shown at its end. */
 export { PaneRow as CodeRow } from "@/components/UnifiedSidebar";
 
+/**
+ * Code's default list, the very part Code mode puts beside its panes: "active" and the project's workspaces. For a
+ * panel that draws the list itself (list="replace") and wants it somewhere in its own: `<><Mine /><CodeList /></>`
+ * is what list="add" does.
+ */
+export { CodeList } from "@/components/UnifiedSidebar";
+
 /** A new tab in Code (the "new conversation" page, where the agent and folder are picked), in `cwd` when given. */
 export function newCodeTab(opts?: { cwd?: string }) {
   toggleOverview(false);
@@ -102,4 +110,24 @@ export function showInCodeView(id: string) {
 /** The conversation in the focused pane of Code's layout, for the panel's part to mark its row. */
 export function useCodeSession(): string | undefined {
   return useStore((s) => focusedSession(s.layout));
+}
+
+/**
+ * A place in the panel's list that takes rows dropped on it (a group: a status, a person): put the returned ref on
+ * its element. While a row of Code (CodeRow, a pane's title bar) is dragged over it, it lights up as Code's own
+ * groups do; dropped, `fn` gets the pane and its conversation. Nothing moves in Code's layout: what landing there
+ * means is the panel's (a task changes status).
+ */
+export function useCodeRowDrop(fn: (row: { pane: string; session?: string }) => void): (el: HTMLElement | null) => void {
+  const f = useRef(fn);
+  f.current = fn;
+  const at = useRef<HTMLElement | null>(null);
+  const on = useRef((e: Event) => f.current((e as CustomEvent).detail)).current;
+  return useRef((el: HTMLElement | null) => {
+    at.current?.removeEventListener(ROW_DROP, on);
+    at.current = el;
+    if (!el) return;
+    el.dataset.rowDrop = "";
+    el.addEventListener(ROW_DROP, on);
+  }).current;
 }
