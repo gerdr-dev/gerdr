@@ -134,14 +134,18 @@ export function setConnProbe(f: () => Promise<boolean>) {
  * 发一条消息，点下去就先在对话最底下画一条半透明的（见 Transcript.sending），日志里那条到了换掉。
  * 失败就拿掉、错误照旧抛给调用方（它负责把字放回输入框）。
  */
-export async function sendShown(id: string, content: ContentBlock[], onRetry?: (attempt: number) => void, now?: boolean) {
-  const msgId = uuid();
+export async function sendShown(id: string, content: ContentBlock[], onRetry?: (attempt: number) => void, now?: boolean, msgId = uuid(), signal?: AbortSignal) {
   const t = transcript(id);
   const bump = () => set((s) => ({ tv: { ...s.tv, [id]: (s.tv[id] ?? 0) + 1 } }));
   t.addSending(msgId, content);
   bump();
+  // Called off: the bubble goes at once, not when a retry's wait runs out (the text is back in the composer already)
+  signal?.addEventListener("abort", () => {
+    t.dropSending(msgId);
+    bump();
+  });
   try {
-    const r = await api.send(id, content, onRetry, now, msgId);
+    const r = await api.send(id, content, onRetry, now, msgId, signal);
     // The server logs and pushes the message before answering, so the logged copy normally replaced the bubble
     // already. Still missing a moment later means the push connection is likely dead while looking open: check it
     // (a dead one reconnects, and the full re-push replaces the bubble). Dropping the bubble on a timer instead made

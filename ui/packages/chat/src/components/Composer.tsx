@@ -32,6 +32,11 @@ export type ComposerHandle = {
 // See DraftImage (drafts.ts): images carry their bytes, videos an uploaded path, other files (host.localPath) the
 // path they have on this machine.
 type Img = DraftImage;
+// A message's id, made here so the composer can call it off while it is on its way (host.cancelSend)
+const newId = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (+c ^ ((Math.random() * 16) >> (+c / 4))).toString(16));
 const isVideo = (im: Img) => im.mimeType.startsWith("video/");
 // Neither an inline image nor a video: drawn as a chip with its name, not a thumbnail
 const isFile = (im: Img) => !isVideo(im) && !(im.mimeType.startsWith("image/") && !im.path);
@@ -612,6 +617,8 @@ const ComposerImpl = forwardRef<
     setBusy(true);
     const prev = text;
     const prevImgs = imgs;
+    const ctl = { id: newId(), abort: new AbortController(), prev, prevImgs };
+    sendCtl.current = ctl;
     setText("");
     setImgs([]);
     gone.current.clear();
@@ -620,7 +627,13 @@ const ComposerImpl = forwardRef<
     const flush = now ? queuedAhead?.() : undefined;
     if (flush) now = false;
     try {
-      await host.send(session.id, content, { now, onRetry: (n) => toast.loading(tr("composer.resending", { n }), { id: tid }) });
+      await host.send(session.id, content, {
+        now,
+        messageId: ctl.id,
+        signal: ctl.abort.signal,
+        onRetry: (n) => toast.loading(tr("composer.resending", { n }), { id: tid }),
+      });
+      if (ctl.abort.signal.aborted) return; // called off (cancelSend), everything is already back
       toast.dismiss(tid);
       sentAt.current = Date.now();
       flush?.();
@@ -630,14 +643,59 @@ const ComposerImpl = forwardRef<
       }
       onSent?.();
     } catch (e: any) {
+      if (ctl.abort.signal.aborted) return;
       toast.dismiss(tid);
+      escPending.current = false;
+      setStopping(false);
       // 没发出去：原样放回输入框（字和图都在），人可以再按一次。
       if (!drafts.getText(paneId)) setText(prev);
       setImgs((cur) => (cur.length ? cur : prevImgs));
       if (!hooks.onSendError?.(session, e, () => sendRef.current())) toast.error(isNetworkError(e) ? tr("composer.sendOffline") : (e.message ?? String(e)));
     } finally {
-      setBusy(false);
+      if (sendCtl.current === ctl) {
+        sendCtl.current = null;
+        setBusy(false);
+      }
     }
+  };
+
+  // The message on its way (busy): the stop button and Esc call it off right away instead of leaving the composer
+  // stuck on "Sending…" until the send returns, which can take long while the agent starts (the UI answers at once).
+  const sendCtl = useRef<{ id: string; abort: AbortController; prev: string; prevImgs: Img[] } | null>(null);
+  const cancelSend = async () => {
+    const ctl = sendCtl.current;
+    if (!ctl || escaping.current) return;
+    if (!host.cancelSend) {
+      escPending.current = true; // the host can't call it off: stop the turn once the send returns
+      setStopping(true);
+      return;
+    }
+    escaping.current = true;
+    setStopping(true);
+    let off = true;
+    try {
+      off = await host.cancelSend(session.id, ctl.id);
+    } catch {
+      // The server didn't answer: the send can't be getting through either (it is retrying), so give it up here
+    } finally {
+      escaping.current = false;
+    }
+    if (sendCtl.current !== ctl) {
+      setStopping(false); // the send returned meanwhile: it failed (text already back) or went in (press stop again)
+      return;
+    }
+    if (!off) {
+      escPending.current = true; // too late, it went in: stop the turn and take it back as soon as the send returns
+      return;
+    }
+    ctl.abort.abort();
+    sendCtl.current = null;
+    toast.dismiss(`send-${session.id}`);
+    setBusy(false);
+    setStopping(false);
+    if (!drafts.getText(paneId)) setText(ctl.prev);
+    setImgs((cur) => (cur.length ? cur : ctl.prevImgs));
+    ta.current?.focus();
   };
 
   const hist = useRef<{ idx: number; list: string[] }>({ idx: -1, list: [] });
@@ -1116,7 +1174,7 @@ const ComposerImpl = forwardRef<
     // Esc 按得快的两种：消息还在发（等发完再撤）、刚发完界面还没收到「在跑」（服务端其实已经在跑了）
     if (e.key === "Escape" && (running || busy || Date.now() - sentAt.current < 5000)) {
       e.preventDefault();
-      if (busy) escPending.current = true;
+      if (busy) void cancelSend();
       else escape();
       return;
     }
@@ -1622,12 +1680,12 @@ const ComposerImpl = forwardRef<
                   className="size-8 rounded-full"
                   disabled={stopping}
                   onMouseDown={keepFocus}
-                  onClick={() => escape()}
+                  onClick={() => (busy ? cancelSend() : escape())}
                 >
                   {stopping ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 fill-current" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{stopping ? tr("composer.stopping") : tr("composer.stop")}</TooltipContent>
+              <TooltipContent>{stopping ? tr("composer.stopping") : busy ? tr("composer.cancelSend") : tr("composer.stop")}</TooltipContent>
             </Tooltip>
           )}
           {running && (!compact || hasText) && (
@@ -1647,15 +1705,27 @@ const ComposerImpl = forwardRef<
               <TooltipContent>{sendKey === "enter" ? tr("composer.sendNowKey") : tr("composer.sendNow")}</TooltipContent>
             </Tooltip>
           )}
-          {(!compact || !running || hasText) && (
+          {busy && !running ? (
+            // Not running yet (a new turn on its way): the send button turns into "call it off" (cancelSend)
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send()}>
-                  {running ? <CornerDownRight className="size-4" /> : <ArrowUp className="size-4" />}
+                <Button size="icon" className="size-8 rounded-full" disabled={stopping} onMouseDown={keepFocus} onClick={() => cancelSend()}>
+                  {stopping ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 fill-current" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{running ? tr("composer.sendQueued") : tr("composer.send")}</TooltipContent>
+              <TooltipContent>{tr("composer.cancelSend")}</TooltipContent>
             </Tooltip>
+          ) : (
+            (!compact || !running || hasText) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon" className="size-8 rounded-full" disabled={!hasText || busy} onMouseDown={keepFocus} onClick={() => send()}>
+                    {running ? <CornerDownRight className="size-4" /> : <ArrowUp className="size-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{running ? tr("composer.sendQueued") : tr("composer.send")}</TooltipContent>
+              </Tooltip>
+            )
           )}
         </div>
       </div>

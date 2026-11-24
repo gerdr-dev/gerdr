@@ -25,6 +25,10 @@ func (s *Server) sessionRoutes(mux *http.ServeMux) {
 		return nil, s.Hub.Delete(r.Context(), sess.ID())
 	}))
 	mux.HandleFunc("POST /api/sessions/{id}/send", s.sessionOp(s.send))
+	// The composer's stop button while a message still shows "Sending…" (hub/cancelsend.go)
+	mux.HandleFunc("POST /api/sessions/{id}/send/{msg}/cancel", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {
+		return map[string]any{"cancelled": sess.CancelSend(r.PathValue("msg"))}, nil
+	}))
 	mux.HandleFunc("POST /api/sessions/{id}/meta", s.sessionOp(s.meta))
 	// 输入框里的 `!命令`：gerdr 在会话目录里直接跑，不经过 agent（hub/shell.go）
 	mux.HandleFunc("POST /api/sessions/{id}/shell", s.sessionOp(func(r *http.Request, sess *hub.Session) (any, error) {

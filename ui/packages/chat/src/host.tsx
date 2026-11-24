@@ -34,9 +34,20 @@ export interface ChatHost {
   /**
    * Send a user message: a new turn when idle, an interjection while one runs (now = cut the current generation
    * short). messageId makes a retry idempotent. onRetry: the host is retrying a flaky network (n = attempt).
-   * Reject with an Error to put the text back into the composer and show the message.
+   * Reject with an Error to put the text back into the composer and show the message. signal: the composer called
+   * the message off (cancelSend said yes); stop retrying and drop whatever shows it as on its way.
    */
-  send(sessionId: string, content: ContentBlock[], opts?: { messageId?: string; now?: boolean; onRetry?: (n: number) => void }): Promise<void>;
+  send(
+    sessionId: string,
+    content: ContentBlock[],
+    opts?: { messageId?: string; now?: boolean; onRetry?: (n: number) => void; signal?: AbortSignal },
+  ): Promise<void>;
+  /**
+   * Call off a message whose send hasn't returned yet (the stop button / Esc while it shows "Sending…": a send can
+   * wait a long while for the agent to start). true = it won't go in, the composer takes it back at once; false = too
+   * late, it is in, and the composer stops the turn once the send returns. Without it Esc waits for the send to finish.
+   */
+  cancelSend?(sessionId: string, messageId: string): Promise<boolean>;
   /** Stop the running turn. content: what goes back into the composer (withdrawn interjections, or the whole message). */
   stop(sessionId: string): Promise<{ content: ContentBlock[] }>;
   /** Take back the last interjection the agent hasn't read (↑ in an empty composer). */

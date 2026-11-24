@@ -195,6 +195,7 @@ type Session struct {
 	turnCost    float64              // what the agent reported spending since the last turn_end (emit puts it on the next one)
 	turnUse     []acpx.Tokens        // the token reports since the last turn_end, one entry per model (same as turnCost)
 	sending     map[string]bool      // 正在处理的 client 消息 id（同一条重发时挡住并发的那次）
+	sendState   map[string]bool      // client message ids called off (false) or past the point of no return (true): cancelsend.go
 	retryCancel chan struct{}        // 自动重试正在等：关掉它 = 人按了停止
 	shut        bool                 // Hub.Shutdown 关掉的（关了 pane）：这一轮因为进程被杀报的错不算错、不自动重试；再接上时清掉
 	shells      map[string]*shellRun // 输入框里 `!命令` 还在跑的（shell.go）

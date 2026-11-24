@@ -126,9 +126,10 @@ export function onAuthLost(f: () => void) {
   authLost = f;
 }
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, {
     method,
+    signal,
     credentials: "same-origin",
     // X-Gerdr：服务端拿它挡 CSRF（跨站页面发不出自定义头）。
     headers: body !== undefined ? { "Content-Type": "application/json", "X-Gerdr": "1" } : { "X-Gerdr": "1" },
@@ -166,13 +167,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * 只是响应丢了」，不会变成两条。onRetry 给界面说一声「在重试」。
  */
 // now：agent 在跑时立即插话（截断当前这次生成）；默认排到下一个空档（当前这步做完）再塞进去，和 Claude Code 的输入框一样。
-async function sendWithRetry(id: string, content: ContentBlock[], onRetry?: (attempt: number) => void, now?: boolean, msgId = uuid()) {
+// signal: the person called it off (cancelSend); no more tries.
+async function sendWithRetry(id: string, content: ContentBlock[], onRetry?: (attempt: number) => void, now?: boolean, msgId = uuid(), signal?: AbortSignal) {
   const waits = [500, 1000, 2000, 4000, 8000, 15000, 30000];
   for (let i = 0; ; i++) {
     try {
-      return await req<{ messageId: string; steered: boolean }>("POST", `/api/sessions/${id}/send`, { content, id: msgId, now: now || undefined });
+      return await req<{ messageId: string; steered: boolean }>("POST", `/api/sessions/${id}/send`, { content, id: msgId, now: now || undefined }, signal);
     } catch (e) {
-      if (!isNetworkError(e) || i >= waits.length) throw e;
+      if (signal?.aborted || !isNetworkError(e) || i >= waits.length) throw e;
       onRetry?.(i + 1);
       await sleep(waits[i]);
     }
@@ -392,6 +394,9 @@ export const api = {
   termInfo: (id: string, liveCwd?: boolean) => req<TermInfo>("GET", `/api/terms/${encodeURIComponent(id)}${liveCwd ? "?cwd=1" : ""}`),
   termKill: (id: string) => req("DELETE", `/api/terms/${encodeURIComponent(id)}`),
   send: sendWithRetry,
+  /** Call off a message still on its way (hub/cancelsend.go). false: too late, it went in. */
+  cancelSend: (id: string, msgId: string) =>
+    req<{ cancelled: boolean }>("POST", `/api/sessions/${id}/send/${encodeURIComponent(msgId)}/cancel`).then((r) => r.cancelled),
   /** Stores a composer attachment the agent can't take inline (a video) on the gerdr machine; returns its absolute path. */
   /** host: onto another computer, for its agent (the answer is a path there) */
   /** onProgress (0..1): XHR rather than fetch, as fetch reports no upload progress (a phone's video takes a while). */

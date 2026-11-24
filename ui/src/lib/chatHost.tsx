@@ -361,7 +361,8 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
           const card = cardOf(part);
           return card ? <ToolCard card={card} session={ctx.sessionId} /> : undefined;
         },
-        send: (id, content, o) => sendShown(id, withScreen(id, content), o?.onRetry, o?.now || sendsNow(id)).then(() => {}),
+        send: (id, content, o) => sendShown(id, withScreen(id, content), o?.onRetry, o?.now || sendsNow(id), o?.messageId, o?.signal).then(() => {}),
+        cancelSend: (id, msg) => api.cancelSend(id, msg),
         stop: (id) => timedEscape(id),
         withdrawLast: (id) => api.withdrawLast(id),
         withdraw: (id, msg, now) => withdrawSteer(id, msg, !!now),

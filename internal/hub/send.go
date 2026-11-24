@@ -80,6 +80,11 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 	if idErr == nil {
 		msgID = clientID
 		s.mu.Lock()
+		if called, ok := s.sendState[msgID]; ok && !called {
+			delete(s.sendState, msgID)
+			s.mu.Unlock()
+			return SendResult{}, ErrSendCancelled
+		}
 		if s.sending[msgID] {
 			s.mu.Unlock()
 			return SendResult{}, errors.New(i18n.S("这条消息正在发送", "This message is already being sent"))
@@ -120,6 +125,9 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 		held = len(s.heldElsewhere(ctx, c)) > 0
 	}
 	if held {
+		if s.calledOff(msgID) {
+			return SendResult{}, ErrSendCancelled
+		}
 		if err := s.Takeover(ctx, "fork"); err != nil {
 			return SendResult{}, err
 		}
@@ -127,6 +135,16 @@ func (s *Session) SendWith(ctx context.Context, content []acp.ContentBlock, o Se
 			return SendResult{}, err
 		}
 	}
+	// Past here the message has effects (a steer, a held command, an answered question, a new turn): too late to call
+	// it off (cancelsend.go). Everything slow before this point (a stop finishing, the agent starting) is just waiting.
+	if !s.commitSend(msgID) {
+		return SendResult{}, ErrSendCancelled
+	}
+	defer func() {
+		s.mu.Lock()
+		delete(s.sendState, msgID)
+		s.mu.Unlock()
+	}()
 	// An inferred turn (inferred.go) is our guess that the agent is still working, not a turn it takes steers in:
 	// close it and send this as a new prompt.
 	s.endInferred()
