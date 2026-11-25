@@ -363,7 +363,8 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	// Stopped with Escape: its turn_end already went out (or the turn was rolled back), this one would come twice
 	stopped := s.stopTurn
 	s.stopTurn = false
-	s.quiet = err == nil && clearOnly(s.events)
+	// A stopped turn (Escape, the stop button, a closed pane) is quiet too: the person ended it, a "Done" for it is wrong
+	s.quiet = stopped || ev.StopReason == "cancelled" || err == nil && clearOnly(s.events)
 	go s.markSynced(10 * time.Second) // 这一轮是我们写的：记下文件现在多大（claude 在一轮之后还会补写标题之类，等一会儿再量）
 	if err != nil {
 		s.lastErr, s.lastLogin = ev.Error, acpx.LoginCommandOf(err)
@@ -407,7 +408,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 }
 
 // clearOnly: the turn at the end of evs did nothing but /clear — the clear notice, and not a word from the agent.
-// Such a turn ends with nothing to read, so it isn't announced as done (Summary.Quiet).
+// Such a turn ends with nothing to read, so it isn't announced as done (Summary.Quiet). A stopped turn isn't either.
 func clearOnly(evs []*Event) bool {
 	cleared := false
 	for i := len(evs) - 1; i >= 0; i-- {

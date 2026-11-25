@@ -101,6 +101,8 @@ func (s *Session) Escape(ctx context.Context) (EscapeResult, error) {
 	ev := &Event{Kind: EvTurnEnd, MessageID: turnMsg, StopReason: string(acp.StopReasonCancelled), Auto: auto,
 		DurationMs: now() - s.turnStarted, OutputTokens: s.turnTokens}
 	s.stopping, s.stopTurn = done, ending
+	// The person stopped it: not announced as done (Summary.Quiet); the turn end that follows keeps it so (send.go)
+	s.quiet = true
 	if s.infer { // nothing will report this guessed turn over: it ends once the agent goes quiet (inferred.go)
 		s.inferLast = time.Now()
 		s.armInferLocked(inferStopQuiet)

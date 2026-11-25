@@ -364,8 +364,9 @@ type Summary struct {
 	// (the Superagent's activity feed) shows what the user told it there, which it would otherwise never see. Kept in
 	// memory only: after a restart it is empty until they type again.
 	PersonSaid PersonSaid `json:"personSaid,omitzero"`
-	// Quiet: the last turn ended with nothing to read (it was only a /clear: clearOnly). Watchers don't announce it
-	// as done — a "Done" notification for a /clear the person just typed is noise.
+	// Quiet: the last turn ended with nothing to read (it was only a /clear: clearOnly) or a person stopped it.
+	// Watchers don't announce it as done — a "Done" notification for a /clear the person just typed, or for a turn
+	// they cancelled, is noise (user report: a cancelled task said 完成).
 	Quiet bool `json:"quiet,omitempty"`
 }
 

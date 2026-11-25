@@ -81,7 +81,7 @@ export type SessionSummary = ChatSession & {
   /** commands 是借的缓存（这个会话的 agent 进程还没起，用这个 agent 上次报的；可能是旧版写的） */
   commandsCached?: boolean;
   pending: number;
-  /** The last turn ended with nothing to read (only a /clear): not announced as done (hub Summary.Quiet) */
+  /** The last turn ended with nothing to read (only a /clear) or a person stopped it: not announced as done (hub Summary.Quiet) */
   quiet?: boolean;
   /** Do not disturb for this one conversation (hub Record.Muted): no notifications about it, it still turns unread */
   muted?: boolean;
