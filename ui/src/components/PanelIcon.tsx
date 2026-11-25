@@ -9,12 +9,13 @@ import { set, useStore } from "@/lib/store";
 import { setSpaceIcon } from "@/lib/actions";
 import { spaceInitials } from "@/lib/layout";
 import { cn } from "@/lib/utils";
+import { solidIconColor } from "./AgentGlyph";
 import { IconPicker, StoredIcon, TextIcon } from "./IconPicker";
 
 /** Its default face, the same for every panel without an icon of its own: a generic panel icon (a letter of its name
  * read as a word, 「空」 for 空白面板, and two panels starting alike looked the same). */
-function PanelDefault({ className }: { className?: string }) {
-  return <PanelsTopLeft className={cn("size-4", className)} />;
+function PanelDefault({ className, color }: { className?: string; color?: string }) {
+  return <PanelsTopLeft className={cn("size-4", className)} style={{ color: solidIconColor(color) }} />;
 }
 
 /**
@@ -22,7 +23,7 @@ function PanelDefault({ className }: { className?: string }) {
  * sprite from an add-on, IconPicker), with its colour; else its default.
  */
 export function PanelIcon({ icon, color, className }: { icon?: string; color?: string; title?: string; className?: string }) {
-  return <StoredIcon icon={icon} color={color} className={cn("size-4", className)} fallback={<PanelDefault className={className} />} />;
+  return <StoredIcon icon={icon} color={color} className={cn("size-4", className)} fallback={<PanelDefault color={color} className={className} />} />;
 }
 
 /**
@@ -100,7 +101,7 @@ export function PanelIconDialog() {
           def={
             isProject
               ? { title: t("projectIcon.default"), node: <TextIcon text={spaceInitials(name)} color={color} className="size-5" />, glyph: "tiles" }
-              : { title: t("panelIcon.default"), node: <PanelDefault className="size-5" />, glyph: "tiles" }
+              : { title: t("panelIcon.default"), node: <PanelDefault color={color} className="size-5" />, glyph: "tiles" }
           }
         />
         {err && <div className="text-[12px] text-bad">{err}</div>}

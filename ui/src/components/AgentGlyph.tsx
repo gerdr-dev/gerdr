@@ -241,8 +241,14 @@ export function autoGlyph(id: string): string {
 /** A custom colour as stored: "#rrggbb", picked freely next to the PALETTE (projects' and panels' icons). */
 export const isHexColor = (c?: string) => !!c && /^#[0-9a-f]{6}$/i.test(c);
 
+/** Display a saved palette key or custom hex colour as a flat fill. */
+export function solidIconColor(color?: string): string | undefined {
+  if (!color) return undefined;
+  return isHexColor(color) ? color : PALETTE[color]?.to;
+}
+
 /** A stored colour's gradient: a PALETTE key's, or for "#rrggbb" a lighter tint of it down to itself; else none. */
-export function colorStops(color?: string): { from: string; to: string } | undefined {
+function colorStops(color?: string): { from: string; to: string } | undefined {
   if (!color) return undefined;
   if (PALETTE[color]) return PALETTE[color];
   if (!isHexColor(color)) return undefined;
@@ -253,14 +259,16 @@ export function colorStops(color?: string): { from: string; to: string } | undef
 }
 
 /** color: a PALETTE key or "#rrggbb"; none / unknown = the glyph's own colours. */
-export function AgentGlyph({ name, color, className }: { name: string; color?: string; className?: string }) {
+export function AgentGlyph({ name, color, className, solid }: { name: string; color?: string; className?: string; solid?: boolean }) {
   const line = LINES[name];
   const key = line || GLYPHS[name] ? name : autoGlyph(name);
   const g = GLYPHS[key];
-  const c = colorStops(color) || (g ? { from: g.from, to: g.to } : undefined);
+  const flat = solid ? solidIconColor(color) : undefined;
+  const c = flat ? undefined : colorStops(color) || g;
   // Gradients and masks need an id unique on the page (the same glyph is drawn many times). The glyph's name and colour
   // are part of it so that ids from two React roots that do collide still point at the same colours.
   const id = (useId() + key + (color ?? "")).replace(/[^\w-]/g, "");
+  const paint = flat ?? (c ? `url(#${id})` : "currentColor");
   const grad = c && (
     <defs>
       <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="4" y1="2" x2="20" y2="22">
@@ -273,7 +281,7 @@ export function AgentGlyph({ name, color, className }: { name: string; color?: s
     // lucide puts children inside its <svg>, so the gradient can live there too
     const Icon = line.icon;
     return (
-      <Icon className={cn("shrink-0", !c && "text-muted-foreground", className)} stroke={c ? `url(#${id})` : "currentColor"} aria-label={t(line.label)}>
+      <Icon className={cn("shrink-0", !c && !flat && "text-muted-foreground", className)} stroke={paint} aria-label={t(line.label)}>
         {grad}
       </Icon>
     );
@@ -281,7 +289,7 @@ export function AgentGlyph({ name, color, className }: { name: string; color?: s
   return (
     <svg viewBox="0 0 24 24" className={cn("shrink-0", className)} aria-label={t(g.label)}>
       {grad}
-      {g.draw(`url(#${id})`, id)}
+      {g.draw(paint, id)}
     </svg>
   );
 }

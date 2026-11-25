@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { ImagePlus, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { slots } from "@/lib/addons";
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { nativePickIconImage } from "@/lib/native";
 import { FitSprite } from "./AddonSlot";
-import { AgentGlyph, GLYPHS, LINES, PALETTE, colorStops, isHexColor } from "./AgentGlyph";
+import { AgentGlyph, GLYPHS, LINES, PALETTE, isHexColor, solidIconColor } from "./AgentGlyph";
 import { imageToIcon, isImageIcon, TEXT_ICON } from "@/lib/iconImage";
 import type { MessageKey } from "@/lib/messages";
 
@@ -33,29 +33,21 @@ export const knownIcon = (icon?: string) =>
  * as a whole width, a Latin one as about half).
  */
 export function TextIcon({ text, color, className }: { text: string; color?: string; className?: string }) {
-  const c = colorStops(color);
-  const id = ("ti" + (color ?? "")).replace(/[^\w-]/g, "") + useId().replace(/[^\w-]/g, "");
+  const background = solidIconColor(color);
+  let ink = "var(--background)";
+  if (background) {
+    // Compare black and white against the fill using its relative sRGB luminance.
+    const [r, g, b] = [1, 3, 5].map((offset) => {
+      const value = parseInt(background.slice(offset, offset + 2), 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    ink = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? "black" : "white";
+  }
   const w = [...text].reduce((n, ch) => n + (ch.codePointAt(0)! >= 0x2e80 ? 1 : 0.62), 0) || 1;
   return (
     <svg viewBox="0 0 24 24" className={cn("shrink-0", className)} aria-label={text}>
-      {c && (
-        <defs>
-          <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="2" y1="0" x2="22" y2="24">
-            <stop stopColor={c.from} />
-            <stop offset="1" stopColor={c.to} />
-          </linearGradient>
-        </defs>
-      )}
-      <rect width="24" height="24" rx="6" fill={c ? `url(#${id})` : "var(--foreground)"} />
-      <text
-        x="12"
-        y="12.5"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={Math.min(14, 19 / w)}
-        fontWeight={600}
-        fill={c ? "white" : "var(--background)"}
-      >
+      <rect width="24" height="24" rx="6" fill={background ?? "var(--foreground)"} />
+      <text x="12" y="12.5" textAnchor="middle" dominantBaseline="central" fontSize={Math.min(14, 19 / w)} fontWeight={600} fill={ink}>
         {text}
       </text>
     </svg>
@@ -88,7 +80,7 @@ export function StoredIcon({
   }
   if (icon.startsWith(TEXT_ICON)) return <TextIcon text={icon.slice(TEXT_ICON.length)} color={color} className={className} />;
   if (isImageIcon(icon)) return <img src={icon} alt="" draggable={false} className={cn("shrink-0 rounded-[22%] object-cover", className)} />;
-  return <AgentGlyph name={icon} color={color} className={className} />;
+  return <AgentGlyph name={icon} color={color} className={className} solid />;
 }
 
 /**
@@ -181,7 +173,7 @@ export function IconPicker({
   );
   const icons = (list: Record<string, { label: MessageKey }>) =>
     Object.entries(list).map(([k, g]) =>
-      cell(icon === k, t(g.label), () => onChange({ icon: k }), <AgentGlyph name={k} color={color} className="size-5" />, k),
+      cell(icon === k, t(g.label), () => onChange({ icon: k }), <AgentGlyph name={k} color={color} className="size-5" solid={custom} />, k),
     );
   return (
     <div className="space-y-1">
@@ -242,7 +234,7 @@ export function IconPicker({
               color === k,
               t(c.label),
               () => onChange({ color: k }),
-              <span className="size-4 rounded-full" style={{ background: `linear-gradient(135deg, ${c.from}, ${c.to})` }} />,
+              <span className="size-4 rounded-full" style={{ background: custom ? c.to : `linear-gradient(135deg, ${c.from}, ${c.to})` }} />,
               k,
             ),
           )}
@@ -261,7 +253,7 @@ export function IconPicker({
               />
               <input
                 type="color"
-                value={isHexColor(color) ? color : "#6366f1"}
+                value={solidIconColor(color) ?? "#6366f1"}
                 onChange={(e) => onChange({ color: e.target.value })}
                 className="absolute inset-0 cursor-pointer opacity-0"
               />
