@@ -27,6 +27,7 @@ export {
   useCodePaneTag,
   type CodePaneTag,
   useCodeDirs,
+  useCodeStart,
   type CodeDir,
   newCodeTab,
   useCodeRows,

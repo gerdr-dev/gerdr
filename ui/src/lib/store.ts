@@ -364,6 +364,25 @@ export function hostDirs(s: Pick<State, "mode" | "layout" | "workPanels" | "code
   return dirs?.length ? dirs : undefined;
 }
 
+/**
+ * How the hosting panel starts a conversation from the new-conversation page (core useCodeStart), by panel key: it
+ * answers with the id of the conversation it started, which goes in the pane. Not in the store: a function, and
+ * nothing draws from it.
+ */
+export type CodeStartFn = (o: { agent: string; cwd: string }) => Promise<string>;
+const codeStarts = new Map<string, CodeStartFn>();
+export function setCodeStart(key: string, fn: CodeStartFn | null) {
+  if (fn) codeStarts.set(key, fn);
+  else codeStarts.delete(key);
+}
+/** The on-screen hosting panel's way to start a conversation, when it gave one. */
+export function hostStart(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): CodeStartFn | undefined {
+  if (!codeHost(s)) return undefined;
+  const space = currentSpace(s.layout);
+  const panel = s.workPanels[space];
+  return codeStarts.get(panel ? `${space}/${panel}` : space);
+}
+
 /** core useCodeDirs: panel `key`'s quick-pick folders; null takes them away. */
 export function setCodeDirs(key: string, dirs: CodeDir[] | null) {
   const next = { ...get().codeDirs };

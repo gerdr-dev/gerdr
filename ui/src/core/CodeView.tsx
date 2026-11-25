@@ -5,7 +5,7 @@ import { addTab, addTabForSession, focusPane, replaceSessionInPane } from "@/lib
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
 import { type CodeMenuFn, type CodePaneTagFn, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
-import { type CodeDir, focusedSession, get, markRead, set, setCodeDirs, setCodeHost, useStore } from "@/lib/store";
+import { type CodeDir, type CodeStartFn, focusedSession, get, markRead, set, setCodeDirs, setCodeHost, setCodeStart, useStore } from "@/lib/store";
 import { PanelKeyContext } from "./visible";
 
 /**
@@ -186,6 +186,22 @@ export function useCodeDirs(dirs: CodeDir[]) {
 }
 
 export type { CodeDir } from "@/lib/store";
+
+/**
+ * While this panel hosts Code, the new-conversation page (Cmd+T, a + that opens it) starts its conversations through
+ * `fn` instead of Code: the panel starts one of its own (a task's worker, with its tools and rules) in that folder
+ * with that agent, sends nothing, and answers with its id; the pane shows it. Throwing leaves the page as it was.
+ */
+export function useCodeStart(fn: CodeStartFn) {
+  const key = useContext(PanelKeyContext);
+  const f = useRef(fn);
+  f.current = fn;
+  useEffect(() => {
+    if (!key) return;
+    setCodeStart(key, (o) => f.current(o));
+    return () => setCodeStart(key, null);
+  }, [key]);
+}
 
 /**
  * A tag after a pane's title, from the panel: what it knows about the conversation in that pane (a task's number and
