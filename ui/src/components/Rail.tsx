@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { switchSpace } from "@/lib/actions";
 import { useLanRoute } from "@/lib/android";
 import { hasProjectIcon, ProjectIcon } from "./PanelIcon";
+import { TEXT_ICON } from "@/lib/iconImage";
 import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,9 @@ function RailProjects() {
 
   const project = (sp: Space) => {
     const on = sp.id === here;
+    const custom = hasProjectIcon(sp);
+    const text = sp.icon?.startsWith(TEXT_ICON) ? sp.icon.slice(TEXT_ICON.length) : "";
+    const showIcon = custom && (on || (!!sp.icon && !text));
     // Another project's agents are out of every list on screen: its dot is the only thing that tells you it needs you
     const st = on ? undefined : spaceStatus(layout, sp, sessions, unread, badges);
     return (
@@ -65,8 +69,10 @@ function RailProjects() {
                 aria-current={on || undefined}
                 className={cn(
                   "relative flex size-9 shrink-0 items-center justify-center rounded-lg border text-[12px] font-semibold",
-                  hasProjectIcon(sp)
-                    ? cn("bg-background", on ? "border-foreground" : "border-transparent opacity-80 hover:opacity-100")
+                  custom
+                    ? on
+                      ? "border-foreground bg-background"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                     : on
                       ? "border-foreground bg-foreground text-background"
                       : "bg-background text-muted-foreground hover:text-foreground",
@@ -76,11 +82,10 @@ function RailProjects() {
                 onPointerDown={(e) => startSpaceDrag(e, sp.id, "y")}
               >
                 {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
-                {hasProjectIcon(sp) ? (
-                  // Its own icon fills the button; the bar at the left still says which project is on
-                  <ProjectIcon name={sp.name} icon={sp.icon} color={sp.color} className={cn("size-7", !on && "grayscale")} />
+                {showIcon ? (
+                  <ProjectIcon name={sp.name} icon={sp.icon} color={on ? sp.color : undefined} className="size-7" />
                 ) : (
-                  <span className="max-w-full truncate px-0.5">{spaceInitials(sp.name)}</span>
+                  <span className="max-w-full truncate px-0.5">{text || spaceInitials(sp.name)}</span>
                 )}
                 {st && <StatusDot status={st.status} unread={st.unread} className="absolute -top-0.5 -right-0.5 ring-2 ring-sidebar" />}
               </button>
