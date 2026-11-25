@@ -17,6 +17,8 @@ export type Panel = {
   color?: string;
   /** behind: commits waiting on its remote, as of the last check (server panelupdates.go); web: the remote as a page. */
   source: { git: boolean; remote?: string; dirty?: boolean; behind?: number; web?: string };
+  /** Its folder on this computer (an older backend: none). */
+  dir?: string;
 };
 
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
@@ -107,6 +109,7 @@ export function usePanels(space: string): { panels: Panel[]; codeAt: number; own
             icon: str(p.config.icon),
             color: str(p.config.color),
             source: p.source,
+            dir: p.dir,
           }));
           const codeAt = r.codeAt ?? 0;
           cache[space] = { panels, codeAt, ownRemoved: r.ownRemoved };

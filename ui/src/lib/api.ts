@@ -277,6 +277,8 @@ export const api = {
       panels: {
         key: string;
         name: string;
+        /** The panel's folder on this computer. */
+        dir?: string;
         config: Record<string, unknown>;
         source: { git: boolean; remote?: string; dirty?: boolean; behind?: number; web?: string };
       }[];

@@ -133,7 +133,7 @@ func (s *Server) Handler() http.Handler {
 		s.Work.Host = workHost{s} // ctx.sessions / ctx.workspaces in local functions (workhost.go)
 		if s.Hub != nil {
 			go s.watchPanelSessions() // their conversations' status → their "gerdr/session.*" triggers (panelsessions.go)
-			go s.checkPanelUpdates() // whether an installed panel's repository has moved on (panelupdates.go)
+			go s.checkPanelUpdates()  // whether an installed panel's repository has moved on (panelupdates.go)
 		}
 		// A function changed its panel's files: the panel's page refreshes (core usePanelChange) instead of polling
 		s.Work.Changed = func(key, path string) {

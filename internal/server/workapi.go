@@ -144,13 +144,16 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			Name   string         `json:"name"`
 			Config map[string]any `json:"config"`
 			Source work.Source    `json:"source"`
+			// Dir: the panel's folder, for 复制路径 and for an agent asked to change it (Settings → Panels)
+			Dir string `json:"dir"`
 		}
 		list := []panel{}
 		add := func(key, name string) {
-			if _, err := s.Work.Dir(key); err != nil {
+			dir, err := s.Work.Dir(key)
+			if err != nil {
 				return
 			}
-			p := panel{Key: key, Name: name}
+			p := panel{Key: key, Name: name, Dir: dir}
 			// Its ui.json with this person's rename / icon over it (work/uiprefs.go)
 			p.Config, _ = s.Work.UIConfig(key)
 			p.Source, _ = s.Work.Source(key)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, Ellipsis, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
+import { Bot, Copy, Download, Ellipsis, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -8,7 +8,10 @@ import { api } from "@/lib/api";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { panelsChanged, usePanels, type Panel } from "@/lib/panels";
 import { usePhone } from "@/lib/phone";
-import { set, useStore } from "@/lib/store";
+import { closeDialog, set, useStore } from "@/lib/store";
+import { addTab } from "@/lib/actions";
+import { showCode } from "@/lib/actions/views";
+import { copyText } from "@/lib/clipboard";
 import { t } from "@/lib/i18n";
 import { removePanel } from "@/lib/panelActions";
 import { PanelIcon } from "./PanelIcon";
@@ -111,6 +114,16 @@ function PanelRow({ p }: { p: Panel }) {
     }
   };
   const remove = () => removePanel({ key: p.key, title: p.title });
+  // Changing a panel is an agent's work in its folder, started from here: nobody has to know where that folder is
+  // (the person, 2026-11-25: a panel assistant always on screen takes room, and the secretary isn't for this). A
+  // new conversation's page opens on the folder; the agent reads the gerdr-ui skill when asked to change a panel.
+  const askAgent = () => {
+    if (!p.dir) return;
+    closeDialog();
+    addTab({ cwd: p.dir });
+    showCode();
+  };
+  const copyPath = () => p.dir && copyText(p.dir).then(() => toast.success(t("panelSettings.copied"), { description: p.dir }));
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
       <button
@@ -153,6 +166,16 @@ function PanelRow({ p }: { p: Panel }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {p.dir && (
+              <>
+                <DropdownMenuItem onClick={askAgent}>
+                  <Bot /> {t("panelSettings.askAgent")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void copyPath()}>
+                  <Copy /> {t("panelSettings.copyPath")}
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuItem onClick={() => set({ dialog: { kind: "rename", target: "panel", id: p.key, value: p.title } })}>
               <Pencil /> {t("panelSettings.rename")}
             </DropdownMenuItem>
@@ -169,6 +192,16 @@ function PanelRow({ p }: { p: Panel }) {
       ) : (
         // One group, tight: as three items of the row they were spaced like the row's parts (gap-3) on top of their own padding
         <div className="flex shrink-0 items-center gap-0.5">
+          {p.dir && (
+            <>
+              <Button size="sm" variant="ghost" title={t("panelSettings.askAgentHint", { dir: p.dir })} onClick={askAgent}>
+                <Bot /> {t("panelSettings.askAgentShort")}
+              </Button>
+              <Button size="icon-sm" variant="ghost" title={t("panelSettings.copyPathHint", { dir: p.dir })} onClick={() => void copyPath()}>
+                <Copy />
+              </Button>
+            </>
+          )}
           <Button
             size="icon-sm"
             variant="ghost"
