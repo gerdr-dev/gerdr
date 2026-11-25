@@ -91,9 +91,10 @@ interface Ctx {
 
   /**
    * Conversations with coding agents (the Code side of gerdr): hand a task to an agent and follow it.
-   * A conversation started here shows up in this project's Code layout as a new tab — in the workspace for its directory
-   * (or the closest one above it), else a new workspace for it (or nowhere: `workspace: "none"`) — and keeps running when
-   * the page closes.
+   * A conversation started here is this panel's (tagged `panel`, and so is any one its agent starts): Code's own list
+   * leaves it out, as it leaves out every panel's; show it in your page (or your CodeView list). It opens as a tab in
+   * the project's Code layout — in the workspace for its directory (or the closest one above it), else a new workspace
+   * for it (or nowhere: `workspace: "none"`, the usual choice) — and keeps running when the page closes.
    */
   sessions: {
     /**

@@ -109,17 +109,16 @@ export type ActiveSrc = {
   workPanels?: Record<string, string>;
   codeHosts?: Record<string, unknown>;
   codeOverviews?: Record<string, string[]>;
-  hostPanels?: string[];
 };
 
 /**
- * A conversation of a panel that hosts Code (store.hostPanels): that panel's alone. Code and such a panel are kept
- * apart both ways (the person, 2026-11-25: once on the Superagent panel they don't go back to Code, and its workers
- * turning up in Code read as clutter there): the panel doesn't list Code's conversations, Code doesn't list its —
- * not in "active", the overview or the workspaces (UnifiedSidebar).
+ * A panel's conversation (tags.panel: started by a panel, or by an agent of one): that panel's alone, by where it came
+ * from. Code and panels are kept apart both ways (the person, 2026-11-25: each side manages what it made; once on the
+ * Superagent panel they don't go back to Code, and its workers turning up in Code read as clutter): a hosting panel
+ * doesn't list Code's conversations, Code doesn't list a panel's — not in "active", the overview or the workspaces
+ * (UnifiedSidebar), though a hosting panel opens them as panes in the same layout.
  */
-export const panelOwned = (s: SessionSummary | undefined, hostPanels: string[] | undefined): boolean =>
-  !!s?.tags?.panel && !!hostPanels?.includes(s.tags.panel);
+export const panelOwned = (s: SessionSummary | undefined): boolean => !!s?.tags?.panel;
 
 /**
  * The tiles a panel hosting Code gave (core useCodeOverview), while it is the one shown; undefined otherwise. Its list
@@ -178,7 +177,7 @@ export function toPin(st: ActiveSrc): string[] {
   const conf = activeConf(st.config);
   const added = new Set(conf.added);
   return openSessionsWithProject(st.layout, st.sessions)
-    .filter((x) => !added.has(x.s.id) && !panelOwned(x.s, st.hostPanels) && joins(x, st, conf))
+    .filter((x) => !added.has(x.s.id) && !panelOwned(x.s) && joins(x, st, conf))
     .map((x) => x.s.id);
 }
 
@@ -196,10 +195,9 @@ export function activeIds(st: ActiveSrc): string[] {
   // streamed event, not only the changes it depends on), several per change, and each run walks every pane and sorts.
   // Measured on a phone-overview page turn: ~50ms of it per turn at CPU x4. Callers don't mutate the array.
   const c = activeCache;
-  if (c && c.layout === st.layout && c.sessions === st.sessions && c.config === st.config && c.unread === st.unread && c.hostPanels === st.hostPanels)
-    return c.ids;
+  if (c && c.layout === st.layout && c.sessions === st.sessions && c.config === st.config && c.unread === st.unread) return c.ids;
   const ids = computeActiveIds(st);
-  activeCache = { layout: st.layout, sessions: st.sessions, config: st.config, unread: st.unread, hostPanels: st.hostPanels, ids };
+  activeCache = { layout: st.layout, sessions: st.sessions, config: st.config, unread: st.unread, ids };
   return ids;
 }
 
@@ -208,7 +206,6 @@ let activeCache: {
   sessions: ActiveSrc["sessions"];
   config: ActiveSrc["config"];
   unread: ActiveSrc["unread"];
-  hostPanels: ActiveSrc["hostPanels"];
   ids: string[];
 } | null = null;
 
@@ -218,7 +215,7 @@ function computeActiveIds(st: ActiveSrc): string[] {
   const all = o.allIn.includes(space);
   const added = new Set(o.added);
   return openSessionsWithProject(st.layout, st.sessions)
-    .filter((x) => (all || x.project === space) && !panelOwned(x.s, st.hostPanels) && (added.has(x.s.id) || joins(x, st, o)))
+    .filter((x) => (all || x.project === space) && !panelOwned(x.s) && (added.has(x.s.id) || joins(x, st, o)))
     .map((x) => x.s)
     .sort((a, b) => compareSessions(a, b, st.unread))
     .map((s) => s.id);

@@ -93,7 +93,6 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
   const unread = useStoreWhile(open, (s) => s.unread);
   const config = useStoreWhile(open, (s) => s.config);
   const overview = useStoreWhile(open, (s) => s.overview);
-  const hostPanels = useStoreWhile(open, (s) => s.hostPanels);
   const [picked, setPicked] = useState<string[]>([]);
   useEffect(() => {
     if (open) setPicked([]);
@@ -102,12 +101,12 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
   const all = activeAllProjects({ config, layout });
   // Memoized on the frozen store values above: the parent re-renders on every push of its tile's session
   const list = useMemo(() => {
-    const inActive = new Set(activeIds({ overview, layout, sessions, config, unread, hostPanels }));
+    const inActive = new Set(activeIds({ overview, layout, sessions, config, unread }));
     return openSessionsWithProject(layout, sessions)
-      .filter((x) => (all || x.project === space) && !inActive.has(x.s.id) && !panelOwned(x.s, hostPanels))
+      .filter((x) => (all || x.project === space) && !inActive.has(x.s.id) && !panelOwned(x.s))
       .map((x) => x.s)
       .sort((a, b) => compareSessions(a, b, unread));
-  }, [overview, layout, sessions, config, unread, hostPanels, all, space]);
+  }, [overview, layout, sessions, config, unread, all, space]);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const confirm = () => {
     addActive(picked);

@@ -515,9 +515,8 @@ export function CodeList() {
   const list = spaceWorkspaces(layout);
   // A hosting panel lists its own conversations in its part above (the secretary's workers): not again in the
   // workspace their pane sits in, nor under "active". The workspace's title says how many of them work in its folder.
-  // In Code mode too, any hosting panel's (overviewState.panelOwned): Code and those panels are kept apart both ways.
-  const hostPanels = useStore((s) => s.hostPanels);
-  const theirs = (id?: string) => !!id && ((hosted && sessions[id]?.tags?.panel === workKey) || panelOwned(sessions[id], hostPanels));
+  // In Code mode too, any panel's (overviewState.panelOwned): Code and the panels are kept apart both ways.
+  const theirs = (id?: string) => !!id && panelOwned(sessions[id]);
   const groups = sideRows(layout, undefined, sessions);
   // A workspace holding nothing but the panel's conversations (made for a worker's directory, where the person has
   // nothing open) isn't listed at all: it would be a title over "empty" for every repository a worker touched

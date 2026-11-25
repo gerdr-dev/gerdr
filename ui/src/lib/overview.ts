@@ -193,7 +193,7 @@ export function workingOutIds(st = get()): string[] {
   const space = currentSpace(st.layout);
   const shown = new Set(activeIds(st));
   return openSessionsWithProject(st.layout, st.sessions)
-    .filter((x) => (all || x.project === space) && working(x.s) && !shown.has(x.s.id) && !panelOwned(x.s, st.hostPanels))
+    .filter((x) => (all || x.project === space) && working(x.s) && !shown.has(x.s.id) && !panelOwned(x.s))
     .map((x) => x.s.id);
 }
 
