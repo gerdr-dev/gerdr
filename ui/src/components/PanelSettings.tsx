@@ -100,7 +100,13 @@ export function PanelSettings() {
 function PanelRow({ p }: { p: Panel }) {
   const phone = usePhone();
   const [busy, setBusy] = useState("");
-  const remote = p.source.remote?.replace(/^https?:\/\/(github\.com\/)?/, "");
+  // A clone of a repository on this computer (file://…, a panel being made here and installed from it) read as a file,
+  // and its 更新 as nonsense: it says 本机仓库 and the folder, from home
+  const home = useStore((s) => s.home);
+  const localRepo = p.source.remote?.startsWith("file://") ? decodeURI(p.source.remote.slice(7)) : undefined;
+  const remote = localRepo
+    ? t("panelSettings.localRepo", { path: home && localRepo.startsWith(home + "/") ? "~" + localRepo.slice(home.length) : localRepo })
+    : p.source.remote?.replace(/^https?:\/\/(github\.com\/)?/, "");
   const update = async () => {
     setBusy("update");
     try {
