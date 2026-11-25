@@ -97,6 +97,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { codeHost, get, hostOrder, markRead, set, useStore } from "@/lib/store";
+import { panelOwned } from "@/lib/overviewState";
 import { showInCodeView } from "@/core/CodeView";
 import { codeMenuItems } from "@/lib/codeMenu";
 import { whenCaughtUp } from "@/lib/catchup";
@@ -514,17 +515,18 @@ export function CodeList() {
   const list = spaceWorkspaces(layout);
   // A hosting panel lists its own conversations in its part above (the secretary's workers): not again in the
   // workspace their pane sits in, nor under "active". The workspace's title says how many of them work in its folder.
-  const theirs = (id?: string) => hosted && !!id && sessions[id]?.tags?.panel === workKey;
+  // In Code mode too, any hosting panel's (overviewState.panelOwned): Code and those panels are kept apart both ways.
+  const hostPanels = useStore((s) => s.hostPanels);
+  const theirs = (id?: string) => !!id && ((hosted && sessions[id]?.tags?.panel === workKey) || panelOwned(sessions[id], hostPanels));
   const groups = sideRows(layout, undefined, sessions);
   // A workspace holding nothing but the panel's conversations (made for a worker's directory, where the person has
   // nothing open) isn't listed at all: it would be a title over "empty" for every repository a worker touched
   const onlyTheirs = new Set<string>();
-  if (hosted)
-    for (const [id, rows] of groups) {
-      const rest = rows.filter((r) => !theirs(r.pane.sessionId));
-      if (rows.length && !rest.length) onlyTheirs.add(id);
-      groups.set(id, rest);
-    }
+  for (const [id, rows] of groups) {
+    const rest = rows.filter((r) => !theirs(r.pane.sessionId));
+    if (rows.length && !rest.length) onlyTheirs.add(id);
+    groups.set(id, rest);
+  }
   const panelLive = hosted ? Object.values(sessions).filter((s) => s.tags?.panel === workKey && (s.status === "running" || needsYou(s))) : [];
   const liveIn = (ws: Workspace) => {
     const dir = ws.cwd?.replace(/\/+$/, "");

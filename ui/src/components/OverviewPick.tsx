@@ -7,7 +7,7 @@ import { basename, focusSession, newAgentInOverview, newTabForOverview } from "@
 import { currentSpace, spaceList } from "@/lib/layout";
 import { compareSessions } from "@/lib/order";
 import { activeAllProjects, activeIds, addActive, focusTile, placeTilesAfter, toggleOverview } from "@/lib/overview";
-import { openSessionsWithProject } from "@/lib/overviewState";
+import { openSessionsWithProject, panelOwned } from "@/lib/overviewState";
 import { useStore, useStoreWhile } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
@@ -93,6 +93,7 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
   const unread = useStoreWhile(open, (s) => s.unread);
   const config = useStoreWhile(open, (s) => s.config);
   const overview = useStoreWhile(open, (s) => s.overview);
+  const hostPanels = useStoreWhile(open, (s) => s.hostPanels);
   const [picked, setPicked] = useState<string[]>([]);
   useEffect(() => {
     if (open) setPicked([]);
@@ -101,12 +102,12 @@ function PickActive({ open, onClose, after }: { open: boolean; onClose: () => vo
   const all = activeAllProjects({ config, layout });
   // Memoized on the frozen store values above: the parent re-renders on every push of its tile's session
   const list = useMemo(() => {
-    const inActive = new Set(activeIds({ overview, layout, sessions, config, unread }));
+    const inActive = new Set(activeIds({ overview, layout, sessions, config, unread, hostPanels }));
     return openSessionsWithProject(layout, sessions)
-      .filter((x) => (all || x.project === space) && !inActive.has(x.s.id))
+      .filter((x) => (all || x.project === space) && !inActive.has(x.s.id) && !panelOwned(x.s, hostPanels))
       .map((x) => x.s)
       .sort((a, b) => compareSessions(a, b, unread));
-  }, [overview, layout, sessions, config, unread, all, space]);
+  }, [overview, layout, sessions, config, unread, hostPanels, all, space]);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const confirm = () => {
     addActive(picked);

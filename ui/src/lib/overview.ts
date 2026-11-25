@@ -19,6 +19,7 @@ import {
   openSessionsWithProject,
   overviewFocus,
   overviewIds,
+  panelOwned,
   panelTiles,
   phoneOrder,
   toPin,
@@ -192,7 +193,7 @@ export function workingOutIds(st = get()): string[] {
   const space = currentSpace(st.layout);
   const shown = new Set(activeIds(st));
   return openSessionsWithProject(st.layout, st.sessions)
-    .filter((x) => (all || x.project === space) && working(x.s) && !shown.has(x.s.id))
+    .filter((x) => (all || x.project === space) && working(x.s) && !shown.has(x.s.id) && !panelOwned(x.s, st.hostPanels))
     .map((x) => x.s.id);
 }
 

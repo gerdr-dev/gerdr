@@ -131,6 +131,11 @@ type State = {
    */
   codeHosts: Record<string, CodeHost>;
   /**
+   * Every panel seen hosting Code on this device (keys; localStorage, since a panel's page isn't mounted while Code
+   * mode shows). Their conversations (tags.panel) are theirs alone: Code doesn't list them (overviewState.panelOwned).
+   */
+  hostPanels: string[];
+  /**
    * The folders a hosting panel offers as quick picks on the new-conversation page (core useCodeDirs), by panel key,
    * in place of Code's own (the project's workspaces): a panel that doesn't group by workspace has its own idea of
    * where work goes (the repositories in its settings).
@@ -217,6 +222,7 @@ export const useStore = create<State>(() => ({
   mountWatch: {},
   workPanels: loadWorkPanels(),
   codeHosts: {},
+  hostPanels: loadHostPanels(),
   codeDirs: {},
   codeOverviews: {},
   panelUpdates: 0,
@@ -443,8 +449,28 @@ export const hostsCode = (s: Pick<State, "mode" | "layout" | "workPanels" | "cod
  */
 export const codeShown = (s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()) => s.mode !== "work" || hostsCode(s);
 
+// A function (hoisted) with the key inside: the store is created above, before a const here would be initialised
+function hostPanelsKey() {
+  return "gerdr.hostPanels";
+}
+function loadHostPanels(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(hostPanelsKey()) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 /** core CodeView mounting / unmounting in panel `key`. */
 export function setCodeHost(key: string, host: CodeHost | null) {
+  if (host && !get().hostPanels.includes(key)) {
+    const hostPanels = [...get().hostPanels, key];
+    set({ hostPanels });
+    try {
+      localStorage.setItem(hostPanelsKey(), JSON.stringify(hostPanels));
+    } catch {}
+  }
   const cur = get().codeHosts;
   if (cur[key]?.list === host?.list) return;
   const next = { ...cur };
