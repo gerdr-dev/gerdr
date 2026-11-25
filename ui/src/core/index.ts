@@ -29,7 +29,6 @@ export {
   useCodeDirs,
   useCodeStart,
   useCodeOrder,
-  useCodeClosed,
   useCodeNumber,
   type CodeDir,
   newCodeTab,

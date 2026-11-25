@@ -396,22 +396,6 @@ export function setCodeOrder(key: string, ids: string[] | null) {
   if (ids) codeOrders.set(key, ids);
   else codeOrders.delete(key);
 }
-/**
- * Told when the person closes a pane holding a conversation while the panel hosts Code (core useCodeClosed), by
- * panel key: whether that closes anything of its own is the panel's call (a task opened and never spoken to goes).
- */
-const codeCloseds = new Map<string, (session: string) => void>();
-export function setCodeClosed(key: string, fn: ((session: string) => void) | null) {
-  if (fn) codeCloseds.set(key, fn);
-  else codeCloseds.delete(key);
-}
-export function hostClosed(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): ((session: string) => void) | undefined {
-  if (!codeHost(s)) return undefined;
-  const space = currentSpace(s.layout);
-  const panel = s.workPanels[space];
-  return codeCloseds.get(panel ? `${space}/${panel}` : space);
-}
-
 /** The on-screen hosting panel's order, when it gave one. */
 export function hostOrder(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): string[] | undefined {
   if (!codeHost(s)) return undefined;

@@ -1131,6 +1131,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const starting = useStore((s) => !!s.starting[pane.id]);
   const inTodo = useStore((s) => !!pane.sessionId && activeIds(s).includes(pane.sessionId));
   const noActive = useStore((s) => codeHost(s)?.list === "replace");
+  const taskOnly = noActive && !!session && leaves(tab.root).length === 1;
   const agents = useStore((s) => s.agents);
   const home = useStore((s) => s.home);
   // The tab's only pane on a phone: the top bar (PhoneBar) already says its title and status, so this bar says where
@@ -1364,16 +1365,24 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
                     )}
                   </>
                 )}
-                <DropdownMenuItem onClick={() => closeSession(session.id)}>
-                  <CircleX /> {t("panes.closeSession")}
+                {!taskOnly && (
+                  <DropdownMenuItem onClick={() => closeSession(session.id)}>
+                    <CircleX /> {t("panes.closeSession")}
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
+            {/* A panel's list of tasks (list="replace") has no tabs to close: a task alone on screen has no close here, as
+                ⌘W does nothing on it (actions/hosted.ts); a part of a split still closes */}
+            {!taskOnly && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => (focusPane(pane.id), closeFocusedPane())}>
+                  <X /> {t("panes.closePane")}
+                  <ActionKeys action="closePane" />
                 </DropdownMenuItem>
               </>
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => (focusPane(pane.id), closeFocusedPane())}>
-              <X /> {t("panes.closePane")}
-              <ActionKeys action="closePane" />
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

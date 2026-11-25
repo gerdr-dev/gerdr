@@ -367,12 +367,6 @@ declare module "@gerdr/core" {
    * the workspace keys do nothing. CodeRow numbers itself while ⌘ is held; for a row you draw yourself, useCodeNumber.
    */
   export function useCodeOrder(sessions: string[]): void;
-  /**
-   * With CodeView: called when the person closes a pane holding a conversation (⌘W, its close button, its tab) and it
-   * shows nowhere else. Closing a pane isn't giving the work up: what it means for yours is your call (e.g. a task
-   * opened with ⌘T and never spoken to goes away).
-   */
-  export function useCodeClosed(fn: (session: string) => void): void;
   /** With useCodeOrder: the number (1–9) to show on this conversation's row while ⌘ is held, else undefined. */
   export function useCodeNumber(session?: string): number | undefined;
   export function useCodeStart(fn: (o: { agent: string; cwd: string; mode?: string; continueFrom?: string }) => Promise<string>): void;

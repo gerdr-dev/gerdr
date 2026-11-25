@@ -940,6 +940,9 @@ const Row = memo(function Row({
   const close = () => (inSplit ? closePaneById(pane.id) : closeTab(tab.id));
   const onActive = (on: boolean) => s && (on ? addActive([s.id]) : removeActive(s.id));
   const dismiss = top && s ? () => onActive(false) : close;
+  // Where a panel draws the whole list its rows are tasks, not tabs: there's nothing to close on one (the person,
+  // 2026-11-25: the × on a task's row, as ⌘W, closed a "window" the list never shows). A part of a split still closes
+  const noClose = noActive && !!s && !inSplit;
   // Already in the tab on screen (alone or in its split): nothing to put beside it
   const canBeside = !inActiveTab;
   const openBeside = () => {
@@ -998,7 +1001,7 @@ const Row = memo(function Row({
           onClick={(e) => e.timeStamp - took.current > 800 && pick()}
           onDoubleClick={() => s && set({ dialog: { kind: "rename", target: "session", id: s.id, value: s.title ?? "" } })}
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-          onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
+          onAuxClick={(e) => e.button === 1 && (e.preventDefault(), !noClose && dismiss())}
           className={cn(
             "group relative cursor-default rounded-md text-[12px] select-none",
             // With a line under it (`below`) the row is this box and the line together: one thing to hover, click,
@@ -1048,19 +1051,21 @@ const Row = memo(function Row({
                 <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
                   {title}
                 </span>
-                <HostTag session={s} className="py-0.5 group-hover:hidden" iconOnly />
-                <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
+                <HostTag session={s} className={cn("py-0.5", !noClose && "group-hover:hidden")} iconOnly />
+                <span className={cn("flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground", !noClose && "group-hover:hidden")}>
                   {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
                 </span>
               </>
             )}
-            <button
-              className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-              title={top && s ? t("nav.removeActive") : inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
-              onClick={(e) => (e.stopPropagation(), dismiss())}
-            >
-              <X className="size-3" />
-            </button>
+            {!noClose && (
+              <button
+                className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
+                title={top && s ? t("nav.removeActive") : inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
+                onClick={(e) => (e.stopPropagation(), dismiss())}
+              >
+                <X className="size-3" />
+              </button>
+            )}
             {/* Always drawn (transparent when there is nothing to show, or no session at all: a file / terminal pane)
               so the right-hand labels line up in one column across every row. */}
             <StatusDot status={dotStatus(s)} unread={unread} />
@@ -1105,10 +1110,14 @@ const Row = memo(function Row({
           </ContextMenuItem>
         )}
         <RowPanelItems pane={pane.id} session={s?.id} />
-        <ContextMenuSeparator />
-        <ContextMenuItem variant="destructive" onClick={close}>
-          <CircleX /> {inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
-        </ContextMenuItem>
+        {!noClose && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive" onClick={close}>
+              <CircleX /> {inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
+            </ContextMenuItem>
+          </>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

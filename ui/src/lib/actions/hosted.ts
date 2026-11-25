@@ -46,26 +46,34 @@ function previous() {
 }
 
 /**
- * ⌘W here moves on from the task in front to the row next to it in the list, not to the next tab of its workspace
- * (which the list doesn't show, or a blank page Code puts back). The list has no "open" or "closed" (the person,
- * 2026-11-25: 任务和窗口的概念不应该暴露出来), so it stops nothing: no second press to confirm, which read as the key
- * doing nothing, and a conversation still working keeps working (Code's close would cancel its turn). An idle one's
- * agent is let go as in Code; it comes back with the next message. A pane closed out of a split leaves the rest of
- * that tab in front.
+ * ⌘W where the list is tasks, not tabs (the person, 2026-11-25: 任务和窗口的概念不应该暴露出来, and a ⌘W that only
+ * moved to the next row meant nothing anyone could tell). It acts only where there is something to close that one
+ * can see go:
+ *   - a split: that part of it goes, the rest of the tab fills its place (Code's own close);
+ *   - a new conversation not spoken to yet (⌘T's, or the new-conversation page): it goes (a panel lists an empty task of
+ *     its own only while it's on screen, so ⇧⌘T brings back the same task) and the one shown before it comes back;
+ *   - a task alone on screen: nothing. A task isn't closed; it ends by moving it to 已完成.
+ * Nothing it closes is stopped while working, and there is no second press to confirm.
  */
-function closeThenLand(close: Run, whole: boolean): Run {
+function close(whole: boolean): Run {
   return () => {
-    const ids = order();
-    const was = here();
-    const i = ids.indexOf(was ?? "\0");
-    const before = get().layout;
-    const split = !whole && leaves(activeTab(before).root).length > 1;
-    close();
-    if (get().layout === before) return;
+    const l = get().layout;
+    const tab = activeTab(l);
+    const split = !whole && leaves(tab.root).length > 1;
+    const id = here();
+    const s = id ? get().sessions[id] : undefined;
+    // An agent's conversation with nothing in it yet (no events, no title): what ⌘T opens. A pane with no
+    // conversation is the new-conversation page itself
+    const empty = !id || (!!s && !s.lastSeq && !s.title);
+    if (!split && !empty) return;
+    // The one seen before: the new-conversation page has no conversation, so the last one seen is still "now"
+    const back = id ? shown.before : shown.now;
+    if (whole) closeTab(undefined, true);
+    else closeFocusedPane(true);
     if (split) return;
-    const rest = ids.filter((x) => x !== was);
-    const next = i < 0 ? rest[0] : (rest[i] ?? rest[i - 1]);
-    if (next) show(next);
+    const ids = order();
+    const to = back && back !== id && get().sessions[back] ? back : ids.find((x) => x !== id);
+    if (to) show(to);
   };
 }
 
@@ -79,8 +87,8 @@ export function hostedKeys(nth: (i: number) => void): Partial<Record<KeyAction, 
     prevTab: () => step(-1),
     lastTab: previous,
     ...digits("tab", nth),
-    closePane: closeThenLand(() => closeFocusedPane(true), false),
-    closeTab: closeThenLand(() => closeTab(undefined, true), true),
+    closePane: close(false),
+    closeTab: close(true),
     // No tab names in the list (they were taken out of Code's rows too)
     renameTab: nothing,
     // No workspaces in the list: switching one only changed what's behind it, closing one closed its tasks' panes

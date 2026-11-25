@@ -16,7 +16,6 @@ import {
   setCodeHost,
   setCodeOrder,
   setCodeStart,
-  setCodeClosed,
   hostOrder,
   useStore,
 } from "@/lib/store";
@@ -217,22 +216,6 @@ export function useCodeOrder(sessions: string[]) {
     setCodeOrder(key, sig ? sig.split(",") : []);
     return () => setCodeOrder(key, null);
   }, [key, sig]);
-}
-
-/**
- * Told when the person closes a pane holding a conversation while this panel hosts Code (⌘W, a pane's close, closing
- * its tab) and it is shown nowhere else: what that means for the panel is its own call — a task opened with ⌘T and
- * never spoken to can go, one with work in it stays (closing its pane isn't giving it up).
- */
-export function useCodeClosed(fn: (session: string) => void) {
-  const key = useContext(PanelKeyContext);
-  const f = useRef(fn);
-  f.current = fn;
-  useEffect(() => {
-    if (!key) return;
-    setCodeClosed(key, (s) => f.current(s));
-    return () => setCodeClosed(key, null);
-  }, [key]);
 }
 
 /** The number ⌘N puts on this conversation's row while ⌘ is held (1–9), for a row the panel draws itself; else undefined. */

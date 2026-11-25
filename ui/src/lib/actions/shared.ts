@@ -1,7 +1,7 @@
 // Helpers the action files share. lib/actions.ts does not re-export them (apart from basename).
 import { api } from "../api";
 import { activeTab, activeWs, DEFAULT_SPACE, findLeaf, locateSession, newTab, updateWs, type Layout, type PaneLeaf, type Workspace } from "../layout";
-import { get, hostClosed } from "../store";
+import { get } from "../store";
 
 export const basename = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
 
@@ -33,14 +33,11 @@ export function killTerms(panes: PaneLeaf[]) {
  */
 export function shutdownGone(panes: PaneLeaf[], keepBusy = false) {
   const l = get().layout;
-  // A panel hosting Code hears of it too (core useCodeClosed): a task it opened that was never spoken to can go
-  const told = hostClosed();
   for (const p of panes) {
     const s = p.sessionId ? get().sessions[p.sessionId] : undefined;
     if (!s || locateSession(l, s.id)) continue;
     // keepBusy (a panel hosting Code: there ⌘W only moves on, actions/hosted.ts): one still working isn't stopped
     if (!(keepBusy && (s.status === "running" || s.status === "waiting" || s.status === "starting"))) api.shutdown(s.id).catch(() => {});
-    told?.(s.id);
   }
 }
 
