@@ -121,7 +121,7 @@ export function lastTab() {
   });
 }
 
-export function closeTab(tabId?: string) {
+export function closeTab(tabId?: string, keepBusy = false) {
   const l = get().layout;
   const ws = l.workspaces.find((w) => w.tabs.some((t) => t.id === (tabId ?? activeWs(l).activeTab))) ?? activeWs(l);
   const id = tabId ?? ws.activeTab;
@@ -132,7 +132,7 @@ export function closeTab(tabId?: string) {
     const w = l.workspaces.find((x) => x.id === ws.id);
     return w ? removeTab(l, w, id) : l;
   });
-  shutdownGone(tab ? leaves(tab.root) : []);
+  shutdownGone(tab ? leaves(tab.root) : [], keepBusy);
 }
 
 export function renameTab(tabId: string, name: string) {

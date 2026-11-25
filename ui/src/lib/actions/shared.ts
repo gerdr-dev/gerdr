@@ -31,15 +31,17 @@ export function killTerms(panes: PaneLeaf[]) {
  * 和 herdr 关 pane 就结束里面的 agent 一个意思 —— 不然它没人看得见地挂着，claude 进程要白占几百 MB 到闲置超时。
  * 记录留着：⌘⇧T 能原样放回来，下次发话再 --resume 接上。要在 setLayout 之后调（看的是关完之后的布局）。
  */
-export function shutdownGone(panes: PaneLeaf[]) {
+export function shutdownGone(panes: PaneLeaf[], keepBusy = false) {
   const l = get().layout;
   // A panel hosting Code hears of it too (core useCodeClosed): a task it opened that was never spoken to can go
   const told = hostClosed();
-  for (const p of panes)
-    if (p.sessionId && get().sessions[p.sessionId] && !locateSession(l, p.sessionId)) {
-      api.shutdown(p.sessionId).catch(() => {});
-      told?.(p.sessionId);
-    }
+  for (const p of panes) {
+    const s = p.sessionId ? get().sessions[p.sessionId] : undefined;
+    if (!s || locateSession(l, s.id)) continue;
+    // keepBusy (a panel hosting Code: there ⌘W only moves on, actions/hosted.ts): one still working isn't stopped
+    if (!(keepBusy && (s.status === "running" || s.status === "waiting" || s.status === "starting"))) api.shutdown(s.id).catch(() => {});
+    told?.(s.id);
+  }
 }
 
 export function removeTab(l: Layout, ws: Workspace, tabId: string): Layout {

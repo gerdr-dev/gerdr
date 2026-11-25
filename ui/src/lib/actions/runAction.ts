@@ -166,7 +166,7 @@ const WORK: Partial<Record<KeyAction, Run>> = {
 const TABLES: Record<ViewName, Partial<Record<KeyAction, Run>>> = { code: CODE, overview: OVERVIEW, work: WORK };
 
 // A panel hosting Code with its own list: the keys about tabs and workspaces go by that list (hosted.ts)
-const HOSTED = hostedKeys(CODE, (i) => APP[`active${i as Digit}`]());
+const HOSTED = hostedKeys((i) => APP[`active${i as Digit}`]());
 
 export function runAction(a: KeyAction) {
   const view = currentView();

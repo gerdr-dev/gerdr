@@ -8,8 +8,8 @@ import type { KeyAction } from "../keys";
 import { activeTab, leaves, locateSession } from "../layout";
 import { focusedSession, get, hostOrder, markRead, useStore } from "../store";
 import { toggleOverview } from "../overview";
-import { focusPane } from "./panes";
-import { addTabForSession } from "./tabs";
+import { closeFocusedPane, focusPane } from "./panes";
+import { addTabForSession, closeTab } from "./tabs";
 
 type Run = () => void;
 
@@ -46,9 +46,12 @@ function previous() {
 }
 
 /**
- * Close what's in front with Code's own close (`close`: its double press for a running agent included), then land on
- * the row next to the closed one in the list, not on the next tab of its workspace (which the list doesn't show, or
- * a blank page Code puts back). A pane closed out of a split leaves the rest of that tab in front, as in Code.
+ * ⌘W here moves on from the task in front to the row next to it in the list, not to the next tab of its workspace
+ * (which the list doesn't show, or a blank page Code puts back). The list has no "open" or "closed" (the person,
+ * 2026-11-25: 任务和窗口的概念不应该暴露出来), so it stops nothing: no second press to confirm, which read as the key
+ * doing nothing, and a conversation still working keeps working (Code's close would cancel its turn). An idle one's
+ * agent is let go as in Code; it comes back with the next message. A pane closed out of a split leaves the rest of
+ * that tab in front.
  */
 function closeThenLand(close: Run, whole: boolean): Run {
   return () => {
@@ -58,7 +61,7 @@ function closeThenLand(close: Run, whole: boolean): Run {
     const before = get().layout;
     const split = !whole && leaves(activeTab(before).root).length > 1;
     close();
-    if (get().layout === before) return; // not closed (the first press on a running agent)
+    if (get().layout === before) return;
     if (split) return;
     const rest = ids.filter((x) => x !== was);
     const next = i < 0 ? rest[0] : (rest[i] ?? rest[i - 1]);
@@ -68,16 +71,16 @@ function closeThenLand(close: Run, whole: boolean): Run {
 
 const nothing: Run = () => {};
 
-/** What replaces Code's table entries while hosted; the rest stay Code's. `code` is Code's table, for its closes. */
-export function hostedKeys(code: Partial<Record<KeyAction, Run>>, nth: (i: number) => void): Partial<Record<KeyAction, Run>> {
+/** What replaces Code's table entries while hosted; the rest stay Code's. `nth`: ⌘N's go-to. */
+export function hostedKeys(nth: (i: number) => void): Partial<Record<KeyAction, Run>> {
   const digits = (prefix: string, f: (i: number) => void) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => [`${prefix}${i}`, () => f(i)]));
   return {
     nextTab: () => step(1),
     prevTab: () => step(-1),
     lastTab: previous,
     ...digits("tab", nth),
-    closePane: closeThenLand(code.closePane!, false),
-    closeTab: closeThenLand(code.closeTab!, true),
+    closePane: closeThenLand(() => closeFocusedPane(true), false),
+    closeTab: closeThenLand(() => closeTab(undefined, true), true),
     // No tab names in the list (they were taken out of Code's rows too)
     renameTab: nothing,
     // No workspaces in the list: switching one only changed what's behind it, closing one closed its tasks' panes

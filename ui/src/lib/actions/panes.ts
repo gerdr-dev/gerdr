@@ -249,7 +249,8 @@ export function openSubagent(sessionId: string, toolCallId: string, title?: stri
   });
 }
 
-export function closeFocusedPane() {
+/** keepBusy: a conversation still working keeps going (shutdownGone); a panel hosting Code closes this way. */
+export function closeFocusedPane(keepBusy = false) {
   const l = get().layout;
   const p = focusedLeaf(l);
   if (p) rememberPane(activeWs(l), activeTab(l), p);
@@ -261,7 +262,7 @@ export function closeFocusedPane() {
     if (next) return updateTab(l, t.id, () => next);
     return removeTab(l, ws, t.id);
   });
-  shutdownGone(p ? [p] : []);
+  shutdownGone(p ? [p] : [], keepBusy);
 }
 
 // Closing a pane ends its agent, cancelling a turn in flight, so ⌘W / prefix+x on an agent that is mid-turn (running, or
