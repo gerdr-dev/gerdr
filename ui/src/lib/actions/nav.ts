@@ -5,27 +5,39 @@
 // it (that's its view, not ours).
 import { activeTab, allLeaves, currentSpace, spaceOf, type Layout } from "../layout";
 import { isNative } from "../native";
-import { get, overviewShown, setMode, useStore } from "../store";
+import { codeShown, get, overviewShown, setMode, setWorkPanel, useStore } from "../store";
 import { focusPane } from "./panes";
 
 type Mode = "agents" | "work";
 /** pane: the focused one, also kept for Work, where it says which project to come back to (the Work view shows the current one). */
-type Place = { mode: Mode; pane: string; space: string };
+/**
+ * panel: which panel of the project the Work view showed. panes: Code's panes were what showed — Code mode, or a panel
+ * that hosts Code (core CodeView), where going from one conversation to another is a step like in Code. Such a panel
+ * used to count as one place whatever pane was in front (as a page that covers the panes does), so back from
+ * conversation B went out of the panel instead of to A.
+ */
+type Place = { mode: Mode; pane: string; space: string; panel: string; panes: boolean };
 
 const MAX = 100;
 const back: Place[] = [];
 const forward: Place[] = [];
 let jumping = false;
 
-const here = (l: Layout, mode: Mode): Place => ({ mode, pane: activeTab(l).focus, space: currentSpace(l) });
-// In Work the pane under it isn't seen, so moving it isn't going anywhere; only the project is
-const key = (p: Place) => (p.mode === "work" ? `w:${p.space}` : `a:${p.pane}`);
-let cur = here(get().layout, get().mode);
+type Shown = Parameters<typeof codeShown>[0] & { mode: Mode };
+const here = (s: NonNullable<Shown>): Place => {
+  const space = currentSpace(s.layout);
+  return { mode: s.mode, pane: activeTab(s.layout).focus, space, panel: s.mode === "work" ? (s.workPanels[space] ?? "") : "", panes: codeShown(s) };
+};
+// In a Work page that covers the panes, the pane under it isn't seen, so moving it isn't going anywhere; only the
+// project and its panel are
+const key = (p: Place) => (p.panes ? `a:${p.mode}:${p.panel}:${p.pane}` : `w:${p.space}:${p.panel}`);
+let cur = here(get());
 
 useStore.subscribe((s, p) => {
-  if (s.layout === p.layout && s.mode === p.mode) return;
-  const next = here(s.layout, s.mode);
-  if (key(next) === key(cur)) return void (cur = next);
+  if (s.layout === p.layout && s.mode === p.mode && s.workPanels === p.workPanels && s.codeHosts === p.codeHosts) return;
+  const next = here(s);
+  // A panel saying it hosts Code (a moment after it is switched to) changes what kind of place this is, not where
+  if (key(next) === key(cur) || (s.layout === p.layout && s.mode === p.mode && s.workPanels === p.workPanels)) return void (cur = next);
   if (!jumping) {
     if (!back.length || key(back[back.length - 1]) !== key(cur)) back.push(cur);
     if (back.length > MAX) back.shift();
@@ -38,7 +50,7 @@ useStore.subscribe((s, p) => {
 function target(l: Layout, p: Place): string | undefined {
   const all = allLeaves(l);
   if (all.some((x) => x.pane.id === p.pane)) return p.pane;
-  if (p.mode === "work") return all.find((x) => spaceOf(x.ws) === p.space)?.pane.id;
+  if (!p.panes) return all.find((x) => spaceOf(x.ws) === p.space)?.pane.id;
 }
 
 // Moves one step along `from`, putting where we are onto `to`. Places that are gone (pane or project closed, here or on
@@ -56,6 +68,7 @@ function step(from: Place[], to: Place[]) {
     try {
       // Pane first: in Work it picks the project the view then shows
       focusPane(pane);
+      if (p.mode === "work" && (get().workPanels[p.space] ?? "") !== p.panel) setWorkPanel(p.space, p.panel);
       if (get().mode !== p.mode) setMode(p.mode);
     } finally {
       jumping = false;
