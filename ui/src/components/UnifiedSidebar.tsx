@@ -453,20 +453,21 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                   {hosted && <div ref={setCodeSlot} data-code-slot />}
                   {/* Code's default list: all there is in Code mode; under the panel's part, or left out, when hosted */}
                   {!replaced && <CodeList />}
-                  <div className="mt-1 flex gap-1 px-0.5">
-                    <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
-                      <Plus className="size-3.5" /> {t("unifiedSidebar.newTab")}
-                    </FootButton>
-                    <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
-                      <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
-                    </FootButton>
-                    {/* A new workspace is a new group of Code's default list: nothing to show for it without that list */}
-                    {!replaced && (
+                  {/* Code's footer (new tab, terminal, new workspace). Not under a panel that draws the whole list: its rows are
+                      tasks, not tabs, and it has its own + to start one (the person, 2026-11-25: 去掉新 tab，终端也去掉) */}
+                  {!replaced && (
+                    <div className="mt-1 flex gap-1 px-0.5">
+                      <FootButton onClick={() => (toggleOverview(false), addTab())} title={t("unifiedSidebar.newTabHint")}>
+                        <Plus className="size-3.5" /> {t("unifiedSidebar.newTab")}
+                      </FootButton>
+                      <FootButton onClick={() => (toggleOverview(false), openTerminal("tab"))} title={t("unifiedSidebar.terminalHint")}>
+                        <SquareTerminal className="size-3.5" /> {t("unifiedSidebar.terminal")}
+                      </FootButton>
                       <FootButton onClick={() => set({ dialog: { kind: "newWorkspace" } })} title={t("unifiedSidebar.newGroupHint")}>
                         <Plus className="size-3.5" /> {t("unifiedSidebar.newGroup")}
                       </FootButton>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
