@@ -1255,6 +1255,7 @@ const ComposerImpl = forwardRef<
 
   const modes = session.modes;
   const opts = session.configOptions ?? [];
+  const agentName = host.agentName?.(session.agent) ?? session.agent;
   // 新会话的默认值（宿主有才有「设为默认」）：设完下拉里马上显示「已是默认」
   const defaults = hooks.useDefaults?.(session.agent);
   const defs = defaults?.values ?? {};
@@ -1631,15 +1632,12 @@ const ComposerImpl = forwardRef<
             )}
             {compact ? (
               <OptionsMenu
+                agentName={agentName}
                 mode={modeGroup}
                 groups={optGroups}
                 short={tight}
                 onSetDefault={
-                  defaults &&
-                  (() => {
-                    defaults.setAll(Object.fromEntries([modeGroup, ...optGroups].filter((g) => !!g).map((g) => [g!.id, g!.value])));
-                    toast.success(tr("composer.defaultsSaved"));
-                  })
+                  defaults && (() => defaults.setAll(Object.fromEntries((modeGroup ? [modeGroup, ...optGroups] : optGroups).map((g) => [g.id, g.value]))))
                 }
               />
             ) : (
@@ -1650,34 +1648,24 @@ const ComposerImpl = forwardRef<
                   g && (
                     <OptionMenu
                       key={g.id}
+                      agentName={agentName}
                       label={g.label}
                       value={g.value}
                       options={g.options}
                       onChange={g.onChange}
                       defaultValue={g.defaultValue}
                       actual={g.actual}
-                      onSetDefault={
-                        defaults &&
-                        (() => {
-                          defaults.set(g.id, g.value);
-                          toast.success(tr("composer.defaultSaved", { label: g.label }));
-                        })
-                      }
+                      onSetDefault={defaults && (() => defaults.set(g.id, g.value))}
                     />
                   ),
               )
             )}
             {!compact && optGroups.length > 1 && (
               <OptionsMenu
+                agentName={agentName}
                 groups={optGroups}
                 chevron
-                onSetDefault={
-                  defaults &&
-                  (() => {
-                    defaults.setAll(Object.fromEntries(optGroups.map((g) => [g.id, g.value])));
-                    toast.success(tr("composer.defaultsSaved"));
-                  })
-                }
+                onSetDefault={defaults && (() => defaults.setAll(Object.fromEntries(optGroups.map((g) => [g.id, g.value]))))}
               />
             )}
             {host.composerBar?.(session, { paneId })}

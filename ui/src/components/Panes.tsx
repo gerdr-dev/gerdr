@@ -41,7 +41,7 @@ import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
 import { BrowserOutCard, PopOutItem } from "./browser/BrowserOut";
 import { NewsDot } from "./browser/NewsDot";
-import { codeMenuItems, codePaneTag, paneTagVersion, subscribePaneTags } from "@/lib/codeMenu";
+import { codeMenuItems, codePaneTag, paneTagVersion, subscribePaneTags, type CodeMenuItem } from "@/lib/codeMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -57,6 +57,7 @@ import {
   reopenTerminal,
   runAction,
   splitFocused,
+  switchAgentInPane,
   toggleFloatPane,
   minimizePane,
   toggleZoom,
@@ -107,6 +108,8 @@ import { startPaneDrag, useDrag, type TabGhost } from "./TabDrag";
 import { TerminalView } from "./Terminal";
 import { BOX_TRANSITION, useZoomAnim } from "@/lib/zoomAnim";
 import { t } from "@/lib/i18n";
+import type { AgentInfo, SessionSummary } from "@/lib/types";
+import { workProjectOf } from "@/lib/work";
 
 /** 这个 tab 是不是正显示着的那个（藏着的 tab 里的 pane 不算有焦点，不抢光标、不标已读）。 */
 export const TabActive = createContext(true);
@@ -1122,6 +1125,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   // the agent works instead (asked for: one title per screen, the path the desktop bar has had all along)
   const alone = usePhone() && leaves(tab.root).length === 1;
   const [more, setMore] = useState(false);
+  const [switchingAgent, setSwitchingAgent] = useState(false);
   useStore((s) => s.addonVersion);
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
@@ -1137,6 +1141,17 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : t("panes.newSession");
   const title = applyPaneTitle(pane, tab, base);
   const drag = usePaneDrag(pane.id, { label: title, agent: session?.agent });
+  const pickAgent = async (agent: string) => {
+    if (!session || switchingAgent) return;
+    setSwitchingAgent(true);
+    try {
+      await switchAgentInPane(pane.id, session.id, agent);
+    } catch {
+      // continueSession reports the error.
+    } finally {
+      setSwitchingAgent(false);
+    }
+  };
 
   return (
     <div
@@ -1208,8 +1223,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         <PaneCount count={count} />
         <DropdownMenu onOpenChange={(o) => !o && setMore(false)}>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-6">
-              <MoreHorizontal className="size-3.5" />
+            <Button variant="ghost" size="icon" className="size-6" title={switchingAgent ? t("panes.switchingAgent") : undefined}>
+              {switchingAgent ? <PixelLoader className="size-3.5" /> : <MoreHorizontal className="size-3.5" />}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -1257,7 +1272,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
               </DropdownMenuItem>
             )}
             {/* The hosting panel's own items for this pane (lib/codeMenu.ts): a task's status and the like */}
-            <PanelMenuItems pane={pane.id} session={pane.sessionId} />
+            <PanelMenuItems key={session?.id} pane={pane.id} session={session} switching={switchingAgent} pickAgent={pickAgent} />
             {session && (
               <>
                 <DropdownMenuSeparator />
@@ -1379,8 +1394,66 @@ function resumeCommand(agent: string, cwd: string, agentSessionId: string): stri
  * content mounts then): asked as the title bar draws, the answer was from before the panel had registered, and went
  * stale as the panel's own data moved (a task already in 待验收 still offered 移到待验收).
  */
-function PanelMenuItems({ pane, session }: { pane: string; session?: string }) {
-  const items = codeMenuItems(pane, session);
+function PanelMenuItems({
+  pane,
+  session,
+  switching,
+  pickAgent,
+}: {
+  pane: string;
+  session?: SessionSummary;
+  switching: boolean;
+  pickAgent: (agent: string) => void;
+}) {
+  const panelItems = codeMenuItems(pane, session?.id);
+  // The panel switches its own secretary so its settings and tracked session move together.
+  const panelSwitch = panelItems.find((it) => it.id === "agent" && it.children?.length);
+  const canSwitch = session && !session.tags?.panel && !workProjectOf(session.id) && !panelSwitch;
+  const host = canSwitch ? session.host?.id : undefined;
+  const agents = useStore((s) => s.agents);
+  const [remote, setRemote] = useState<AgentInfo[]>();
+  const [remoteError, setRemoteError] = useState("");
+  useEffect(() => {
+    if (!host) return;
+    let active = true;
+    api.agents(host).then(
+      ({ agents }) => active && setRemote(agents),
+      (error) => active && setRemoteError(String(error.message ?? error)),
+    );
+    return () => {
+      active = false;
+    };
+  }, [host]);
+
+  const items: CodeMenuItem[] = panelItems.flatMap((it) => {
+    if (it !== panelSwitch) return [it];
+    // The secretary's panel menu uses agent-default for inheritance and agent-<id> for explicit choices.
+    const children = it
+      .children!.filter((choice) => choice.id !== "agent-default")
+      .map((choice) => ({ ...choice, icon: <AgentIcon agent={choice.id.slice("agent-".length)} className="size-4 shrink-0" /> }));
+    return children.length ? [{ ...it, label: t("panes.changeAgent"), children }] : [];
+  });
+  if (canSwitch) {
+    const list = host ? (remote ?? []) : agents;
+    const children = list
+      .filter((a) => a.id !== session.agent)
+      .map((a) => ({
+        id: a.id,
+        label: t("panes.switchToAgent", { agent: a.name }),
+        icon: <AgentIcon agent={a.id} info={host ? a : undefined} className="size-4 shrink-0" />,
+        disabled: !a.available,
+        onSelect: () => pickAgent(a.id),
+      }));
+    items.push({
+      id: "changeAgent",
+      label: t("panes.changeAgent"),
+      icon: <Bot />,
+      disabled: switching,
+      children: children.length
+        ? children
+        : [{ id: "unavailable", label: remoteError || t(host && !remote ? "panes.loadingAgents" : "panes.noOtherAgents"), disabled: true }],
+    });
+  }
   // Which item with a second level is unfolded; folded again with the next opening (this mounts with the menu)
   const [open, setOpen] = useState("");
   if (!items.length) return null;

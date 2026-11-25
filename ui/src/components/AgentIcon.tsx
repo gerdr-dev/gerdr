@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import type { SessionSummary } from "@/lib/types";
+import type { AgentInfo, SessionSummary } from "@/lib/types";
 import { slots } from "@/lib/addons";
 import { AgentGlyph, NATIVE_GLYPH, autoGlyph } from "./AgentGlyph";
 import { FitSprite } from "./AddonSlot";
@@ -14,10 +14,11 @@ export const SPRITE = "sprite:";
 // their variants (Claude's orange starburst, Codex's gradient cloud with a >_ cut out; paths from simple-icons /
 // lobehub icons, no backing tile, original colours on both themes); else a built-in abstract glyph — fixed for
 // Gerdr Agent, picked from the id for everything else, so two Native roles don't look the same.
-export function AgentIcon({ agent: id, className }: { agent: string; className?: string }) {
-  const info = useStore((s) => s.agents.find((a) => a.id === id));
+export function AgentIcon({ agent: id, info: remote, className }: { agent: string; info?: AgentInfo; className?: string }) {
+  const local = useStore((s) => s.agents.find((a) => a.id === id));
+  const info = remote ?? local;
   // config first: it changes the moment the role is saved, and an older backend doesn't pass `icon` through
-  const def = useStore((s) => s.config.agents?.find((a) => a.id === id));
+  const def = useStore((s) => (remote ? undefined : s.config.agents?.find((a) => a.id === id)));
   const icon = def ? def.icon : info?.icon;
   const color = def ? def.color : info?.color;
   const agent = info?.base || id;

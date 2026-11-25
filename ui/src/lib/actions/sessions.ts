@@ -6,7 +6,7 @@ import { get, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } f
 import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
 import { openWorkChat, panelOfKey, spaceOfKey, workProjectOf } from "../work";
 import { currentView } from "./views";
-import type { ContentBlock } from "../types";
+import type { ContentBlock, SessionSummary } from "../types";
 import { focusPane } from "./panes";
 import { focusedLeaf, shutdownGone } from "./shared";
 import { switchSpace } from "./spaces";
@@ -73,11 +73,28 @@ function resumeInTile(cur: string, sessionId: string) {
 export async function continueInPane(paneId: string, sessionId: string, agent: string) {
   const from = get().sessions[sessionId];
   if (!from || from.agent === agent) return resumeInPane(paneId, sessionId);
+  const s = await continueSession(from, agent);
+  resumeInPane(paneId, s.id);
+  return s;
+}
+
+/** The pane menu hands the open conversation over in place, even when Code is hosted by a panel. */
+export async function switchAgentInPane(paneId: string, sessionId: string, agent: string) {
+  const from = get().sessions[sessionId];
+  if (!from || from.agent === agent || locateSession(get().layout, sessionId)?.pane.id !== paneId) return;
+  const s = await continueSession(from, agent);
+  const pane = locateSession(get().layout, sessionId)?.pane;
+  // The pane may have been closed or switched while the new agent was starting.
+  if (pane?.id !== paneId) return;
+  setPane0(paneId, { sessionId: s.id, draft: undefined });
+  shutdownGone([pane]);
+}
+
+async function continueSession(from: SessionSummary, agent: string) {
   try {
     // Carried on on the computer the conversation is on (handoff across computers isn't done, docs/dev/MULTIHOST.md)
-    const s = await api.createSession({ agent, cwd: from.cwd, continueFrom: sessionId, host: from.host?.id });
+    const s = await api.createSession({ agent, cwd: from.cwd, continueFrom: from.id, host: from.host?.id });
     set((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
-    resumeInPane(paneId, s.id);
     return s;
   } catch (e: any) {
     toast.error(t("actionsSessions.switchAgentFailed", { error: e.message ?? e }));

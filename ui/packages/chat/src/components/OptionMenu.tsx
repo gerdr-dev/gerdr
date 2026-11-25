@@ -1,4 +1,5 @@
 import { Check, ChevronDown, Pin, SlidersHorizontal } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,7 @@ export type Opt = { value: string; name: string; description?: string };
 // 说明文字也一起显示出来，挤成两行；这里触发器只显示名字，说明只在展开的列表里。
 // 列表底下的「设为新会话的默认」：把这一项现在的值存成这种 agent 新开会话时的默认（lib/defaults.ts）。
 export function OptionMenu({
+  agentName,
   label,
   value,
   options,
@@ -27,6 +29,7 @@ export function OptionMenu({
 }: {
   /** The value really in effect, when it isn't value (OptGroup.actual) */
   actual?: string;
+  agentName: string;
   label: string;
   value: string;
   options: Opt[];
@@ -62,7 +65,7 @@ export function OptionMenu({
             </div>
           </DropdownMenuItem>
         ))}
-        {onSetDefault && <SetDefaultItem same={value === defaultValue} onClick={onSetDefault} />}
+        {onSetDefault && <SetDefaultItem agent={agentName} values={cur?.name ?? value} same={value === defaultValue} onClick={onSetDefault} />}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -82,11 +85,18 @@ function ActualTag({ value, actual, chosen }: { value: string; actual: string; c
   );
 }
 
-function SetDefaultItem({ same, onClick, all }: { same: boolean; onClick: () => void; all?: boolean }) {
+function SetDefaultItem({ agent, values, same, onClick, all }: { agent: string; values: string; same: boolean; onClick: () => void; all?: boolean }) {
   return (
     <>
       <DropdownMenuSeparator />
-      <DropdownMenuItem disabled={same} onClick={onClick} className="gap-2 text-[12px] text-muted-foreground">
+      <DropdownMenuItem
+        disabled={same}
+        onClick={() => {
+          onClick();
+          toast.success(t("options.defaultSaved", { agent, values }));
+        }}
+        className="gap-2 text-[12px] text-muted-foreground"
+      >
         <Pin className="size-3.5" />
         {same ? t("options.isDefault") : all ? t("options.setAllDefault") : t("options.setDefault")}
       </DropdownMenuItem>
@@ -116,12 +126,14 @@ const LOUD_MODE = /plan|read-?only|bypass|full-access|dontAsk/i;
 // The button names the mode, model and effort ("Auto  Opus 5.5 · medium") while they fit; with no room they drop out
 // one step at a time (`short`), a LOUD_MODE mode staying longer than an everyday one.
 export function OptionsMenu({
+  agentName,
   groups,
   mode,
   onSetDefault,
   short,
   chevron,
 }: {
+  agentName: string;
   groups: OptGroup[];
   /** The full (desktop) row: the model + effort menu, with the same arrow as the single dropdowns */
   chevron?: boolean;
@@ -173,7 +185,15 @@ export function OptionsMenu({
             ))}
           </DropdownMenuGroup>
         ))}
-        {onSetDefault && <SetDefaultItem all same={all.every((g) => g.value === g.defaultValue)} onClick={onSetDefault} />}
+        {onSetDefault && (
+          <SetDefaultItem
+            all
+            agent={agentName}
+            values={all.map(nameOf).filter(Boolean).join(" · ")}
+            same={all.every((g) => g.value === g.defaultValue)}
+            onClick={onSetDefault}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
