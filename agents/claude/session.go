@@ -496,7 +496,7 @@ func (s *session) steer(blocks []acp.ContentBlock, msgID string, now bool) (acpx
 	} else if now {
 		prio = "now"
 	}
-	if err := pr.send(userMessage(blocks, msgID, prio)); err != nil {
+	if err := pr.send(userMessage(unslashPath(blocks), msgID, prio)); err != nil {
 		return acpx.SteerResponse{}, err
 	}
 	return acpx.SteerResponse{Outcome: acpx.SteerInjected}, nil
@@ -622,6 +622,30 @@ func userMessage(blocks []acp.ContentBlock, msgID, priority string) map[string]a
 		m["priority"] = priority
 	}
 	return m
+}
+
+// unslashPath: a steer that starts with a pasted path ("/Users/me/x.md read this") gets a zero-width space in front.
+// Claude Code takes any queued text starting with "/" for a slash command and holds it until the turn ends, even
+// when the first word is a path (measured with the CLI: a path-first steer waited out a whole turn while plain text
+// was read at the next tool gap; leading spaces are trimmed before that check, a zero-width space is not). A user
+// sent one mid-turn and it sat at "Cutting in…" for minutes, Send now had nothing to move aside. Real commands
+// ("/compact", "/skill args") are left alone: holding those is right. Same reading of a path as hub.commandIn.
+func unslashPath(blocks []acp.ContentBlock) []acp.ContentBlock {
+	if len(blocks) == 0 || blocks[0].Text == nil {
+		return blocks
+	}
+	t := strings.TrimSpace(blocks[0].Text.Text)
+	if !strings.HasPrefix(t, "/") {
+		return blocks
+	}
+	name, _, _ := strings.Cut(t[1:], " ")
+	name, _, _ = strings.Cut(name, "\n")
+	if name != "" && !strings.Contains(name, "/") {
+		return blocks
+	}
+	out := append([]acp.ContentBlock(nil), blocks...)
+	out[0] = acp.TextBlock("​" + t)
+	return out
 }
 
 // isClear：这句是不是 /clear（整句就这一个命令）。

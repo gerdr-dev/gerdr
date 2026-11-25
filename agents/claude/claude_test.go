@@ -530,3 +530,21 @@ func TestCutOffToolCallDiscarded(t *testing.T) {
 		t.Fatalf("discarded %v", discarded)
 	}
 }
+
+// A steer that starts with a path must not look like a slash command to Claude Code (it would hold it until the
+// turn ends); real commands stay as they are.
+func TestUnslashPath(t *testing.T) {
+	for in, want := range map[string]string{
+		"/Users/me/x.md read this": "​/Users/me/x.md read this",
+		"  /tmp/a\nlook":           "​/tmp/a\nlook",
+		"/ hi":                     "​/ hi",
+		"/compact":                 "/compact",
+		"/review the diff":         "/review the diff",
+		"look at /Users/me/x.md":   "look at /Users/me/x.md",
+	} {
+		got := unslashPath([]acp.ContentBlock{acp.TextBlock(in)})[0].Text.Text
+		if got != want {
+			t.Errorf("unslashPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
