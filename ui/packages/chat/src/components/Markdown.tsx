@@ -287,6 +287,10 @@ export function Markdown({ children, streaming = false }: { children: string; st
       rehypePlugins={rehypePlugins}
       components={components}
       urlTransform={urlTransform}
+      // Mending half-written markdown (closing a link, a bold, a code fence the stream hasn't reached yet) is for text
+      // still coming in. Left on for a finished reply, a lone "[" in it (the key ⇧⌘[ in a table) read as a link never
+      // closed, and "](streamdown:incomplete-link)" was appended to the reply's end as text.
+      parseIncompleteMarkdown={streaming}
       {...fade}
     >
       {fixWindowsPaths(children)}

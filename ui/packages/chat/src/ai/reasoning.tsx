@@ -179,7 +179,7 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown linkSafety={useLinkSafety()} {...fade}>{children}</Streamdown>
+      <Streamdown linkSafety={useLinkSafety()} parseIncompleteMarkdown={streaming} {...fade}>{children}</Streamdown>
     </CollapsibleContent>
     );
   }

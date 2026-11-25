@@ -298,7 +298,7 @@ function MdFile({ stat, text }: { stat: FileStat; text: string }) {
           <MdCarousel
             code={hastText(props.node)}
             render={(md) => (
-              <MessageResponse plugins={plugins} rehypePlugins={rehypePlugins} components={components}>
+              <MessageResponse parseIncompleteMarkdown={false} plugins={plugins} rehypePlugins={rehypePlugins} components={components}>
                 {md}
               </MessageResponse>
             )}
@@ -314,7 +314,13 @@ function MdFile({ stat, text }: { stat: FileStat; text: string }) {
       {meta !== null && <FrontMatter raw={meta} />}
       {/* MessageResponse redraws only when the text changes: a plugin loaded afterwards, or an add-on's code block
           (g.codeBlock) coming or going, needs a new key */}
-      <MessageResponse key={`${pluginsKey(plugins)}:${codeBlocks}:${dir}`} plugins={plugins} rehypePlugins={rehypePlugins} components={mdComponents}>
+      <MessageResponse
+        parseIncompleteMarkdown={false}
+        key={`${pluginsKey(plugins)}:${codeBlocks}:${dir}`}
+        plugins={plugins}
+        rehypePlugins={rehypePlugins}
+        components={mdComponents}
+      >
         {body}
       </MessageResponse>
     </div>
