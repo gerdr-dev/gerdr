@@ -783,10 +783,56 @@ func (s *Session) SetMode(ctx context.Context, mode string) error {
 		s.modes.CurrentModeId = acp.SessionModeId(mode)
 	}
 	s.mu.Unlock()
+	if modeAllowsAll(s.h.Base(s.rec.Agent), mode) {
+		s.allowOpenAsks()
+	}
 	s.syncRecFromState()
 	s.h.saveIndex()
 	s.h.broadcastSession(s)
 	return nil
+}
+
+// modeAllowsAll: mode never asks. Switching to it answers the asks already on screen: neither claude's CLI nor
+// codex looks at an ask it has sent again, so a command waiting for approval kept waiting after the person picked
+// "never ask".
+func modeAllowsAll(base, mode string) bool {
+	switch base {
+	case "claude", "native":
+		return mode == "bypassPermissions"
+	case "codex":
+		return mode == "full-access"
+	}
+	return false
+}
+
+// allowOpenAsks answers the open permission requests with their allow-once option. A plan's "ready to code?"
+// (switch_mode) is a question about the plan, not a permission, and stays.
+func (s *Session) allowOpenAsks() {
+	type open struct {
+		id  string
+		req json.RawMessage
+	}
+	var asks []open
+	s.mu.Lock()
+	for id, p := range s.pending {
+		if p.kind == "permission" {
+			asks = append(asks, open{id, p.req})
+		}
+	}
+	s.mu.Unlock()
+	for _, a := range asks {
+		var req acp.RequestPermissionRequest
+		if json.Unmarshal(a.req, &req) != nil || (req.ToolCall.Kind != nil && *req.ToolCall.Kind == acp.ToolKindSwitchMode) {
+			continue
+		}
+		for _, o := range req.Options {
+			if o.Kind == acp.PermissionOptionKindAllowOnce {
+				resp, _ := json.Marshal(map[string]any{"optionId": o.OptionId})
+				_ = s.Answer(a.id, resp) // already answered meanwhile: nothing to do
+				break
+			}
+		}
+	}
 }
 
 func (s *Session) SetConfig(ctx context.Context, id, value string) error {
