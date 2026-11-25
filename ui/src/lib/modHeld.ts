@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from "react";
 import { IS_MAC } from "./keys";
 import { activeIds } from "./overviewState";
-import { get } from "./store";
+import { get, hostOrder } from "./store";
 
 type State = {
   /** Show the numbers: the modifier has been held alone for a moment. */
@@ -36,7 +36,7 @@ if (typeof window !== "undefined") {
     if (e.repeat) return;
     if (e.shiftKey || e.altKey || (IS_MAC ? e.ctrlKey : e.metaKey)) return;
     // Frozen at once (a quick ⌘1 uses the order on screen), shown after a moment so ⌘C / ⌘V don't flash numbers
-    put({ shown: false, frozen: activeIds(get()) });
+    put({ shown: false, frozen: hostOrder() ?? activeIds(get()) });
     clearTimeout(timer);
     timer = setTimeout(() => put({ ...state, shown: true }), 250);
   };
@@ -61,7 +61,7 @@ export function frozenOrder(ids: string[], frozen = state.frozen): string[] {
   return [...kept, ...ids.filter((id) => !kept.includes(id))];
 }
 
-/** The agent ⌘N goes to (1-based), in the order the sidebar shows. */
+/** The agent ⌘N goes to (1-based), in the order the sidebar shows: a hosting panel's list when one shows (useCodeOrder). */
 export function activeAt(n: number): string | undefined {
-  return frozenOrder(activeIds(get()))[n - 1];
+  return frozenOrder(hostOrder() ?? activeIds(get()))[n - 1];
 }

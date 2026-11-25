@@ -96,7 +96,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { codeHost, get, markRead, set, useStore } from "@/lib/store";
+import { codeHost, get, hostOrder, markRead, set, useStore } from "@/lib/store";
 import { showInCodeView } from "@/core/CodeView";
 import { codeMenuItems } from "@/lib/codeMenu";
 import { whenCaughtUp } from "@/lib/catchup";
@@ -296,6 +296,10 @@ export function PaneRow({ pane: id, where, below }: { pane: string; where?: stri
   const told = useContext(Roomy);
   const now = useNow(!told && phone);
   const own = !told && phone ? { now } : null;
+  // ⌘1–9 by the hosting panel's order (useCodeOrder), numbered while ⌘ is held
+  const numbers = useModShown();
+  useModFrozen();
+  const nth = numbers && sid ? frozenOrder(hostOrder() ?? []).indexOf(sid) : -1;
   if (!loc) return null;
   const cur = activeWs(layout);
   const here = !gridOn && loc.ws.id === cur.id && loc.tab.id === cur.activeTab;
@@ -313,6 +317,7 @@ export function PaneRow({ pane: id, where, below }: { pane: string; where?: stri
       inActiveTab={loc.tab.id === cur.activeTab}
       where={where}
       below={below}
+      num={nth >= 0 && nth < 9 ? nth + 1 : undefined}
     />
   );
   return own ? <Roomy.Provider value={own}>{row}</Roomy.Provider> : row;

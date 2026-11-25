@@ -1,7 +1,8 @@
 import { toast } from "sonner";
 import type { KeyAction } from "../keys";
 import { activeTab, activeWs } from "../layout";
-import { codeShown, get, set, setMode, toggleSidebar } from "../store";
+import { codeShown, get, hostOrder, set, setMode, toggleSidebar } from "../store";
+import { hostedKeys } from "./hosted";
 import { closeTile, focusTileDir, stepTile, swapTileDir, toggleOverview, toggleTileZoom } from "../overview";
 import { activeAt } from "../modHeld";
 import {
@@ -164,9 +165,12 @@ const WORK: Partial<Record<KeyAction, Run>> = {
 
 const TABLES: Record<ViewName, Partial<Record<KeyAction, Run>>> = { code: CODE, overview: OVERVIEW, work: WORK };
 
+// A panel hosting Code with its own list: the keys about tabs and workspaces go by that list (hosted.ts)
+const HOSTED = hostedKeys(CODE, (i) => APP[`active${i as Digit}`]());
+
 export function runAction(a: KeyAction) {
   const view = currentView();
-  const run = TABLES[view.name][a] ?? (APP as Partial<Record<KeyAction, Run>>)[a];
+  const run = (view.name === "code" && hostOrder() ? HOSTED[a] : undefined) ?? TABLES[view.name][a] ?? (APP as Partial<Record<KeyAction, Run>>)[a];
   if (run) return run();
   view.leave();
 }

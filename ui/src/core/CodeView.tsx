@@ -5,8 +5,22 @@ import { addTab, addTabForSession, focusPane, replaceSessionInPane } from "@/lib
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
 import { type CodeMenuFn, type CodePaneTagFn, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
-import { type CodeDir, type CodeStartFn, focusedSession, get, markRead, set, setCodeDirs, setCodeHost, setCodeStart, useStore } from "@/lib/store";
+import {
+  type CodeDir,
+  type CodeStartFn,
+  focusedSession,
+  get,
+  markRead,
+  set,
+  setCodeDirs,
+  setCodeHost,
+  setCodeOrder,
+  setCodeStart,
+  hostOrder,
+  useStore,
+} from "@/lib/store";
 import { PanelKeyContext } from "./visible";
+import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
 
 /**
  * Code inside a panel: while the panel that renders this is the one shown, Gerdr shows Code's own layout (tabs, split
@@ -186,6 +200,32 @@ export function useCodeDirs(dirs: CodeDir[]) {
 }
 
 export type { CodeDir } from "@/lib/store";
+
+/**
+ * The conversations this panel's list shows, in its order: while it hosts Code, the keys go by it, not by Code's tabs
+ * and workspaces (which it doesn't show). ⌘1–9 / prefix+1–9 the Nth (numbered on its rows while ⌘ is held: CodeRow
+ * by itself, a row of the panel's own with useCodeNumber), ⇧⌘] / ⇧⌘[ the next / previous, ⌘E the one before, ⌘W lands
+ * on the neighbour; the workspace keys do nothing. Call it where the list is ordered, with every row that has a
+ * conversation, opened in Code or not.
+ */
+export function useCodeOrder(sessions: string[]) {
+  const key = useContext(PanelKeyContext);
+  const sig = sessions.join(",");
+  useEffect(() => {
+    if (!key) return;
+    setCodeOrder(key, sig ? sig.split(",") : []);
+    return () => setCodeOrder(key, null);
+  }, [key, sig]);
+}
+
+/** The number ⌘N puts on this conversation's row while ⌘ is held (1–9), for a row the panel draws itself; else undefined. */
+export function useCodeNumber(session?: string): number | undefined {
+  const shown = useModShown();
+  useModFrozen();
+  if (!shown || !session) return undefined;
+  const i = frozenOrder(hostOrder() ?? []).indexOf(session);
+  return i >= 0 && i < 9 ? i + 1 : undefined;
+}
 
 /**
  * While this panel hosts Code, conversations started in Code go through `fn` instead of becoming Code's (createInPane:

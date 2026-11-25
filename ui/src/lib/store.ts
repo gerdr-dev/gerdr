@@ -386,6 +386,24 @@ export function hostStart(s: Pick<State, "mode" | "layout" | "workPanels" | "cod
   return codeStarts.get(panel ? `${space}/${panel}` : space);
 }
 
+/**
+ * The hosting panel's list, as the conversations it shows in order (core useCodeOrder), by panel key: the keys that
+ * mean "the Nth" or "the next" (⌘1–9, ⇧⌘] / ⇧⌘[, where ⌘W lands) follow it instead of Code's tabs and workspaces,
+ * which that list doesn't show (actions/hosted.ts).
+ */
+const codeOrders = new Map<string, string[]>();
+export function setCodeOrder(key: string, ids: string[] | null) {
+  if (ids) codeOrders.set(key, ids);
+  else codeOrders.delete(key);
+}
+/** The on-screen hosting panel's order, when it gave one. */
+export function hostOrder(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts"> = get()): string[] | undefined {
+  if (!codeHost(s)) return undefined;
+  const space = currentSpace(s.layout);
+  const panel = s.workPanels[space];
+  return codeOrders.get(panel ? `${space}/${panel}` : space);
+}
+
 /** core useCodeDirs: panel `key`'s quick-pick folders; null takes them away. */
 export function setCodeDirs(key: string, dirs: CodeDir[] | null) {
   const next = { ...get().codeDirs };

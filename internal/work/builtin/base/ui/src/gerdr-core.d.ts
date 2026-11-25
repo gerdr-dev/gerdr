@@ -360,6 +360,15 @@ declare module "@gerdr/core" {
    * it. Throw to fail (an error toast, nothing opens). Not routed: importing an agent's old conversation, /resume,
    * moving one to another folder or computer, and anything on another computer.
    */
+  /**
+   * With CodeView: the conversations your list shows, in its order (every row that has a conversation, opened in Code
+   * or not; leave out folded-away ones). While you host Code the keys go by it instead of Code's tabs and workspaces:
+   * ⌘1–9 / prefix+1–9 the Nth, ⇧⌘] / ⇧⌘[ the next / previous, ⌘E the one shown before, ⌘W lands on the neighbour;
+   * the workspace keys do nothing. CodeRow numbers itself while ⌘ is held; for a row you draw yourself, useCodeNumber.
+   */
+  export function useCodeOrder(sessions: string[]): void;
+  /** With useCodeOrder: the number (1–9) to show on this conversation's row while ⌘ is held, else undefined. */
+  export function useCodeNumber(session?: string): number | undefined;
   export function useCodeStart(fn: (o: { agent: string; cwd: string; mode?: string; continueFrom?: string }) => Promise<string>): void;
   /**
    * With CodeView: a tag after a pane's title, what you know about the conversation in it (a task's number and

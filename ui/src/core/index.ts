@@ -28,6 +28,8 @@ export {
   type CodePaneTag,
   useCodeDirs,
   useCodeStart,
+  useCodeOrder,
+  useCodeNumber,
   type CodeDir,
   newCodeTab,
   useCodeRows,
