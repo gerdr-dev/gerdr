@@ -49,6 +49,8 @@ export const zh = {
   "panelSettings.local": "本地",
   "panelSettings.dirty": "有没提交的改动",
   "panelSettings.update": "更新",
+  "panelSettings.behind": "有更新",
+  "panelSettings.behindHint": "它的仓库有 {n} 个新提交，点「更新」拉下来",
 };
 
 export const en: Record<keyof typeof zh, string> = {
@@ -105,4 +107,6 @@ export const en: Record<keyof typeof zh, string> = {
   "panelSettings.local": "Local",
   "panelSettings.dirty": "has uncommitted changes",
   "panelSettings.update": "Update",
+  "panelSettings.behind": "Update available",
+  "panelSettings.behindHint": "Its repository has {n} new commit(s): click Update to pull them",
 };

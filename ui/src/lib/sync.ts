@@ -504,6 +504,10 @@ function handle(m: any) {
     case "panel_data":
       panelDataChanged(m.data?.panel, m.data?.path);
       break;
+    // The server's periodic check found a panel's repository moved on (or one was updated): the settings dot follows
+    case "panel_updates":
+      import("./panels").then((p) => p.refreshPanelUpdates());
+      break;
     case "turn":
       import("./addons").then((p) => p.emit("turn", m.data));
       break;

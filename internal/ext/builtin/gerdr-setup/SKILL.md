@@ -222,6 +222,7 @@ project is the current directory's (or `--project`). A panel is named by its nam
 gerdr panel list                                   # key, name, config (title, icon, color), where it came from
 gerdr panel install owner/repo [--name board]      # clone a published panel (its code runs here: confirm with the user)
 gerdr panel new <name>                             # a blank one, for its agent to build
+gerdr panel check                                  # fetch the panels' repositories, list those with new commits (nothing applied)
 gerdr panel update [<panel>]                       # git pull; the user's own changes stay on top
 gerdr panel rename <panel> "任务看板"                # the name shown for it, for this person
 gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, or sprite:<key>; no icon = default
@@ -230,6 +231,9 @@ gerdr panel badge <panel> 3 | dot | clear          # a red number / dot on its r
 gerdr panel rm <panel>                             # to the trash, data and all
 gerdr panel restore                                # the project's own panel back (blank) after removing it
 ```
+
+Updates are never applied by themselves: Gerdr fetches every few hours and tells the user (a dot on Settings, 有更新
+on the panel's row); `gerdr panel list` shows `source.behind` (new commits) and `source.web` (the repository's page).
 
 A badge is only a mark: no inbox item, no notification, and it goes once the user opens the panel. For something that
 needs the user, a panel's function uses `ctx.inbox`; its functions set the badge with `ctx.badge`.

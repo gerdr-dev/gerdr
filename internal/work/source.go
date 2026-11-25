@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,6 +25,11 @@ type Source struct {
 	Branch string `json:"branch,omitempty"`
 	// Dirty: changes not committed (the user's or their agent's edits); an update keeps them or refuses.
 	Dirty bool `json:"dirty,omitempty"`
+	// Behind: commits on the remote branch not here yet, as of the last fetch (FetchUpdates): an update waits. Only
+	// told, never applied by itself: an update can change how the panel works under the person.
+	Behind int `json:"behind,omitempty"`
+	// Web: the remote as a page a browser opens (https://host/owner/repo), when it is one; empty for file:// and the like.
+	Web string `json:"web,omitempty"`
 }
 
 func (r *Runner) Source(project string) (Source, error) {
@@ -39,7 +45,68 @@ func (r *Runner) Source(project string) (Source, error) {
 	s.Branch, _ = git(dir, "rev-parse", "--abbrev-ref", "HEAD")
 	st, _ := git(dir, "status", "--porcelain")
 	s.Dirty = st != ""
+	s.Web = webURL(s.Remote)
+	// Against what the last fetch saw of the branch it follows: no network here
+	if n, err := git(dir, "rev-list", "--count", "HEAD..@{u}"); err == nil {
+		s.Behind, _ = strconv.Atoi(n)
+	}
 	return s, nil
+}
+
+// FetchUpdates fetches the panel's remote (nothing else: the checkout stays as it is), so Source.Behind tells whether
+// an update waits. A panel with no remote is left alone.
+func (r *Runner) FetchUpdates(ctx context.Context, key string) error {
+	dir, err := r.Dir(key)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return nil
+	}
+	if remote, _ := git(dir, "remote", "get-url", "origin"); remote == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "fetch", "--quiet", "origin")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0") // a private repo fails instead of waiting for a password nobody sees
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git fetch: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// webURL: a git remote as the page of its repository, for the hosts people publish on (https, git@host:path,
+// ssh://…); "" for anything a browser can't open (file://, a local path).
+func webURL(remote string) string {
+	u := strings.TrimSuffix(strings.TrimSpace(remote), "/")
+	switch {
+	case strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://"):
+		// drop credentials (https://user:token@host/…): not something to show or open
+		if i := strings.Index(u, "@"); i >= 0 && i < strings.Index(u[8:]+"/", "/")+8 {
+			u = u[:strings.Index(u, "://")+3] + u[i+1:]
+		}
+	case strings.HasPrefix(u, "git@"):
+		host, path, ok := strings.Cut(strings.TrimPrefix(u, "git@"), ":")
+		if !ok {
+			return ""
+		}
+		u = "https://" + host + "/" + path
+	case strings.HasPrefix(u, "ssh://"):
+		rest := strings.TrimPrefix(u, "ssh://")
+		if i := strings.Index(rest, "@"); i >= 0 {
+			rest = rest[i+1:]
+		}
+		host, path, ok := strings.Cut(rest, "/")
+		if !ok {
+			return ""
+		}
+		host, _, _ = strings.Cut(host, ":") // the ssh port isn't the web one
+		u = "https://" + host + "/" + path
+	default:
+		return ""
+	}
+	return strings.TrimSuffix(u, ".git")
 }
 
 // repoURL accepts what people copy from GitHub: https://github.com/o/r(.git), github.com/o/r, o/r, git@…:o/r.git.

@@ -1,3 +1,4 @@
+import { usePanelUpdates } from "@/lib/panels";
 import { Code2, Command, Plus, Settings } from "lucide-react";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -117,6 +118,8 @@ export function Rail() {
   const sidebar = useStore((s) => s.sidebar);
   const doctorBad = useStore((s) => s.doctor?.level === "bad");
   const updateWaits = useStore((s) => updateWaitsForClick(s.appUpdate)); // an update closed with "Later"
+  const panelUpdates = useStore((s) => s.panelUpdates);
+  usePanelUpdates();
   const connected = useStore((s) => s.connected);
   const lanRoute = useLanRoute();
   const cur = mode === "work" ? "work" : "agents";
@@ -201,14 +204,22 @@ export function Rail() {
             </button>,
           )}
           {tip(
-            doctorBad ? t("rail.settingsDoctorBad") : updateWaits ? t("rail.settingsUpdate") : t("nav.settings"),
+            doctorBad
+              ? t("rail.settingsDoctorBad")
+              : updateWaits
+                ? t("rail.settingsUpdate")
+                : panelUpdates
+                  ? t("rail.settingsPanelUpdates", { n: panelUpdates })
+                  : t("nav.settings"),
             <button
               aria-label={t("nav.settings")}
               className={cn(railBtn, "relative")}
-              onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : undefined } })}
+              onClick={() => set({ dialog: { kind: "settings", tab: doctorBad ? "labs" : !updateWaits && panelUpdates ? "panels" : undefined } })}
             >
               <Settings className="size-4" />
-              {(doctorBad || updateWaits) && <span className={cn("absolute top-1.5 right-1.5 size-1.5 rounded-full", doctorBad ? "bg-bad" : "bg-brand")} />}
+              {(doctorBad || updateWaits || panelUpdates > 0) && (
+                <span className={cn("absolute top-1.5 right-1.5 size-1.5 rounded-full", doctorBad ? "bg-bad" : "bg-brand")} />
+              )}
             </button>,
           )}
           {/* Which way the phone App reaches gerdr (details in Settings → General → this phone) */}

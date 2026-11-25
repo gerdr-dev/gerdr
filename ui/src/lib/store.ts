@@ -133,6 +133,8 @@ type State = {
    * where work goes (the repositories in its settings).
    */
   codeDirs: Record<string, CodeDir[]>;
+  /** How many installed panels (every project) have an update waiting (lib/panels.ts refreshPanelUpdates): the settings dot. */
+  panelUpdates: number;
   /** Where a hosting panel's sidebar part is drawn: an element at the top of Code's list (UnifiedSidebar), while it shows. */
   codeSlot: HTMLElement | null;
   /** The all-agents overview (lib/overview.ts): covers the sidebar and the tabs while on. Per device, in localStorage. */
@@ -207,6 +209,7 @@ export const useStore = create<State>(() => ({
   workPanels: loadWorkPanels(),
   codeHosts: {},
   codeDirs: {},
+  panelUpdates: 0,
   codeSlot: null,
   overview: loadOverview(),
   localFont: loadLocalFont(),

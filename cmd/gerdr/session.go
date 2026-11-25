@@ -1872,6 +1872,35 @@ Only a mark: nothing goes to the inbox, nobody is notified. It goes when the use
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
+		Use:   "check",
+		Short: "Check the project's panels for updates (git fetch, nothing applied); lists the ones with new commits",
+		Long: "Fetches every panel's repository in the project and lists the panels (of every project) whose repository has\n" +
+			"commits they don't have yet: {panels: [{key, behind}]}. Nothing is updated: `gerdr panel update <panel>` does that.\n" +
+			"Gerdr checks by itself every few hours too; `gerdr panel list` shows source.behind and source.web (the repository's page).",
+		Args: cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			var res struct {
+				Errors map[string]string `json:"errors"`
+			}
+			if err := c.do("POST", "/api/work/panels/check", map[string]any{"project": project()}, &res); err != nil {
+				return err
+			}
+			for k, e := range res.Errors {
+				fmt.Fprintf(os.Stderr, "%s: %s\n", k, e)
+			}
+			var out map[string]any
+			if err := c.do("GET", "/api/work/panels/updates", nil, &out); err != nil {
+				return err
+			}
+			printJSON(out)
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
 		Use:   "restore",
 		Short: "Give the project its own panel back after it was removed (a blank one)",
 		Args:  cobra.NoArgs,

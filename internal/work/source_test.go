@@ -168,3 +168,18 @@ func TestPanels(t *testing.T) {
 		t.Error("a removed panel's directory was made again")
 	}
 }
+
+func TestWebURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://github.com/gerdr-dev/gerdr-panel-superagent.git": "https://github.com/gerdr-dev/gerdr-panel-superagent",
+		"https://user:tok@git.example.com/a/b.git":                "https://git.example.com/a/b",
+		"git@git.huglight.cn:bysir/gerdr-addon.git":               "https://git.huglight.cn/bysir/gerdr-addon",
+		"ssh://git@gitlab.example.com:2222/team/x.git":            "https://gitlab.example.com/team/x",
+		"file:///Users/me/dev/panel":                              "",
+		"/Users/me/dev/panel":                                     "",
+	} {
+		if got := webURL(in); got != want {
+			t.Errorf("webURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

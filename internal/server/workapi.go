@@ -168,6 +168,22 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"panels": list, "codeAt": codeAt, "ownRemoved": s.Work.WorkRemoved(project)})
 	})
+	// Panels whose repository has commits they don't have yet (as of the last fetch, panelupdates.go), every project's:
+	// the rail's settings button and Settings → Panels tell of them. Nothing is updated by itself.
+	mux.HandleFunc("GET /api/work/panels/updates", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"panels": s.panelUpdates()})
+	})
+	// Fetch a project's panels now (Settings → Panels opening, its 检查更新), then list them as GET /api/work/panels does.
+	mux.HandleFunc("POST /api/work/panels/check", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Project string `json:"project"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"errors": s.fetchPanels(r.Context(), b.Project)})
+	})
 	// Move a panel on the rail: to its 0-based place among its project's panels and Code (key "<project>/."), as
 	// dragging its button or `gerdr panel move` does.
 	mux.HandleFunc("POST /api/work/panels/move", func(w http.ResponseWriter, r *http.Request) {

@@ -274,11 +274,20 @@ export const api = {
   /** A project's panels (its own Work first, unless removed), with their ui.json (the user's rename / icon over it) and where they came from. */
   panels: (project: string) =>
     req<{
-      panels: { key: string; name: string; config: Record<string, unknown>; source: { git: boolean; remote?: string; dirty?: boolean } }[];
+      panels: {
+        key: string;
+        name: string;
+        config: Record<string, unknown>;
+        source: { git: boolean; remote?: string; dirty?: boolean; behind?: number; web?: string };
+      }[];
       /** Code's place among the panels (it is dragged like one), 0 = before them all. */
       codeAt?: number;
       ownRemoved: boolean;
     }>("GET", `/api/work/panels?project=${encodeURIComponent(project)}`),
+  /** Panels of every project whose repository has new commits (as of the last check; nothing is updated by itself). */
+  panelUpdates: () => req<{ panels: { key: string; behind: number }[] }>("GET", "/api/work/panels/updates"),
+  /** Check a project's panels for updates now (git fetch); errors by panel key. */
+  checkPanels: (project: string) => req<{ errors: Record<string, string> }>("POST", "/api/work/panels/check", { project }),
   /** Put a panel at its 0-based place on the rail (the person's order, work/order.go). */
   movePanel: (key: string, to: number) => req<{ ok: boolean }>("POST", "/api/work/panels/move", { key, to }),
   unremovePanel: (key: string, trash: string) => req<{ ok: boolean }>("POST", "/api/work/panels/unremove", { key, trash }),

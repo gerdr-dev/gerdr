@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useStore } from "@/lib/store";
 
 /**
  * A project's panels (server work.Runner: its own Work, unless the user removed it, and the ones installed or added),
@@ -14,7 +15,8 @@ export type Panel = {
   title: string;
   icon?: string;
   color?: string;
-  source: { git: boolean; remote?: string; dirty?: boolean };
+  /** behind: commits waiting on its remote, as of the last check (server panelupdates.go); web: the remote as a page. */
+  source: { git: boolean; remote?: string; dirty?: boolean; behind?: number; web?: string };
 };
 
 const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
@@ -28,8 +30,25 @@ export function panelTitle(key: string): string | undefined {
   return cache[space]?.panels.find((p) => p.key === key)?.title;
 }
 
-/** Tell every usePanels to fetch again (after adding, removing, restoring, a new icon). */
-export const panelsChanged = () => window.dispatchEvent(new Event("gerdr:panels"));
+/** Tell every usePanels to fetch again (after adding, removing, restoring, a new icon, an update). */
+export const panelsChanged = () => {
+  window.dispatchEvent(new Event("gerdr:panels"));
+  void refreshPanelUpdates();
+};
+
+/**
+ * Panels, of every project, whose repository has commits they don't have (server panelupdates.go checks every few
+ * hours; Settings → Panels checks its project on opening). Only told: the rail's settings button gets a dot, the
+ * panel's row says so; updating stays the person's click.
+ */
+export async function refreshPanelUpdates() {
+  try {
+    const r = await api.panelUpdates();
+    useStore.setState({ panelUpdates: r.panels.length });
+  } catch {
+    // an older backend, or offline: no dot
+  }
+}
 
 type Cached = { panels: Panel[]; codeAt: number; ownRemoved: boolean };
 const cache: Record<string, Cached> = {};
@@ -117,4 +136,13 @@ export function usePanels(space: string): { panels: Panel[]; codeAt: number; own
   // Handing those out told PanelButtons the new project's remembered panel was gone, and it overwrote it with the first
   // one: switching projects lost which panel each was left on.
   return state.space === space ? state : fromCache(space);
+}
+
+/** Keep the panel-update count fresh: now, every half hour (the server checks every few hours), and when pushed (sync.ts). */
+export function usePanelUpdates() {
+  useEffect(() => {
+    void refreshPanelUpdates();
+    const id = setInterval(() => void refreshPanelUpdates(), 30 * 60_000);
+    return () => clearInterval(id);
+  }, []);
 }

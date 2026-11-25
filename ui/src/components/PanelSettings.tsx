@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, Ellipsis, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,17 @@ export function PanelSettings() {
   const spaces = spaceList(layout);
   const [project, setProject] = useState(() => currentSpace(layout));
   const { panels, ownRemoved, loaded } = usePanels(project);
+  // Opening the page (or another project's tab) checks its panels' repositories now: the periodic check is hours apart
+  useEffect(() => {
+    let live = true;
+    api.checkPanels(project).then(
+      () => live && panelsChanged(),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [project]);
   const name = spaces.find((s) => s.id === project)?.name ?? project;
   return (
     <div className="space-y-4">
@@ -112,10 +123,27 @@ function PanelRow({ p }: { p: Panel }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px]">{p.title}</div>
         <div className="truncate text-[12px] text-muted-foreground">
-          {remote ? t("panelSettings.from", { remote }) : p.source.git ? t("panelSettings.localGit") : t("panelSettings.local")}
+          {remote && p.source.web ? (
+            // A repository on the web opens in the browser (asked for); a local one (file://) has nothing to open
+            <a href={p.source.web} target="_blank" rel="noreferrer" title={p.source.web} className="hover:text-foreground hover:underline">
+              {t("panelSettings.from", { remote })}
+            </a>
+          ) : remote ? (
+            t("panelSettings.from", { remote })
+          ) : p.source.git ? (
+            t("panelSettings.localGit")
+          ) : (
+            t("panelSettings.local")
+          )}
           {p.source.dirty && ` · ${t("panelSettings.dirty")}`}
         </div>
       </div>
+      {!!p.source.behind && (
+        // Only told: updating stays this row's button (an update can change how the panel works)
+        <span className="shrink-0 rounded-full bg-brand/15 px-2 py-0.5 text-[11px] text-brand" title={t("panelSettings.behindHint", { n: p.source.behind })}>
+          {t("panelSettings.behind")}
+        </span>
+      )}
       {phone ? (
         // A phone's row is too narrow for three buttons: they left the name and source a few characters (reported)
         <DropdownMenu>
