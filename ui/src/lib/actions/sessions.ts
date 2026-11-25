@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { api } from "../api";
 import { askConfirm } from "../confirm";
 import { allLeaves, currentSpace, locateSession, mutedSession, paneSpace, setPane, spaceList, type PaneLeaf } from "../layout";
-import { get, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
+import { get, hostStart, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
 import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
 import { openWorkChat, panelOfKey, spaceOfKey, workProjectOf } from "../work";
 import { currentView } from "./views";
@@ -16,8 +16,24 @@ import { t } from "../i18n";
 
 // ---- 会话 ----
 
-export async function createInPane(paneId: string, o: { agent: string; cwd: string; mode?: string; import?: string; title?: string; host?: string }) {
+export async function createInPane(
+  paneId: string,
+  o: { agent: string; cwd: string; mode?: string; import?: string; title?: string; host?: string },
+): Promise<SessionSummary | undefined> {
   setPane0(paneId, { draft: { agent: o.agent, cwd: o.cwd, host: o.host } });
+  // A panel hosting Code starts it as its own (core useCodeStart): a task's worker, not a Code conversation. Every
+  // way a pane gets a new conversation comes here (the new-conversation page, ⌘D, a new tab that starts at once), so
+  // this is the one place. Not an import of an agent's old conversation, nor on another computer: those stay Code's.
+  const viaPanel = !o.import && !o.host ? hostStart() : undefined;
+  if (viaPanel)
+    try {
+      const id = await viaPanel({ agent: o.agent, cwd: o.cwd, mode: o.mode });
+      setLayout((l) => setPane(l, paneId, { sessionId: id, draft: undefined }));
+      return get().sessions[id];
+    } catch (e: any) {
+      toast.error(t("actionsSessions.openFailed", { error: e?.message ?? e }));
+      throw e;
+    }
   try {
     // 没给模式时后端按设置里的默认模式 / 模型开（hub.Create），这里不用管
     // On another computer its projects aren't ours: no project

@@ -188,9 +188,10 @@ export function useCodeDirs(dirs: CodeDir[]) {
 export type { CodeDir } from "@/lib/store";
 
 /**
- * While this panel hosts Code, the new-conversation page (Cmd+T, a + that opens it) starts its conversations through
- * `fn` instead of Code: the panel starts one of its own (a task's worker, with its tools and rules) in that folder
- * with that agent, sends nothing, and answers with its id; the pane shows it. Throwing leaves the page as it was.
+ * While this panel hosts Code, conversations started in Code go through `fn` instead of becoming Code's (createInPane:
+ * the new-conversation page, ⌘D, a new tab that starts at once; the overview's new agent; a fork): the panel starts
+ * one of its own (a task's worker, with its tools and rules), sends nothing, and answers with its id. Gerdr types in
+ * gerdr-core.d.ts list what isn't routed.
  */
 export function useCodeStart(fn: CodeStartFn) {
   const key = useContext(PanelKeyContext);

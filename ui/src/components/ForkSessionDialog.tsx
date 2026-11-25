@@ -8,7 +8,7 @@ import { ownerOf } from "@/lib/panelRoute";
 import { workProjectOf } from "@/lib/work";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { closeDialog, useStore } from "@/lib/store";
+import { closeDialog, hostStart, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AgentIcon } from "./AgentIcon";
 
@@ -35,6 +35,14 @@ export function ForkSessionDialog() {
     if (busy) return;
     setBusy(agent);
     try {
+      // A panel hosting Code makes the fork its own (core useCodeStart: carried on from this one), as any start there
+      const viaPanel = session.host ? undefined : hostStart();
+      if (viaPanel) {
+        const id = await viaPanel({ agent, cwd: session.cwd, continueFrom: session.id });
+        closeDialog();
+        openSessionNear(id, session.id, true);
+        return;
+      }
       const s = await api.createSession({
         agent,
         cwd: session.cwd,

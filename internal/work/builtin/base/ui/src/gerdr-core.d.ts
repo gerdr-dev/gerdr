@@ -352,12 +352,15 @@ declare module "@gerdr/core" {
   export type CodeDir = { path: string; name?: string };
   export function useCodeDirs(dirs: CodeDir[]): void;
   /**
-   * With CodeView: the new-conversation page (Cmd+T, newCodeTab) starts its conversations through `fn` while this
-   * panel shows, instead of as Code's own: start one of yours (e.g. a task's worker via a local function and
-   * ctx.sessions.start) in `cwd` with `agent`, send nothing (the person types the first message), and resolve to its
-   * id; the pane shows it. Throw to fail (the page stays, with the error).
+   * With CodeView: every conversation started in Code while this panel shows goes through `fn` instead of becoming
+   * Code's own: the new-conversation page (Cmd+T, newCodeTab), ⌘D (a copy of the focused one: same agent, folder,
+   * mode), the overview's new agent, and a fork (`continueFrom`: the one forked, its chat carried along). Start one of
+   * yours (e.g. a task's worker via a local function and ctx.sessions.start) in `cwd` with `agent` (and `mode`,
+   * `continueFrom` when given), send nothing (the person types the first message), and resolve to its id; Code shows
+   * it. Throw to fail (an error toast, nothing opens). Not routed: importing an agent's old conversation, /resume,
+   * moving one to another folder or computer, and anything on another computer.
    */
-  export function useCodeStart(fn: (o: { agent: string; cwd: string }) => Promise<string>): void;
+  export function useCodeStart(fn: (o: { agent: string; cwd: string; mode?: string; continueFrom?: string }) => Promise<string>): void;
   /**
    * With CodeView: a tag after a pane's title, what you know about the conversation in it (a task's number and
    * status); with `items`, a menu on it (move it). Data, drawn by Gerdr. Asked again whenever your component renders.

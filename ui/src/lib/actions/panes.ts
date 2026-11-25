@@ -28,7 +28,8 @@ import {
   type Tab,
   type Workspace,
 } from "../layout";
-import { codeShown, get, set, setLayout } from "../store";
+import { codeShown, get, hostStart, set, setLayout } from "../store";
+import type { SessionSummary } from "../types";
 import { addActive, focusTile, joinActiveOnStart, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter, toggleOverview } from "../overview";
 import { spaceOfKey, workProjectOf } from "../work";
 import { ownerOf } from "../panelRoute";
@@ -105,10 +106,15 @@ export function newAgentInOverview(): boolean {
     return true;
   }
   const opening = toast.loading(t("actionsPanes.openingAgent"));
-  api
-    .createSession({ agent: s.agent, cwd: s.cwd, mode: s.modeId ?? s.modes?.currentModeId ?? s.mode, project: currentSpace(get().layout) })
+  const mode = s.modeId ?? s.modes?.currentModeId ?? s.mode;
+  // A panel hosting Code starts it as its own (core useCodeStart), as createInPane does
+  const viaPanel = s.host ? undefined : hostStart();
+  (viaPanel
+    ? viaPanel({ agent: s.agent, cwd: s.cwd, mode }).then((id) => get().sessions[id] ?? ({ id } as SessionSummary))
+    : api.createSession({ agent: s.agent, cwd: s.cwd, mode, project: currentSpace(get().layout) })
+  )
     .then((n) => {
-      set((st) => ({ sessions: { ...st.sessions, [n.id]: n } }));
+      if (n.agent) set((st) => ({ sessions: { ...st.sessions, [n.id]: n } }));
       setLayout((l) => {
         const loc = locateSession(l, s.id);
         // A Work conversation's tile has no pane: its project's workspace, as openSessionNear does

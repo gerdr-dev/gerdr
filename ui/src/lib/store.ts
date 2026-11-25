@@ -369,7 +369,7 @@ export function hostDirs(s: Pick<State, "mode" | "layout" | "workPanels" | "code
  * answers with the id of the conversation it started, which goes in the pane. Not in the store: a function, and
  * nothing draws from it.
  */
-export type CodeStartFn = (o: { agent: string; cwd: string }) => Promise<string>;
+export type CodeStartFn = (o: { agent: string; cwd: string; mode?: string; continueFrom?: string }) => Promise<string>;
 const codeStarts = new Map<string, CodeStartFn>();
 export function setCodeStart(key: string, fn: CodeStartFn | null) {
   if (fn) codeStarts.set(key, fn);

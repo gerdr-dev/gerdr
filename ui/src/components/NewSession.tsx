@@ -398,21 +398,8 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
         toast.error(e.message ?? String(e)); // createInPane reports its own failures; this one would go unseen
         throw e;
       }
-      // A panel hosting Code starts it as its own (core useCodeStart): a task's worker, not a Code conversation. Not an
-      // import of an agent's old conversation, nor on another computer: those stay Code's.
-      const viaPanel = !imp && !host ? hostStart() : undefined;
-      if (viaPanel) {
-        let id: string;
-        try {
-          id = await viaPanel({ agent: as, cwd });
-        } catch (e: any) {
-          toast.error(t("actionsSessions.openFailed", { error: e?.message ?? String(e) }));
-          throw e;
-        }
-        resumeInPane(pane.id, id);
-        return;
-      }
-      intoWorkspace(cwd);
+      // A panel hosting Code starts it as its own (createInPane, core useCodeStart): no workspace of Code's for it
+      if (imp || host || !hostStart()) intoWorkspace(cwd);
       await createInPane(pane.id, { agent: as, cwd, import: imp, title, host: host || undefined });
     } catch {
       setBusy(false);
