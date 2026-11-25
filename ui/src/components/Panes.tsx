@@ -41,7 +41,16 @@ import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
 import { BrowserOutCard, PopOutItem } from "./browser/BrowserOut";
 import { NewsDot } from "./browser/NewsDot";
-import { codeJump, codeJumpVersion, codeMenuItems, codePaneTags, paneTagVersion, subscribeCodeJumps, subscribePaneTags, type CodeMenuItem } from "@/lib/codeMenu";
+import {
+  codeJump,
+  codeJumpVersion,
+  codeMenuItems,
+  codePaneTags,
+  paneTagVersion,
+  subscribeCodeJumps,
+  subscribePaneTags,
+  type CodeMenuItem,
+} from "@/lib/codeMenu";
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
 import type { CodePaneTag } from "@/lib/codeMenu";
