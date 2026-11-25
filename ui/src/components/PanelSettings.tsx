@@ -217,7 +217,7 @@ function PanelRow({ p }: { p: Panel }) {
             <Pencil />
           </Button>
           {remote && (
-            <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void update()} title={p.source.remote}>
+            <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void update()}>
               <RefreshCw className={busy === "update" ? "animate-spin" : undefined} /> {t("panelSettings.update")}
             </Button>
           )}
