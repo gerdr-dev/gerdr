@@ -572,6 +572,39 @@ function boot() {
 }
 
 function setUp() {
+  ipcMain.removeHandler("gerdr:pick-icon-image");
+  ipcMain.handle("gerdr:pick-icon-image", async (event, title) => {
+    const w = BrowserWindow.fromWebContents(event.sender);
+    // Only the main Gerdr page can ask, and only the file chosen in this sheet is read.
+    const frame = event.senderFrame;
+    if (!w || !wins.has(winId(w)) || !frame || frame.parent || !isPage(frame.url)) return null;
+    const { canceled, filePaths } = await dialog.showOpenDialog(w, {
+      title: typeof title === "string" ? title : undefined,
+      properties: ["openFile"],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg", "avif", "bmp", "ico"] }],
+    });
+    if (canceled || !filePaths[0]) return null;
+    const file = await fs.promises.open(filePaths[0], "r");
+    try {
+      const stat = await file.stat();
+      const maxBytes = 32 * 1024 * 1024;
+      if (!stat.isFile()) return null;
+      if (stat.size > maxBytes) return { tooLarge: true };
+      // Bound the read even if the file grows after stat.
+      const bytes = new Uint8Array(stat.size + 1);
+      let offset = 0;
+      while (offset < bytes.length) {
+        const { bytesRead } = await file.read(bytes, offset, bytes.length - offset, null);
+        if (!bytesRead) break;
+        offset += bytesRead;
+      }
+      if (offset > stat.size) return { tooLarge: true };
+      return { bytes: bytes.buffer.slice(0, offset), svg: path.extname(filePaths[0]).toLowerCase() === ".svg" };
+    } finally {
+      await file.close();
+    }
+  });
+
   ipcMain.removeHandler("gerdr:shot"); // a script the loader ran before this one (and then gave up on) may have set it
   ipcMain.handle("gerdr:shot", async (e, tab) => {
     const v = [...views.values()].find((x) => x.tab === tab);

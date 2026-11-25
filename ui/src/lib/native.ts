@@ -32,6 +32,14 @@ export function nativeFilePath(f: File): string | undefined {
 
 export const hasNativeFilePath = () => typeof (window as any).gerdrNative?.getPathForFile === "function";
 
+type PickedIconImage = { bytes: ArrayBuffer; svg: boolean } | { tooLarge: true };
+
+/** Open the system picture picker in the desktop window that owns the icon dialog. */
+export function nativePickIconImage(title: string): Promise<PickedIconImage | null> | undefined {
+  const shell = (window as Window & { gerdrNative?: { invoke?: (name: string, title: string) => Promise<PickedIconImage | null> } }).gerdrNative;
+  return shell?.invoke?.("pick-icon-image", title);
+}
+
 /** space: the session (layout.ts Space) the conversation is in, so clicking it brings up the window showing that one. */
 export function nativeNotify(title: string, body: string, sessionId?: string, space?: string) {
   const b = bridge();

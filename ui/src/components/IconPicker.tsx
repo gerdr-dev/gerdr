@@ -1,5 +1,5 @@
-import { useId, useRef, type ReactNode } from "react";
-import { ImagePlus } from "lucide-react";
+import { useId, useRef, useState, type ReactNode } from "react";
+import { ImagePlus, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { slots } from "@/lib/addons";
 import { spriteTitle } from "@/lib/rail";
@@ -7,6 +7,7 @@ import { lucideIcon } from "@/lib/rail";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { nativePickIconImage } from "@/lib/native";
 import { FitSprite } from "./AddonSlot";
 import { AgentGlyph, GLYPHS, LINES, PALETTE, colorStops, isHexColor } from "./AgentGlyph";
 import { imageToIcon, isImageIcon, TEXT_ICON } from "@/lib/iconImage";
@@ -136,14 +137,36 @@ export function IconPicker({
 }) {
   useStore((s) => s.addonVersion);
   const file = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const text = icon.startsWith(TEXT_ICON) ? icon.slice(TEXT_ICON.length) : "";
-  const upload = async (f?: File) => {
-    if (!f) return;
+  const upload = async (pick: () => Promise<Blob | null>) => {
+    setUploading(true);
     try {
-      onChange({ icon: await imageToIcon(f) });
-    } catch (e: any) {
-      toast.error(t("iconPicker.uploadFailed"), { description: e?.message ?? String(e) });
+      const image = await pick();
+      if (image) onChange({ icon: await imageToIcon(image) });
+    } catch (e) {
+      toast.error(t("iconPicker.uploadFailed"), { description: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setUploading(false);
     }
+  };
+  const pickImage = () => {
+    const native = nativePickIconImage(t("iconPicker.upload"));
+    if (!native) {
+      file.current?.click();
+      return;
+    }
+    void upload(async () => {
+      const selected = await native.catch((error: unknown) => {
+        // The UI can hot-reload before the running desktop shell has been updated.
+        if (!(error instanceof Error) || !error.message.includes("No handler registered for 'gerdr:pick-icon-image'")) throw error;
+        file.current?.click();
+        return null;
+      });
+      if (!selected) return null;
+      if ("tooLarge" in selected) throw new Error(t("iconPicker.imageTooLarge"));
+      return new Blob([selected.bytes], { type: selected.svg ? "image/svg+xml" : "" });
+    });
   };
   const cell = (on: boolean, title: string, onClick: () => void, body: ReactNode, key?: string) => (
     <button
@@ -184,10 +207,12 @@ export function IconPicker({
           {isImageIcon(icon) && cell(true, t("iconPicker.image"), () => {}, <img src={icon} alt="" className="size-6 rounded-[22%] object-cover" />)}
           <button
             type="button"
-            className="flex h-8 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground"
-            onClick={() => file.current?.click()}
+            disabled={uploading}
+            aria-busy={uploading}
+            className="flex h-8 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-60"
+            onClick={pickImage}
           >
-            <ImagePlus className="size-4" /> {t("iconPicker.upload")}
+            {uploading ? <LoaderCircle className="size-4 animate-spin" /> : <ImagePlus className="size-4" />} {t("iconPicker.upload")}
           </button>
           <input
             ref={file}
@@ -195,8 +220,9 @@ export function IconPicker({
             accept="image/*"
             hidden
             onChange={(e) => {
-              void upload(e.target.files?.[0]);
+              const selected = e.target.files?.[0];
               e.target.value = "";
+              if (selected) void upload(async () => selected);
             }}
           />
         </div>
