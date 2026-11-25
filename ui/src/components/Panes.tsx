@@ -31,7 +31,7 @@ import {
   CircleX,
   X,
 } from "lucide-react";
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
 import { BrowserOutCard, PopOutItem } from "./browser/BrowserOut";
 import { NewsDot } from "./browser/NewsDot";
-import { codeMenuItems } from "@/lib/codeMenu";
+import { codeMenuItems, codePaneTag, paneTagVersion, subscribePaneTags } from "@/lib/codeMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -1168,6 +1168,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           </>
         )}
         <HostTag session={session} />
+        <PaneTag pane={pane.id} session={pane.sessionId} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("panes.waiting")}</span> : null}
         {session ? (
           <span className="hidden min-w-0 flex-1 items-center gap-2 overflow-hidden font-mono text-[11px] text-muted-foreground md:flex">
@@ -1410,5 +1411,53 @@ function PanelMenuItems({ pane, session }: { pane: string; session?: string }) {
         ),
       )}
     </>
+  );
+}
+
+/**
+ * The hosting panel's tag after a pane's title (lib/codeMenu.ts CodePaneTag): a task's number and where it stands,
+ * and the menu to move it. Two tasks side by side looked the same in their title bars, and on a phone, with the list
+ * in the drawer, an open conversation said nothing of its status at all.
+ */
+function PaneTag({ pane, session }: { pane: string; session?: string }) {
+  useSyncExternalStore(subscribePaneTags, paneTagVersion);
+  // The panel showing or not, and which one, decides whether there is a tag at all
+  useStore((s) => `${s.mode}/${Object.keys(s.codeHosts).join()}/${JSON.stringify(s.workPanels)}`);
+  const tag = codePaneTag(pane, session);
+  if (!tag) return null;
+  const chip = (
+    <span
+      title={tag.title}
+      className={cn(
+        "flex h-5 shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] whitespace-nowrap [&_svg]:size-3",
+        tag.tone === "warn"
+          ? "bg-warn/15 text-warn"
+          : tag.tone === "ok"
+            ? "bg-ok/12 text-ok"
+            : tag.tone === "brand"
+              ? "bg-brand/12 text-brand"
+              : "bg-muted text-muted-foreground",
+        tag.items?.length && "cursor-pointer hover:brightness-125",
+      )}
+    >
+      {tag.icon}
+      {tag.label}
+    </span>
+  );
+  if (!tag.items?.length) return chip;
+  return (
+    <DropdownMenu>
+      {/* Not a drag of the pane (the title bar drags it), not a focus change: just the menu */}
+      <DropdownMenuTrigger asChild onPointerDown={(e) => e.stopPropagation()}>
+        <button className="shrink-0 rounded-full outline-none">{chip}</button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {tag.items.map((it) => (
+          <DropdownMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
+            {it.icon} {it.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

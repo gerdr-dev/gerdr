@@ -3,7 +3,7 @@ import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
 import { addTab, addTabForSession, focusPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
-import { type CodeMenuFn, setCodeMenu } from "@/lib/codeMenu";
+import { type CodeMenuFn, type CodePaneTagFn, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
 import { type CodeDir, focusedSession, get, markRead, set, setCodeDirs, setCodeHost, useStore } from "@/lib/store";
 import { PanelKeyContext } from "./visible";
@@ -175,3 +175,21 @@ export function useCodeDirs(dirs: CodeDir[]) {
 }
 
 export type { CodeDir } from "@/lib/store";
+
+/**
+ * A tag after a pane's title, from the panel: what it knows about the conversation in that pane (a task's number and
+ * status), and with `items` a menu on it (move it). `fn` is asked whenever this component renders, so call the hook
+ * where the data it reads lives. Return null for no tag.
+ */
+export function useCodePaneTag(fn: CodePaneTagFn) {
+  const key = useContext(PanelKeyContext);
+  const f = useRef(fn);
+  f.current = fn;
+  // Every render: what fn answers follows the panel's own state, which only its renders tell of
+  useEffect(() => {
+    if (key) setCodePaneTag(key, (row) => f.current(row));
+  });
+  useEffect(() => () => void (key && setCodePaneTag(key, null)), [key]);
+}
+
+export type { CodePaneTag } from "@/lib/codeMenu";

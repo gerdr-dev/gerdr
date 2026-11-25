@@ -23,6 +23,8 @@ export {
   type CodeMenuItem,
   showInCodeView,
   closeCodeDrawer,
+  useCodePaneTag,
+  type CodePaneTag,
   useCodeDirs,
   type CodeDir,
   newCodeTab,

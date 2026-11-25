@@ -45,3 +45,41 @@ export function codeMenuItems(pane: string, session?: string): CodeMenuItem[] {
     return [];
   }
 }
+
+/**
+ * A tag a hosting panel puts after a pane's title: what the panel knows about the conversation in it (a task's number
+ * and status). Data, not an element: Gerdr draws the chip and, with `items`, the menu it opens (the way to change it,
+ * one tap from the pane on a phone too).
+ */
+export type CodePaneTag = { label: string; icon?: ReactNode; tone?: "warn" | "ok" | "brand"; title?: string; items?: CodeMenuItem[] };
+export type CodePaneTagFn = (row: { pane: string; session?: string }) => CodePaneTag | null | undefined;
+
+const tagByPanel = new Map<string, CodePaneTagFn>();
+let tagVersion = 0;
+const tagSubs = new Set<() => void>();
+
+/** core useCodePaneTag: panel `key`'s tag; null takes it away. Called again whenever what it would answer may have changed. */
+export function setCodePaneTag(key: string, fn: CodePaneTagFn | null) {
+  if (fn) tagByPanel.set(key, fn);
+  else tagByPanel.delete(key);
+  tagVersion++;
+  for (const f of tagSubs) f();
+}
+
+export const subscribePaneTags = (f: () => void) => (tagSubs.add(f), () => void tagSubs.delete(f));
+export const paneTagVersion = () => tagVersion;
+
+/** The hosting panel's tag for a pane, while that panel is the one shown. */
+export function codePaneTag(pane: string, session?: string): CodePaneTag | null {
+  const s = get();
+  if (s.mode !== "work") return null;
+  const space = currentSpace(s.layout);
+  const panel = s.workPanels[space];
+  const key = panel ? `${space}/${panel}` : space;
+  if (!s.codeHosts[key]) return null;
+  try {
+    return tagByPanel.get(key)?.({ pane, session }) ?? null;
+  } catch {
+    return null;
+  }
+}

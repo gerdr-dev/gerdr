@@ -351,6 +351,12 @@ declare module "@gerdr/core" {
    */
   export type CodeDir = { path: string; name?: string };
   export function useCodeDirs(dirs: CodeDir[]): void;
+  /**
+   * With CodeView: a tag after a pane's title, what you know about the conversation in it (a task's number and
+   * status); with `items`, a menu on it (move it). Data, drawn by Gerdr. Asked again whenever your component renders.
+   */
+  export type CodePaneTag = { label: string; icon?: ReactNode; tone?: "warn" | "ok" | "brand"; title?: string; items?: CodeMenuItem[] };
+  export function useCodePaneTag(fn: (row: { pane: string; session?: string }) => CodePaneTag | null | undefined): void;
   /** With CodeView: a new tab in Code (the "new conversation" page), in `cwd` when given. */
   export function newCodeTab(opts?: { cwd?: string }): void;
   /**
