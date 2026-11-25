@@ -92,7 +92,8 @@ type Record struct {
 	// ArtifactsDir: the folder this session's artifacts go in, when whoever started it chose one (a panel's task:
 	// docs/dev/ARTIFACTS.md). Empty = its repository's folder (Options.Artifacts).
 	ArtifactsDir string `json:"artifactsDir,omitempty"`
-	// Workdir: where the agent works now when it has moved away from Cwd by itself (Claude's EnterWorktree), as the
+	// Workdir: where the agent works now when it has moved away from Cwd by itself (a worktree: Claude's EnterWorktree,
+	// Gerdr Agent's / Codex's enter_worktree; docs/dev/ARCHITECTURE.md "An agent moving itself"), as the
 	// adapter reports it (acpx.WorkdirKey); empty when it is in Cwd. Cwd stays the session's home: what it is grouped
 	// and matched by, and where the agent is resumed (it moves itself back into the worktree). Saved so the pane
 	// header is right after a gerdr restart, before the agent's process is back.

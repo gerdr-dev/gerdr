@@ -9,7 +9,8 @@ Three ACP agents (`acp.Agent` from github.com/coder/acp-go-sdk), importable by o
 | `github.com/gerdr-dev/gerdr/agents/codex` | Codex (`codex app-server`, JSON-RPC) | one app-server for all sessions |
 
 Supporting packages: `acpx` (Gerdr's ACP extension methods and `_meta` keys), `sysenv` (finding the CLIs, the login
-shell's PATH, the child environment), `rpcline` (line-delimited JSON-RPC, used by codex). None of them import Gerdr's
+shell's PATH, the child environment), `rpcline` (line-delimited JSON-RPC, used by codex), `worktree` (the git side of
+the native / codex `enter_worktree` / `exit_worktree` tools). None of them import Gerdr's
 `internal/` packages; Gerdr injects its own settings through the same Options (`internal/agentwire`).
 
 Wiring is the same for all three: `a := X.New(log, opts)`, `conn := acp.NewAgentSideConnection(a, toClient, fromClient)`,
@@ -45,6 +46,7 @@ codex (`codex.NewWith(log, ext, codex.Options)`; ext nil = codex's own skills / 
 - `NoGUIHint`, `AppendPrompt` (goes into the thread's `developerInstructions` — codex's system-level instructions,
   so nothing has to be prepended to the first message; sessionID is "" while the thread is being created),
   `SessionEnv` (one app-server serves every session, so this is the thread's `shell_environment_policy.set`).
+- `NoWorktree`: leave out the `enter_worktree` / `exit_worktree` dynamic tools (`codex/worktree.go`).
 - `StrictMCP`: every server in `~/.codex/config.toml` is turned off for the thread; session/new's `mcpServers` are
   added either way (stdio and streamable HTTP; codex has no legacy SSE).
 - `Network`: network access in the workspace-write sandbox. `NoApprovals`: approval policy "never" (what the

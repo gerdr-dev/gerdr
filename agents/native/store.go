@@ -54,6 +54,8 @@ type sessionMeta struct {
 	Allow []string `json:"allow,omitempty"`
 	// Title: set by /rename (rename.go). Auto-naming lives in the client (Gerdr's hub), not here.
 	Title string `json:"title,omitempty"`
+	// Workdir: where the session works now when it moved itself away from Cwd (enter_worktree, worktree.go)
+	Workdir string `json:"workdir,omitempty"`
 }
 
 type toolUI struct {

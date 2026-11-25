@@ -34,18 +34,19 @@ import (
 )
 
 type rec struct {
-	mu      sync.Mutex
-	t       *testing.T
-	text    strings.Builder
-	tools   []string
-	perms   int
-	asks    int
-	allowed bool
-	cmds    []string
-	tasks   []acpx.Task
-	autos   []bool
-	subText map[string]string // subagent 标记 → 它说的话
-	cleared string            // /clear 之后 agent 报的新会话 id（sessionId + cleared）
+	mu       sync.Mutex
+	t        *testing.T
+	text     strings.Builder
+	tools    []string
+	perms    int
+	asks     int
+	allowed  bool
+	cmds     []string
+	tasks    []acpx.Task
+	autos    []bool
+	subText  map[string]string // subagent 标记 → 它说的话
+	workdirs []string          // where the agent said it works (acpx.WorkdirKey), in order
+	cleared  string            // /clear 之后 agent 报的新会话 id（sessionId + cleared）
 }
 
 func (r *rec) OnUpdate(n acp.SessionNotification) {
@@ -61,6 +62,9 @@ func (r *rec) OnUpdate(n acp.SessionNotification) {
 				b, _ := json.Marshal(v)
 				r.tasks = nil
 				_ = json.Unmarshal(b, &r.tasks)
+			}
+			if d, ok := g[acpx.WorkdirKey].(string); ok {
+				r.workdirs = append(r.workdirs, d)
 			}
 			if v, ok := g[acpx.AutoTurnKey].(bool); ok {
 				r.autos = append(r.autos, v)

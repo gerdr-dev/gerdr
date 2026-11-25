@@ -181,7 +181,7 @@ func (h *Hub) mcpFor(rec Record) []acp.McpServer {
 }
 
 // extMeta adds what decides a session's skills / MCP / extra instructions to the _meta of a new / resume / load:
-// its extra skill folders, its project and its system file.
+// its extra skill folders, its project, its system file, its artifacts folder and where its agent works now.
 func (h *Hub) extMeta(rec Record, meta map[string]any) {
 	if roots := h.skillRoots(rec); len(roots) > 0 {
 		meta["skillRoots"] = roots
@@ -202,6 +202,11 @@ func (h *Hub) extMeta(rec Record, meta map[string]any) {
 	}
 	if a != "" {
 		meta["artifactsDir"] = a
+	}
+	// Where the agent moved itself (a worktree): the resume's cwd is the session's home, and an agent that can't
+	// restore its own move (Codex: the cwd given wins) goes back there from this instead (acpx.WorkdirKey).
+	if rec.Workdir != "" {
+		meta[acpx.WorkdirKey] = rec.Workdir
 	}
 }
 

@@ -201,6 +201,9 @@ func (a *Agent) attach(id, cwd string, meta map[string]any, servers []acp.McpSer
 	if m.Cwd == "" {
 		m.Cwd, _ = os.UserHomeDir()
 	}
+	if workdirGone(m.Workdir) {
+		m.Workdir = ""
+	}
 	if m.Mode == "" {
 		m.Mode = modeDefault
 	}
@@ -214,6 +217,9 @@ func (a *Agent) attach(id, cwd string, meta map[string]any, servers []acp.McpSer
 	s.setClient(meta, servers)
 	if len(es) == 0 {
 		s.saveMeta()
+	}
+	if m.Workdir != "" {
+		s.noteWorkdir() // in a worktree: Gerdr's record may be older than the move
 	}
 	return s, nil
 }

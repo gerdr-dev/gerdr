@@ -30,6 +30,7 @@ import (
 	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/rpcline"
 	"github.com/gerdr-dev/gerdr/sysenv"
+	"github.com/gerdr-dev/gerdr/worktree"
 )
 
 const (
@@ -104,6 +105,8 @@ type Options struct {
 
 	// NoGUIHint drops gerdr's GUI hint from developerInstructions.
 	NoGUIHint bool
+	// NoWorktree leaves out the enter_worktree / exit_worktree tools (worktree.go).
+	NoWorktree bool
 	// AppendPrompt adds per-session text to the thread's developerInstructions (codex's own system-level
 	// instructions; no need to prepend them to the first message), after Prompt. sessionID is "" when the thread
 	// is being created; meta is session/new's _meta (or resume / load's).
@@ -473,6 +476,9 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 			params["model"] = m
 		}
 	}
+	if !a.opts.NoWorktree {
+		params["dynamicTools"] = worktreeTools()
+	}
 	a.attachMu.Lock()
 	cfg, fp := a.threadConfig(ctx, rpc, "", p.Cwd, p.Meta, p.McpServers)
 	if cfg != nil {
@@ -528,6 +534,7 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any,
 		old.mu.Unlock()
 	}
 	a.mu.Unlock()
+	cwd = resumeCwd(cwd, meta)
 	ap, sb := a.modeParams(mode)
 	params := map[string]any{"threadId": id, "excludeTurns": true, "approvalPolicy": ap, "sandbox": sandboxMode(sb), "developerInstructions": a.instructions(id, cwd, meta)}
 	if cwd != "" {
@@ -563,6 +570,9 @@ func (a *Agent) attach(ctx context.Context, id, cwd string, meta map[string]any,
 	a.sessions[id] = s
 	a.mu.Unlock()
 	a.announceCommands(id)
+	if worktree.RootOf(s.cwd) != "" {
+		a.noteWorkdir(ctx, s) // Gerdr's record may predate the move (it was made while Gerdr wasn't listening)
+	}
 	return s, nil
 }
 
@@ -884,11 +894,19 @@ func (a *Agent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.PromptResp
 		if d := acpx.ArtifactsDir(meta); d != "" && sb["type"] == "workspaceWrite" {
 			sb["writableRoots"] = []string{d}
 		}
+		s.mu.Lock()
+		cwd := s.cwd
+		s.mu.Unlock()
 		params := map[string]any{
 			"threadId":       s.id,
 			"input":          toInputs(p.Prompt),
 			"approvalPolicy": ap,
 			"sandboxPolicy":  sb,
+		}
+		// The folder the thread works in: changed by enter_worktree / exit_worktree mid-turn, it takes effect here
+		// (commands, the sandbox root, and the thread's saved cwd: worktree.go)
+		if cwd != "" {
+			params["cwd"] = cwd
 		}
 		if p.MessageId != nil {
 			params["clientUserMessageId"] = *p.MessageId
@@ -1347,6 +1365,8 @@ func (a *Agent) HandleRequest(ctx context.Context, method string, params json.Ra
 			}
 		}
 		return map[string]any{"answers": answers}, nil
+	case "item/tool/call":
+		return a.dynamicTool(ctx, params)
 	case "mcpServer/elicitation/request":
 		// MCP 服务器要表单：gerdr 还没有通用表单界面，先拒绝（agent 会照常往下走）。
 		return map[string]any{"action": "decline", "content": nil, "_meta": nil}, nil

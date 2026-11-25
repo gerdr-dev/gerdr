@@ -105,7 +105,8 @@ func runTask(c *call, args map[string]any) result {
 		system: subagentSystemPrompt(s.cwd()),
 		msgs:   []llm.Message{{Role: "user", Content: []llm.Part{llm.TextPart(prompt)}}}}
 	for _, t := range parent.tools {
-		if t.name != "task" && t.name != "ask_user" {
+		// Not the worktree tools either: they move the whole session, not just the sub-agent
+		if t.name != "task" && t.name != "ask_user" && t != enterWorktreeTool && t != exitWorktreeTool {
 			r.tools = append(r.tools, t)
 		}
 	}

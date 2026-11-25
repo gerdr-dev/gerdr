@@ -108,6 +108,22 @@ func decide(mode string, t *tool, args map[string]any, cwd string, mem memoryDir
 		}
 		return ask, ""
 	}
+	switch t.name {
+	case "enter_worktree":
+		// Asked for in so many words (the tool says only then), and nothing is lost: a new folder and branch
+		if mode == modeReadOnly {
+			return deny, ""
+		}
+		return allow, ""
+	case "exit_worktree":
+		if mode == modeReadOnly {
+			return deny, ""
+		}
+		if str(args, "action") != "remove" || mode == modeBypass {
+			return allow, ""
+		}
+		return ask, ""
+	}
 	if t.name == "web_fetch" {
 		// 按域名放行：同一个站的文档翻好几页不用每页都点
 		host := ""

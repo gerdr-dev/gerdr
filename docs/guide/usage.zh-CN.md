@@ -30,6 +30,12 @@ Claude Desktop 里 Code 标签页的对话可以拿到这里接着聊：设置 �
 导进来之后别再在 Desktop 里接着聊，不然对话会分叉。Desktop 的普通聊天（claude.ai 那种）存在 Anthropic 的服务器上、不在你电脑里，导不了。
 agent 也能做：`gerdr session import claude-desktop`。
 
+想让 agent 在单独的 git worktree 里干活（同一个仓库有两个 agent 时互不干扰），跟它说一声「在 worktree 里做」就行，
+也可以写进仓库的 AGENTS.md / CLAUDE.md 或 agent 的记忆里，以后都照做。Claude Code 用它自带的 EnterWorktree；
+Gerdr Agent 和 Codex 用 Gerdr 给的 `enter_worktree`，在 `<仓库>/.gerdr/worktrees/<名字>` 开一个，新分支从远端默认分支拉出来
+（Codex 只有从这个版本起新开的对话才有）。无论哪种，会话都会整个搬过去：pane 顶上显示它的分支，旁边开的终端在那里，
+恢复会话也回到那里。worktree 里没有 git 不管的文件（`.env`、`node_modules`），agent 会被提醒从原仓库补过来。
+
 ## 快捷键
 
 和 herdr / tmux 一样：先按前缀 `ctrl+b`，松开，再按：

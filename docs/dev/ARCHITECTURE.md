@@ -159,6 +159,31 @@ What was looked at against this (2026-11) and decided:
    the turn (the call line is written before the nested tools run, so the card lands above them), on replay merged with the
    turn items by timestamp. `sleep` *is* an item (`type: "sleep"`, id = call id).
 
+## An agent moving itself into a worktree (acpx.WorkdirKey, package worktree)
+
+A session has a home folder (`Record.Cwd`: how it is grouped, its memory, what a resume passes as cwd) and may work
+elsewhere (`Record.Workdir`), which the adapter reports in `session_info_update._meta.gerdr.workdir`. The UI uses it for
+the branch in the pane header and the terminal opened beside the session; the hub passes it back in the resume / load
+`_meta` (`extMeta`). Who moves it:
+
+- Claude Code: its own EnterWorktree / ExitWorktree (`.claude/worktrees/`); the adapter reads their structured results
+  (`claude/workdir.go`), and Claude restores the move itself on resume.
+- Gerdr Agent and Codex: `enter_worktree` / `exit_worktree` from Gerdr, the git side in the top-level `worktree`
+  package: `<repo>/.gerdr/worktrees/<name>`, branch `<name>` from `origin/<default>` (fetched) else HEAD, kept out of
+  git status through `info/exclude`. Native keeps it in its session meta (`Workdir`) and every tool reads it per call.
+- Codex, measured on 0.166 (`internal/agenthost/e2e_worktree_test.go`): no tool of its own, so the adapter adds two
+  **dynamic tools** (experimental API, `thread/start` only; a resumed thread keeps them, but one started before can't get
+  them) and answers `item/tool/call` itself. The move only takes effect at the next `turn/start`, which carries `cwd`
+  ("for this turn and subsequent turns"): commands, the sandbox root and the cwd saved with the thread all follow it.
+  Until then the running turn's sandbox only writes under the folder it started in — a worktree **beside** the repository
+  refused every write mid-turn, one **inside** it doesn't, hence `.gerdr/worktrees/`; the tool's result tells the model
+  to give its commands that workdir for the rest of the turn. `thread/resume` with a `cwd` moves the thread there (the
+  given one wins over the saved one), so the adapter resumes in `_meta.workdir` when that folder still exists.
+- External ACP agents (a `command` in config.json, e.g. `agy acp`): no worktree support, on purpose (the user's call,
+  2026-11-25). ACP has no way to move a session's cwd, so a Gerdr-served MCP `enter_worktree` could only make the
+  worktree and ask the model to use absolute paths there; one relative path and it edits the main checkout, which is
+  what a worktree is meant to prevent. Support one by adapting it (its own tool, or an adapter that can move it).
+
 ## Gerdr Agent（native）—— 自己写的 agent，直接调模型接口
 
 `agents/native` (a public package: other programs embed it; the protocol, extension methods and `_meta`

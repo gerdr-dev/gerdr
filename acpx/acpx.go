@@ -186,10 +186,12 @@ const AutoTurnKey = "autoTurn"
 const AutoTurnWakeKey = "autoTurnWake"
 
 // WorkdirKey: session_info_update._meta.gerdr.workdir = string, the directory the agent works in now (symlinks
-// resolved). An agent can move itself mid-session — Claude's EnterWorktree / ExitWorktree — and the session's cwd
+// resolved). An agent can move itself mid-session — Claude's EnterWorktree / ExitWorktree, the enter_worktree /
+// exit_worktree Gerdr gives Gerdr Agent and Codex — and the session's cwd
 // alone would leave the client showing and resolving paths against a directory the agent has left. Sent when it
 // changes and again when a process starts; the session's own cwd means it is back home. The session's cwd is still
-// what the client passes to session/load | resume: the agent restores its own move from there (Claude does, measured).
+// what the client passes to session/load | resume: Claude restores its own move from there (measured); Gerdr also passes
+// this key back in that request's _meta for agents that can't (Codex: the cwd given wins).
 const WorkdirKey = "workdir"
 
 type Wake struct {

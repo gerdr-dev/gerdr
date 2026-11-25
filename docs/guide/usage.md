@@ -40,6 +40,14 @@ workspace. Don't keep talking in the Desktop App as well, or the conversation fo
 conversations (the claude.ai kind) are kept on Anthropic's servers, not on your computer, so they can't be imported.
 Agents: `gerdr session import claude-desktop`.
 
+To have an agent work in its own git worktree (so two agents on one repository don't step on each other), say so:
+"work in a worktree", in the message, or once for good in the repository's AGENTS.md / CLAUDE.md or the agent's memory.
+Claude Code uses its own EnterWorktree; Gerdr Agent and Codex get an `enter_worktree` tool from Gerdr, which makes the
+worktree in `<repo>/.gerdr/worktrees/<name>` on a new branch from the remote's default branch (Codex: in conversations
+started from this version on). Either way the session moves there: the pane header shows its branch, a terminal opened
+beside it starts there, and it resumes there. Files git doesn't track (`.env`, `node_modules`) aren't in a worktree;
+the agent is told to bring over what it needs.
+
 ## keys
 
 Like herdr / tmux: press the prefix `ctrl+b`, release, then:

@@ -161,7 +161,18 @@ func (s *session) currentID() string {
 	return s.id
 }
 
+// cwd: where the session works: its worktree after enter_worktree (worktree.go), else its own folder.
 func (s *session) cwd() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.meta.Workdir != "" {
+		return s.meta.Workdir
+	}
+	return s.meta.Cwd
+}
+
+// home: the session's own folder, also while it works in a worktree.
+func (s *session) home() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.meta.Cwd
@@ -451,14 +462,15 @@ func (s *session) memory() memoryDirs {
 	if s.a.opt.NoMemory {
 		return memoryDirs{}
 	}
-	return memoryFor(s.a.st.dir, s.cwd())
+	return memoryFor(s.a.st.dir, s.home()) // the project's memory, also from its worktrees
 }
 
 func (s *session) newRun(ctx context.Context) *run {
 	cfg := s.a.config()
 	s.mu.Lock()
-	model, effort, cwd := s.meta.Model, s.meta.Effort, s.meta.Cwd
+	model, effort := s.meta.Model, s.meta.Effort
 	s.mu.Unlock()
+	cwd := s.cwd()
 	m, _ := cfg.find(model)
 	r := &run{s: s, model: m, effort: effort, tok: &s.tok}
 	r.tools = append([]*tool(nil), builtinTools...)
@@ -495,7 +507,7 @@ func (s *session) newRun(ctx context.Context) *run {
 var builtinTools []*tool
 
 func init() {
-	builtinTools = []*tool{readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, askTool, taskTool, bashOutputTool, stopTaskTool, webFetchTool, generateImageTool}
+	builtinTools = []*tool{readTool, writeTool, editTool, bashTool, grepTool, globTool, todoTool, askTool, taskTool, bashOutputTool, stopTaskTool, webFetchTool, generateImageTool, enterWorktreeTool, exitWorktreeTool}
 }
 
 // ---- Context-full notice ----
