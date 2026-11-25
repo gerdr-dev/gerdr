@@ -245,6 +245,22 @@ function eatNextClick() {
   const t = setTimeout(off, 500);
 }
 
+const ROW_LAYOUT = "flex items-center gap-2 pr-2 pl-1.5";
+
+/**
+ * A row's content. Alone it is laid out by the row's own box; with a line under it (`below`), in a box of its own
+ * over that line, which starts where the title does (the icon's width and the gap in) and belongs to the same row.
+ */
+function RowBox({ below, roomy, children }: { below?: React.ReactNode; roomy: boolean; children: React.ReactNode }) {
+  if (!below) return children;
+  return (
+    <>
+      <div className={cn(ROW_LAYOUT, roomy ? "min-h-10 pt-1.5" : "h-7")}>{children}</div>
+      <div className={cn("pr-2 leading-4", roomy ? "pb-1.5 pl-[30px]" : "pb-1 pl-7")}>{below}</div>
+    </>
+  );
+}
+
 /** The clock the roomy rows' "3m" column goes by, ticking every 15s while `on` (minutes are its smallest step). */
 function useNow(on: boolean) {
   const [now, setNow] = useState(() => Date.now());
@@ -262,7 +278,7 @@ function useNow(on: boolean) {
  * the menu, dragging it onto a pane — minus what belongs to a workspace group (pinning, its place in the group).
  * `where`: shown at its end instead of the folder.
  */
-export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
+export function PaneRow({ pane: id, where, below }: { pane: string; where?: string; below?: React.ReactNode }) {
   const layout = useStore((s) => s.layout);
   const loc = allLeaves(layout).find((x) => x.pane.id === id);
   const sid = loc?.pane.sessionId;
@@ -296,6 +312,7 @@ export function PaneRow({ pane: id, where }: { pane: string; where?: string }) {
       visible={here && inSplit}
       inActiveTab={loc.tab.id === cur.activeTab}
       where={where}
+      below={below}
     />
   );
   return own ? <Roomy.Provider value={own}>{row}</Roomy.Provider> : row;
@@ -872,6 +889,7 @@ const Row = memo(function Row({
   visible,
   inActiveTab,
   where,
+  below,
   num,
   groupDir,
   groupId,
@@ -893,6 +911,8 @@ const Row = memo(function Row({
   inActiveTab: boolean;
   /** Shown instead of the directory (rows of "active", out of their group). */
   where?: string;
+  /** A line of the caller's under the row, part of it (core CodeRow `below`). */
+  below?: React.ReactNode;
   /** Its ⌘1–9 number, while ⌘ is held (rows of "active"). */
   num?: number;
   /** The folder of the row's workspace: its group's header already says it, so a row there in the same folder doesn't. */
@@ -974,78 +994,83 @@ const Row = memo(function Row({
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
-            "group relative flex cursor-default items-center gap-2 rounded-md pr-2 pl-1.5 text-[12px] select-none",
-            roomy ? "min-h-11 py-1.5" : "h-7",
+            "group relative cursor-default rounded-md text-[12px] select-none",
+            // With a line under it (`below`) the row is this box and the line together: one thing to hover, click,
+            // right-click and drag. The row's own layout then moves to the inner box
+            !below && ROW_LAYOUT,
+            !below && (roomy ? "min-h-11 py-1.5" : "h-7"),
             current ? "bg-accent" : visible ? "bg-accent/40" : "hover:bg-accent/60",
             "data-[state=open]:ring-1 data-[state=open]:ring-brand/60",
           )}
         >
           {loading && <BorderFlow />}
-          <IconSlot n={num} pinned={pinned}>
-            {s ? (
-              <AgentIcon agent={s.agent} className={cn("shrink-0", roomy ? "size-4" : "size-3.5")} />
-            ) : (
-              <Icon className={cn("shrink-0 text-muted-foreground", roomy ? "size-4" : "size-3.5")} />
-            )}
-          </IconSlot>
-          {roomy ? (
-            // Two lines: what it is, then where it is and how long ago it last moved (running: for how long). With nothing
-            // to say where (its group's header already does), one line: a second line holding only the
-            // time left the title and time on different lines with the icon between them (reported)
-            <span className={cn("min-w-0 flex-1 leading-tight", oneLine && "flex items-center gap-1.5")}>
-              <span
-                className={cn(
-                  "block truncate",
-                  oneLine && "min-w-0 flex-1",
-                  pane.term && "font-mono text-[11.5px]",
-                  !s && !pane.term && "text-muted-foreground",
-                )}
-              >
-                {tabLabel ? (
-                  <>
-                    {tabLabel} <span className="text-muted-foreground">· {title}</span>
-                  </>
-                ) : (
-                  title
-                )}
-              </span>
-              {oneLine ? (
-                time
+          <RowBox below={below} roomy={!!roomy}>
+            <IconSlot n={num} pinned={pinned}>
+              {s ? (
+                <AgentIcon agent={s.agent} className={cn("shrink-0", roomy ? "size-4" : "size-3.5")} />
               ) : (
-                <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
-                  <HostTag session={s} />
-                  <span className="min-w-0 flex-1 truncate">{place}</span>
-                  {time}
-                </span>
+                <Icon className={cn("shrink-0 text-muted-foreground", roomy ? "size-4" : "size-3.5")} />
               )}
-            </span>
-          ) : (
-            <>
-              <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
-                {tabLabel ? (
-                  <>
-                    {tabLabel} <span className="text-muted-foreground">· {title}</span>
-                  </>
+            </IconSlot>
+            {roomy ? (
+              // Two lines: what it is, then where it is and how long ago it last moved (running: for how long). With nothing
+              // to say where (its group's header already does), one line: a second line holding only the
+              // time left the title and time on different lines with the icon between them (reported)
+              <span className={cn("min-w-0 flex-1 leading-tight", oneLine && "flex items-center gap-1.5")}>
+                <span
+                  className={cn(
+                    "block truncate",
+                    oneLine && "min-w-0 flex-1",
+                    pane.term && "font-mono text-[11.5px]",
+                    !s && !pane.term && "text-muted-foreground",
+                  )}
+                >
+                  {tabLabel ? (
+                    <>
+                      {tabLabel} <span className="text-muted-foreground">· {title}</span>
+                    </>
+                  ) : (
+                    title
+                  )}
+                </span>
+                {oneLine ? (
+                  time
                 ) : (
-                  title
+                  <span className="mt-0.5 flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
+                    <HostTag session={s} />
+                    <span className="min-w-0 flex-1 truncate">{place}</span>
+                    {time}
+                  </span>
                 )}
               </span>
-              <HostTag session={s} className="py-0.5 group-hover:hidden" iconOnly />
-              <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
-                {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
-              </span>
-            </>
-          )}
-          <button
-            className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
-            title={top && s ? t("nav.removeActive") : inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
-            onClick={(e) => (e.stopPropagation(), dismiss())}
-          >
-            <X className="size-3" />
-          </button>
-          {/* Always drawn (transparent when there is nothing to show, or no session at all: a file / terminal pane)
+            ) : (
+              <>
+                <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
+                  {tabLabel ? (
+                    <>
+                      {tabLabel} <span className="text-muted-foreground">· {title}</span>
+                    </>
+                  ) : (
+                    title
+                  )}
+                </span>
+                <HostTag session={s} className="py-0.5 group-hover:hidden" iconOnly />
+                <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
+                  {s?.status === "running" && s.turn ? <Elapsed since={s.turn.startedAt} /> : <span className="truncate">{where ?? sub}</span>}
+                </span>
+              </>
+            )}
+            <button
+              className="hidden size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-hover:flex hover:text-foreground"
+              title={top && s ? t("nav.removeActive") : inSplit ? t("unifiedSidebar.closeCell") : t("unifiedSidebar.closeTab")}
+              onClick={(e) => (e.stopPropagation(), dismiss())}
+            >
+              <X className="size-3" />
+            </button>
+            {/* Always drawn (transparent when there is nothing to show, or no session at all: a file / terminal pane)
               so the right-hand labels line up in one column across every row. */}
-          <StatusDot status={dotStatus(s)} unread={unread} />
+            <StatusDot status={dotStatus(s)} unread={unread} />
+          </RowBox>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>

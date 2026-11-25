@@ -311,7 +311,8 @@ declare module "@gerdr/core" {
   /** With CodeView: the current project's panes as Code lists them. Follow the conversations' state with useSessions. */
   export function useCodeRows(): CodeRowInfo[];
   /** With CodeView: Code's own row for a pane (icon, status, unread, its menu, dragging). `where`: shown at its end instead of the folder. */
-  export function CodeRow(props: { pane: string; where?: string }): ReactNode;
+  /** `below`: a line of yours under it, part of the row (hovered, clicked, right-clicked and dragged with it). */
+  export function CodeRow(props: { pane: string; where?: string; below?: ReactNode }): ReactNode;
   /**
    * With CodeView: Code's default list ("active" and the project's workspaces), the very part Code mode itself puts
    * beside its panes. Under list="replace", `<><Mine /><CodeList /></>` is what list="add" does.
