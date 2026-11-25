@@ -78,7 +78,7 @@ function RailProjects() {
                 {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
                 {hasProjectIcon(sp) ? (
                   // Its own icon fills the button; the bar at the left still says which project is on
-                  <ProjectIcon name={sp.name} icon={sp.icon} color={sp.color} className="size-7" />
+                  <ProjectIcon name={sp.name} icon={sp.icon} color={sp.color} className={cn("size-7", !on && "grayscale")} />
                 ) : (
                   <span className="max-w-full truncate px-0.5">{spaceInitials(sp.name)}</span>
                 )}
