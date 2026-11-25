@@ -644,9 +644,10 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
 	s.endLoading()
 	if err != nil {
-		// 一句话都没说过的会话，agent 那边多半压根没落盘（claude / codex 都是第一条消息才写），
-		// 接不回来很正常：换一个新的 agent 会话顶上，人看不出区别。
-		if !s.hasUserMessages() {
+		// A session whose agent side was never spoken to is usually not on disk at all (claude and codex both write
+		// on the first message), so it can't be reattached: start a fresh agent session in its place, which nobody
+		// can tell apart.
+		if !s.agentHeardUser() {
 			nres, nerr := c.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
 			if nerr == nil {
 				s.h.rekey(s, string(nres.SessionId))
@@ -674,12 +675,24 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 	return c, nil
 }
 
-func (s *Session) hasUserMessages() bool {
+// agentHeardUser: whether this session's agent session has been sent a message. Only what comes after the last
+// handoff notice counts: a handoff (switching agent, importing a Code conversation into a panel) starts a new agent
+// session under a copy of the old log, and that copy's user messages never reached it. Counting them left an
+// imported conversation that was reopened before anyone wrote in it stuck on "no rollout found" (codex) instead of
+// getting a fresh agent session; the handoff block still carries the copy on the next message.
+func (s *Session) agentHeardUser() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
-	for _, e := range s.events {
+	for i := len(s.events) - 1; i >= 0; i-- {
+		e := s.events[i]
+		if e.Kind == EvNotice && e.Level == handoffLevel {
+			return false
+		}
 		if e.Kind == EvUser {
+			return true
+		}
+		if _, ok := userChunkHead(e); ok {
 			return true
 		}
 	}

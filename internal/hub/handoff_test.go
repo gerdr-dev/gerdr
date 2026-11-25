@@ -310,3 +310,22 @@ func TestForkWhileRunning(t *testing.T) {
 		t.Fatal("switched agents mid-turn")
 	}
 }
+
+// The user messages copied in by a handoff never reached the new agent session, so they don't stop ensureAttached from
+// replacing it when it can't be reattached (codex hasn't written a thread nobody spoke to: "no rollout found").
+func TestAgentHeardUserAfterHandoff(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(h, Record{ID: "new", Agent: "codex", Cwd: "/tmp"})
+	h.register(s)
+	h.adoptHistory(s, Record{ID: "old", Agent: "codex", Cwd: "/tmp"}, []*Event{msg("u1", "之前说的"), agentText("好")})
+	if s.agentHeardUser() {
+		t.Fatal("copied messages counted as said to the new agent session")
+	}
+	s.emit(msg("u2", "接着说"))
+	if !s.agentHeardUser() {
+		t.Fatal("a message after the handoff not counted")
+	}
+}
