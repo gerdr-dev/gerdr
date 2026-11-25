@@ -8,24 +8,30 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 )
 
-// An external agent's turn keeps the mode it started under (agy only applies a change at its next prompt): the
-// running turn reports it while the picker shows the new one. Gerdr's own adapters apply a change at once.
+// A turn that keeps the mode it started under (agy, codex unless full-access) reports it while the picker shows the
+// new one; claude and native apply a change at once.
 func TestTurnMode(t *testing.T) {
 	h := &Hub{opt: Options{Dir: t.TempDir()}, sessions: map[string]*Session{}, subs: map[*Sub]struct{}{}, log: slog.Default()}
 	h.defs = []AgentDef{{ID: "agy", Command: []string{"agy", "acp"}}}
 	for _, c := range []struct {
-		agent, want string
-	}{{"agy", "default"}, {"claude", ""}} {
+		agent, to, want string
+	}{
+		{"agy", "auto", "default"},
+		{"claude", "auto", ""},
+		{"native", "auto", ""},
+		{"codex", "auto", "default"},
+		{"codex", "full-access", ""}, // the adapter accepts every ask from then on
+	} {
 		s := &Session{h: h, loaded: true, rec: Record{ID: "s-" + c.agent, Agent: c.agent},
-			modes: &acp.SessionModeState{CurrentModeId: "default", AvailableModes: []acp.SessionMode{{Id: "default"}, {Id: "auto"}}}}
+			modes: &acp.SessionModeState{CurrentModeId: "default", AvailableModes: []acp.SessionMode{{Id: "default"}, {Id: acp.SessionModeId(c.to)}}}}
 		s.running = true
 		s.turnMode = s.turnModeLocked()
 		if m := s.turnInfoLocked().Mode; m != "" {
 			t.Fatalf("%s: nothing changed yet, got turn mode %q", c.agent, m)
 		}
-		s.modes.CurrentModeId = "auto" // a person switched mid-turn
+		s.modes.CurrentModeId = acp.SessionModeId(c.to) // a person switched mid-turn
 		if m := s.turnInfoLocked().Mode; m != c.want {
-			t.Fatalf("%s: turn mode %q, want %q", c.agent, m, c.want)
+			t.Fatalf("%s → %s: turn mode %q, want %q", c.agent, c.to, m, c.want)
 		}
 		s.modes.CurrentModeId = "default" // and back: nothing to show
 		if m := s.turnInfoLocked().Mode; m != "" {

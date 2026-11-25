@@ -382,8 +382,8 @@ type ContextInfo struct {
 type TurnInfo struct {
 	StartedAt    int64 `json:"startedAt"`
 	OutputTokens int   `json:"outputTokens"`
-	// Mode: the mode this turn really runs under, when a person changed it after the turn started (the picker shows
-	// the new one). Only for external agents, see turnModeLocked.
+	// Mode: the mode this turn really runs under, when a person changed it after the turn started and the agent only
+	// applies the change from its next turn (the picker shows the new one), see modeAppliesNow.
 	Mode string `json:"mode,omitempty"`
 }
 
@@ -399,22 +399,41 @@ func (s *Session) turnInfoLocked() *TurnInfo {
 		return nil
 	}
 	t := &TurnInfo{StartedAt: s.turnStarted, OutputTokens: s.turnTokens}
-	if s.modes != nil && s.turnMode != "" && s.turnMode != string(s.modes.CurrentModeId) {
+	if s.modes != nil && s.turnMode != "" && s.turnMode != string(s.modes.CurrentModeId) && !modeAppliesNow(s.h.Base(s.rec.Agent), string(s.modes.CurrentModeId)) {
 		t.Mode = s.turnMode
 	}
 	return t
 }
 
-// turnModeLocked: the mode a turn starting now runs under, for TurnInfo.Mode. An external ACP agent may fix its
-// permission mode when a turn starts: Antigravity (`agy acp`) reports a mode changed mid-turn at once but keeps
-// asking under the old one until its next prompt (measured: set_mode auto on the first ask, the turn's next two
-// commands still asked, the next turn's didn't), so "I set Auto and it still asks" read as Gerdr ignoring the picker.
-// Gerdr's own adapters apply a change at once: empty for them.
+// turnModeLocked: the mode a turn starting now runs under, for TurnInfo.Mode (shown only while a change made after
+// the turn started hasn't reached it, modeAppliesNow).
 func (s *Session) turnModeLocked() string {
-	if s.modes == nil || builtinAgent(s.h.Base(s.rec.Agent)) {
+	if s.modes == nil {
 		return ""
 	}
 	return string(s.modes.CurrentModeId)
+}
+
+// modeAppliesNow: whether a running turn of this agent switches to mode at once, or only its next turn does.
+//   - claude: set_permission_mode reaches the running CLI.
+//   - native: judges every tool call against the current mode.
+//   - codex: the approval policy and sandbox are fixed per turn by turn/start; a turn/steer carries none. Only
+//     full-access takes effect mid-turn: the adapter then accepts every approval codex asks for, which also lets a
+//     command the old sandbox refused escalate out of it (agents/codex SetSessionMode).
+//
+// Asks already on screen are answered by SetMode for a mode that never asks (modeAllowsAll).
+//   - external ACP agents may fix the mode when a turn starts: Antigravity (`agy acp`) reports a mode changed mid-turn
+//     at once but keeps asking under the old one until its next prompt (measured: set_mode auto on the first ask, the
+//     turn's next two commands still asked, the next turn's didn't), so "I set Auto and it still asks" read as Gerdr
+//     ignoring the picker. Assume they don't apply it.
+func modeAppliesNow(base, mode string) bool {
+	switch base {
+	case "claude", "native":
+		return true
+	case "codex":
+		return mode == "full-access"
+	}
+	return false
 }
 
 func (s *Session) Summary() Summary {

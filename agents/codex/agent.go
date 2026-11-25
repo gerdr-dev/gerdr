@@ -676,7 +676,10 @@ func (a *Agent) SetSessionMode(ctx context.Context, p acp.SetSessionModeRequest)
 	s.mu.Lock()
 	s.mode = string(p.ModeId)
 	s.mu.Unlock()
-	// 下一轮 turn/start 时带上（审批策略和沙箱是按轮覆盖的）。
+	// Sent with the next turn/start: the approval policy and sandbox are turn/start parameters, and a turn/steer
+	// carries neither, so the running turn keeps its old ones. Full access still takes effect at once from this side:
+	// askPermission accepts what codex asks from now on (the hub answers the asks already on screen,
+	// hub.modeAllowsAll), which also lets a command the old sandbox refused escalate out of it.
 	return acp.SetSessionModeResponse{}, nil
 }
 
@@ -1364,6 +1367,9 @@ func decision(opt string) string {
 }
 
 func (a *Agent) askPermission(ctx context.Context, threadID, itemID, title string, kind acp.ToolKind, raw map[string]any, always bool) (string, error) {
+	if a.fullAccess(threadID) {
+		return "allow_once", nil // switched to Full access during a turn that started under an asking mode
+	}
 	opts := []acp.PermissionOption{
 		{OptionId: "allow_once", Name: i18n.S("允许", "Allow"), Kind: acp.PermissionOptionKindAllowOnce},
 	}
@@ -1389,6 +1395,22 @@ func (a *Agent) askPermission(ctx context.Context, threadID, itemID, title strin
 		return string(res.Outcome.Selected.OptionId), nil
 	}
 	return "", errors.New("cancelled")
+}
+
+// fullAccess: threadID's session (a sub-agent asks under its parent's mode) is in full-access now.
+func (a *Agent) fullAccess(threadID string) bool {
+	a.mu.Lock()
+	s := a.sessions[threadID]
+	if s != nil && s.sub != nil {
+		s = s.sub.parent
+	}
+	a.mu.Unlock()
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mode == modeFull
 }
 
 func (a *Agent) itemTitle(threadID, itemID, def string) string {
