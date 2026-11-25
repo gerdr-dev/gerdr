@@ -139,9 +139,10 @@ function PanelRow({ p }: { p: Panel }) {
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <>
+        // One group, tight: as three items of the row they were spaced like the row's parts (gap-3) on top of their own padding
+        <div className="flex shrink-0 items-center gap-0.5">
           <Button
-            size="sm"
+            size="icon-sm"
             variant="ghost"
             title={t("panelSettings.rename")}
             onClick={() => set({ dialog: { kind: "rename", target: "panel", id: p.key, value: p.title } })}
@@ -156,7 +157,7 @@ function PanelRow({ p }: { p: Panel }) {
           <Button size="sm" variant="ghost" className="text-bad hover:text-bad" onClick={() => void remove()}>
             <Trash2 /> {t("workSource.remove")}
           </Button>
-        </>
+        </div>
       )}
     </div>
   );
