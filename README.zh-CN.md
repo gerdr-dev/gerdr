@@ -20,6 +20,8 @@
 
 ---
 
+<p align="center"><img src="docs/images/demo.gif" alt="Gerdr 里三个 Claude Code / Codex 会话并排干活" width="100%" /></p>
+
 **一个窗口，同时管一群 coding agent。**
 
 和 [herdr](https://github.com/herdrdev/herdr) 一样：分屏、tab、工作空间，一个键把 pane 放大，还能分成几个互相隔离的 session；哪个 agent 卡住在等你，一眼就看到，一个键跳过去；

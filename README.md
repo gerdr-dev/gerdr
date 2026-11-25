@@ -20,6 +20,8 @@
 
 ---
 
+<p align="center"><img src="docs/images/demo.gif" alt="Three Claude Code / Codex sessions working side by side in Gerdr" width="100%" /></p>
+
 **One window for all your coding agents.**
 
 Like [herdr](https://github.com/herdrdev/herdr): splits, tabs and workspaces, with one key to zoom a pane, and separate
