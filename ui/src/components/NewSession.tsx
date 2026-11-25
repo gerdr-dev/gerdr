@@ -315,11 +315,12 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   // such a panel may not even show (the repositories in its settings). Code mode keeps the workspaces.
   const panelDirs = useStore((s) => hostDirs(s));
   const wsDirs = useMemo(() => {
-    if (panelDirs) return panelDirs.map((d) => ({ id: d.path, cwd: trimSlash(d.path), name: d.name || trimSlash(d.path).split("/").pop() || d.path }));
+    if (panelDirs)
+      return panelDirs.map((d) => ({ id: d.path, cwd: trimSlash(d.path), name: d.name || trimSlash(d.path).split("/").pop() || d.path, color: d.color }));
     const seen = new Set<string>();
     return spaceWorkspaces(layout, paneSpace(layout, pane.id))
       .filter((w) => w.cwd && !seen.has(w.cwd) && (seen.add(w.cwd), true))
-      .map((w) => ({ id: w.id, cwd: w.cwd!, name: w.name }));
+      .map((w) => ({ id: w.id, cwd: w.cwd!, name: w.name, color: undefined as string | undefined }));
   }, [layout, pane.id, panelDirs]);
   // Whatever this pane becomes goes into the workspace whose folder is picked: the chips above name workspaces, and
   // picking one while the empty pane sat in another left the new session stuck in the wrong group (user report). The
@@ -507,7 +508,8 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
                     w.cwd === trimSlash(abs) ? "border-brand bg-brand/8" : "hover:bg-accent",
                   )}
                 >
-                  <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                  {/* A panel's colour for the repository (core useCodeDirs `color`): the person's own data, not a theme colour */}
+                  <Folder className={cn("size-3.5 shrink-0", !w.color && "text-muted-foreground")} style={w.color ? { color: w.color } : undefined} />
                   <span className="truncate">{w.name}</span>
                 </button>
               ))}

@@ -278,7 +278,7 @@ function useNow(on: boolean) {
  * the menu, dragging it onto a pane — minus what belongs to a workspace group (pinning, its place in the group).
  * `where`: shown at its end instead of the folder.
  */
-export function PaneRow({ pane: id, where, below }: { pane: string; where?: string; below?: React.ReactNode }) {
+export function PaneRow({ pane: id, where, below }: { pane: string; where?: React.ReactNode; below?: React.ReactNode }) {
   const layout = useStore((s) => s.layout);
   const loc = allLeaves(layout).find((x) => x.pane.id === id);
   const sid = loc?.pane.sessionId;
@@ -915,8 +915,8 @@ const Row = memo(function Row({
   visible: boolean;
   /** This row's tab is the one on screen. */
   inActiveTab: boolean;
-  /** Shown instead of the directory (rows of "active", out of their group). */
-  where?: string;
+  /** Shown instead of the directory (rows of "active", out of their group; a panel's own label, e.g. a coloured repository). */
+  where?: React.ReactNode;
   /** A line of the caller's under the row, part of it (core CodeRow `below`). */
   below?: React.ReactNode;
   /** Its ⌘1–9 number, while ⌘ is held (rows of "active"). */

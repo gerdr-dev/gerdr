@@ -356,7 +356,8 @@ export function codeHost(s: Pick<State, "mode" | "layout" | "workPanels" | "code
   return s.codeHosts[panel ? `${space}/${panel}` : space];
 }
 
-export type CodeDir = { path: string; name?: string };
+/** color: the panel's colour for it (a CSS colour the person picked), on its folder icon. */
+export type CodeDir = { path: string; name?: string; color?: string };
 
 /** The quick-pick folders of the hosting panel on screen, when it gave any (core useCodeDirs). */
 export function hostDirs(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts" | "codeDirs"> = get()): CodeDir[] | undefined {

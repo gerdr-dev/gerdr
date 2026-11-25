@@ -312,7 +312,7 @@ declare module "@gerdr/core" {
   export function useCodeRows(): CodeRowInfo[];
   /** With CodeView: Code's own row for a pane (icon, status, unread, its menu, dragging). `where`: shown at its end instead of the folder. */
   /** `below`: a line of yours under it, part of the row (hovered, clicked, right-clicked and dragged with it). */
-  export function CodeRow(props: { pane: string; where?: string; below?: ReactNode }): ReactNode;
+  export function CodeRow(props: { pane: string; where?: ReactNode; below?: ReactNode }): ReactNode;
   /**
    * With CodeView: Code's default list ("active" and the project's workspaces), the very part Code mode itself puts
    * beside its panes. Under list="replace", `<><Mine /><CodeList /></>` is what list="add" does.
@@ -349,7 +349,8 @@ declare module "@gerdr/core" {
    * With CodeView: the folders the new-conversation page offers as quick picks while this panel shows, in place of
    * Code's own (the project's workspaces): your own idea of where work goes (the repositories in your settings).
    */
-  export type CodeDir = { path: string; name?: string };
+  /** color: a CSS colour for its folder icon (e.g. the colour the person gave a repository). */
+  export type CodeDir = { path: string; name?: string; color?: string };
   export function useCodeDirs(dirs: CodeDir[]): void;
   /**
    * With CodeView: every conversation started in Code while this panel shows goes through `fn` instead of becoming
