@@ -27,6 +27,16 @@ import { SPRITE } from "./AgentIcon";
 export const knownIcon = (icon?: string) =>
   !!icon && (!!GLYPHS[icon] || !!LINES[icon] || icon.startsWith(SPRITE) || (icon.startsWith(TEXT_ICON) && icon.length > TEXT_ICON.length) || isImageIcon(icon));
 
+/** Compare black and white against a hex fill using its relative sRGB luminance. */
+export function iconTextColor(background?: string): string {
+  if (!background) return "var(--background)";
+  const [r, g, b] = [1, 3, 5].map((offset) => {
+    const value = parseInt(background.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? "black" : "white";
+}
+
 /**
  * A text icon: up to three characters on a rounded tile of the colour (the foreground colour by default). Drawn as an
  * SVG so it scales with the box like the glyphs do; the font shrinks as the text gets wider (a CJK character counts
@@ -34,20 +44,11 @@ export const knownIcon = (icon?: string) =>
  */
 export function TextIcon({ text, color, className }: { text: string; color?: string; className?: string }) {
   const background = solidIconColor(color);
-  let ink = "var(--background)";
-  if (background) {
-    // Compare black and white against the fill using its relative sRGB luminance.
-    const [r, g, b] = [1, 3, 5].map((offset) => {
-      const value = parseInt(background.slice(offset, offset + 2), 16) / 255;
-      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-    });
-    ink = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? "black" : "white";
-  }
   const w = [...text].reduce((n, ch) => n + (ch.codePointAt(0)! >= 0x2e80 ? 1 : 0.62), 0) || 1;
   return (
     <svg viewBox="0 0 24 24" className={cn("shrink-0", className)} aria-label={text}>
       <rect width="24" height="24" rx="6" fill={background ?? "var(--foreground)"} />
-      <text x="12" y="12.5" textAnchor="middle" dominantBaseline="central" fontSize={Math.min(14, 19 / w)} fontWeight={600} fill={ink}>
+      <text x="12" y="12.5" textAnchor="middle" dominantBaseline="central" fontSize={Math.min(14, 19 / w)} fontWeight={600} fill={iconTextColor(background)}>
         {text}
       </text>
     </svg>

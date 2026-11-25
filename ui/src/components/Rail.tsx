@@ -5,6 +5,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { switchSpace } from "@/lib/actions";
 import { useLanRoute } from "@/lib/android";
 import { hasProjectIcon, ProjectIcon } from "./PanelIcon";
+import { iconTextColor } from "./IconPicker";
+import { solidIconColor } from "./AgentGlyph";
 import { TEXT_ICON } from "@/lib/iconImage";
 import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
@@ -52,8 +54,10 @@ function RailProjects() {
   const project = (sp: Space) => {
     const on = sp.id === here;
     const custom = hasProjectIcon(sp);
-    const text = sp.icon?.startsWith(TEXT_ICON) ? sp.icon.slice(TEXT_ICON.length) : "";
-    const showIcon = custom && (on || (!!sp.icon && !text));
+    const initials = spaceInitials(sp.name);
+    const text = sp.icon?.startsWith(TEXT_ICON) ? sp.icon.slice(TEXT_ICON.length) || initials : !sp.icon && custom ? initials : "";
+    const fill = solidIconColor(sp.color);
+    const wideChars = [...text].filter((ch) => ch.codePointAt(0)! >= 0x2e80).length;
     // Another project's agents are out of every list on screen: its dot is the only thing that tells you it needs you
     const st = on ? undefined : spaceStatus(layout, sp, sessions, unread, badges);
     return (
@@ -82,10 +86,19 @@ function RailProjects() {
                 onPointerDown={(e) => startSpaceDrag(e, sp.id, "y")}
               >
                 {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
-                {showIcon ? (
+                {text ? (
+                  <span
+                    className="flex size-7 items-center justify-center rounded-md"
+                    style={on ? { backgroundColor: fill ?? "var(--foreground)", color: iconTextColor(fill) } : undefined}
+                  >
+                    <span className={cn("max-w-full truncate", wideChars === 3 ? "text-[9px]" : wideChars === 2 && text.length >= 3 && "text-[10px]")}>
+                      {text}
+                    </span>
+                  </span>
+                ) : custom ? (
                   <ProjectIcon name={sp.name} icon={sp.icon} color={on ? sp.color : undefined} className="size-7" />
                 ) : (
-                  <span className="max-w-full truncate px-0.5">{text || spaceInitials(sp.name)}</span>
+                  <span className="max-w-full truncate px-0.5">{initials}</span>
                 )}
                 {st && <StatusDot status={st.status} unread={st.unread} className="absolute -top-0.5 -right-0.5 ring-2 ring-sidebar" />}
               </button>
