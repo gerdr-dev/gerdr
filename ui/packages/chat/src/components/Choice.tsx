@@ -38,7 +38,7 @@ type RowProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   label: ReactNode;
   /** Muted text after the label (what the option costs, what it means). */
   desc?: ReactNode;
-  /** Its position, shown as the number on the right. */
+  /** Its position, shown as the number in front. */
   n: number;
   on?: boolean;
   /** Where the keyboard is: a brand ring, so it is told apart from hover at a glance. */
@@ -47,42 +47,49 @@ type RowProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   tone?: "muted" | "warn";
   /** Something before the text (a checkbox). */
   lead?: ReactNode;
-  /** The number / ✓ on the right; off when `lead` already shows the state. */
+  /** The number / ✓ in front; off when `lead` already shows the state. */
   badge?: boolean;
   /** Greyed out: the card is answered and this wasn't the pick. */
   dim?: boolean;
 };
 
-/** One option: a flat row, label then muted description, its number on the right turning ✓ when picked. */
+/*
+ * One option: a bordered row, its number in front (✓ when picked), then label and muted description.
+ * The number leads and the row has an edge because options are set in the same size and colour as the question: with
+ * the number trailing on the right and no edge, a long option read as more of the question's text (user report).
+ * The number and lead sit on the first line (h-[1lh]), not centred on a wrapped option.
+ */
 export function ChoiceRow({ label, desc, n, on, focused, tone = "muted", lead, badge = true, dim, className, ...rest }: RowProps) {
   return (
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[1em] outline-none ring-1 ring-transparent ring-inset transition-colors enabled:hover:bg-muted/60",
-        on && (tone === "warn" ? "bg-warn/10 enabled:hover:bg-warn/10" : "bg-muted enabled:hover:bg-muted"),
+        "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left text-[1em] leading-normal outline-none ring-1 ring-transparent ring-inset transition-colors enabled:hover:bg-muted/60",
+        on && (tone === "warn" ? "border-warn/40 bg-warn/10 enabled:hover:bg-warn/10" : "bg-muted enabled:hover:bg-muted"),
         focused && "bg-brand/10 ring-brand/50 enabled:hover:bg-brand/10",
         dim && "opacity-50",
         className,
       )}
       {...rest}
     >
-      {lead}
+      {lead && <span className="flex h-[1lh] shrink-0 items-center">{lead}</span>}
+      {badge && (
+        <span className="flex h-[1lh] shrink-0 items-center">
+          <span
+            className={cn(
+              "flex size-5 items-center justify-center rounded-md bg-muted text-[11px] text-muted-foreground tabular-nums",
+              focused && "bg-brand/15 text-brand",
+              on && (tone === "warn" ? "bg-warn/20 text-warn" : "bg-foreground/10 text-foreground"),
+            )}
+          >
+            {on ? <Check className="size-3" /> : n + 1}
+          </span>
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span>{label}</span>
         {desc && <span className="ml-1.5 text-muted-foreground">{desc}</span>}
       </span>
-      {badge && (
-        <span
-          className={cn(
-            "flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] text-muted-foreground tabular-nums",
-            focused && "border-brand/60 text-brand",
-            on && (tone === "warn" ? "border-transparent bg-warn/20 text-warn" : "border-transparent bg-foreground/10 text-foreground"),
-          )}
-        >
-          {on ? <Check className="size-3" /> : n + 1}
-        </span>
-      )}
     </button>
   );
 }
