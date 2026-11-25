@@ -93,8 +93,10 @@ The names: ` + "`gerdr skill list`" + ` / ` + "`gerdr mcp list`" + `. A name tha
 To set up an agent with new skills / MCP in one go, use ` + "`gerdr agent create`" + ` instead.
 
 New sessions' defaults and display order are stored outside agents:
-  defaultModes.<id>    mode, e.g. bypassPermissions (Full access), acceptEdits, default, plan
+  defaultModes.<id>    mode, e.g. bypassPermissions (Full access), acceptEdits, default, plan; unset = auto for
+                       Claude Code (and roles on it), bypassPermissions for Gerdr Agent, else the agent's own
   defaultConfig.<id>   option id → value, e.g. {"model": "opus", "effort": "high"}
+                       unset effort = medium for built-in engines and their roles when supported
   defaultAgent         the agent id the new-session screen picks first
   agentOrder           list of agent ids in display order (unlisted ones follow in default order)
 

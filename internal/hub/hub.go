@@ -144,7 +144,7 @@ type Options struct {
 	// Unlisted agents follow in default order; unknown ids are ignored.
 	AgentOrder []string
 	Log        *slog.Logger
-	Ext         *ext.Manager // skill / MCP 从哪来；nil = 全用 agent 自己的
+	Ext        *ext.Manager // skill / MCP 从哪来；nil = 全用 agent 自己的
 	// Routes: model API addresses add-ons' services serve locally (internal/addons/routes.go); agents pointed at one
 	// talk to the service instead. nil = none.
 	Routes Routes
@@ -907,6 +907,15 @@ type CreateOptions struct {
 	FromCLI bool `json:"-"`
 }
 
+// BuiltinMode: the mode a new session starts in when Settings has none for its agent (or role), by engine. The
+// adapters' own defaults ask before everything, which is more prompting than people here want: Claude Code's classifier
+// ("auto") decides instead, and Gerdr Agent runs with full access (it still asks before reading keys and credentials).
+// The UI mirrors this in ui/src/lib/defaults.ts (BUILTIN_MODES) so the picker shows the same default.
+var BuiltinMode = map[string]string{"claude": "auto", "native": "bypassPermissions"}
+
+// builtinEffort is the new-session fallback for built-in engines and their roles.
+const builtinEffort = "medium"
+
 // permissive：不再问人就动手的模式。
 var permissive = regexp.MustCompile(`(?i)bypass|full-access|dontAsk`)
 
@@ -939,18 +948,25 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 没指定的模式 / 配置项用设置里的默认值（config.json 的 defaultModes / defaultConfig）。界面和 `gerdr session new`
-	// 都走这里，所以两边开出来的一样。默认值不对（agent 不认这个模式、模型被删了）不报错：适配器不认的模式按自己的默认开，
-	// 配置项在下面对着 agent 报的可选值核过才设。
+	// The UI and CLI both use these defaults. Explicit session options take precedence over settings,
+	// and settings take precedence over the engine fallback.
 	explicitMode := o.Mode != ""
-	var defConfig map[string]string
+	base := h.Base(o.Agent)
+	d := NewDefaults{}
 	if h.opt.Defaults != nil {
-		d := h.opt.Defaults(o.Agent)
+		d = h.opt.Defaults(o.Agent)
+		if d.Mode == "" {
+			d.Mode = BuiltinMode[base]
+		}
 		if o.Mode == "" && !(o.FromCLI && permissive.MatchString(d.Mode)) {
 			o.Mode = d.Mode
 		}
-		if o.Import == "" { // 导入的会话用它原来的模型，不拿默认的盖
-			defConfig = d.Config
+	}
+	var defConfig map[string]string
+	if o.Import == "" {
+		defConfig = d.Config
+		if _, set := defConfig["effort"]; !set && builtinAgent(base) {
+			defConfig = mergeConfig(map[string]string{"effort": builtinEffort}, defConfig)
 		}
 	}
 	meta := map[string]any{}

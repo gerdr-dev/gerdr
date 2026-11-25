@@ -437,6 +437,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
             useStore((s) => s.config.defaultModes);
             useStore((s) => s.config.defaultConfig);
             useStore((s) => s.config.llm);
+            useStore((s) => s.agents);
             return { values: defaultsOf(agent), set: (id, v) => setDefault(agent, id, v), setAll: (vs) => setDefaults(agent, vs) };
           },
         },

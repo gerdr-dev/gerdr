@@ -1,11 +1,62 @@
 package hub
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/gerdr-dev/gerdr/agents/native"
 )
+
+func TestNewSessionDefaultEffort(t *testing.T) {
+	cfg := native.Config{Providers: []native.Provider{{
+		ID: "test", BaseURL: "http://localhost", APIKey: "test",
+		Models: []native.Model{
+			{ID: "with-medium", Efforts: []string{"low", "medium", "high"}, DefaultEffort: "high"},
+			{ID: "without-medium", Efforts: []string{"low", "high"}, DefaultEffort: "high"},
+		},
+	}}}
+	h, err := New(Options{
+		Dir: t.TempDir(),
+		LLM: func() native.Config { return cfg },
+		ExtraAgents: []AgentDef{
+			{ID: "worker", Base: "native"},
+			{ID: "reviewer", Base: "native"},
+		},
+		Defaults: func(agent string) NewDefaults {
+			if agent == "reviewer" {
+				return NewDefaults{Config: map[string]string{"effort": "low"}}
+			}
+			return NewDefaults{}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	for _, tt := range []struct {
+		name, agent string
+		config      map[string]string
+		want        string
+	}{
+		{name: "built-in", agent: "native", want: "medium"},
+		{name: "role", agent: "worker", want: "medium"},
+		{name: "configured", agent: "reviewer", want: "low"},
+		{name: "explicit", agent: "reviewer", config: map[string]string{"effort": "high"}, want: "high"},
+		{name: "unsupported", agent: "native", config: map[string]string{"model": "test/without-medium"}, want: "high"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := h.Create(context.Background(), CreateOptions{Agent: tt.agent, Cwd: t.TempDir(), Config: tt.config})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := s.Summary().Config["effort"]; got != tt.want {
+				t.Fatalf("effort = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestCheckMode(t *testing.T) {
 	ms := &acp.SessionModeState{AvailableModes: []acp.SessionMode{{Id: "default"}, {Id: "bypassPermissions"}}}

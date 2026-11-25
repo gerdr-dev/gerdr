@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageModels, LLMSettings } from "@/components/LLMSettings";
 import { api } from "@/lib/api";
-import { MODE, defaultsOf, flatOptions, setDefaults, withoutDefaults } from "@/lib/defaults";
+import { MODE, defaultsOf, flatOptions, optionsOf, setDefaults, withoutDefaults } from "@/lib/defaults";
 import { t } from "@/lib/i18n";
 import { get, refreshAgents, setConfig, showThinkingFor, useStore, type AgentDef, type LLMProvider, type ThinkingDisplay } from "@/lib/store";
 import type { AgentInfo, ExtView } from "@/lib/types";
@@ -178,11 +178,6 @@ function newId(name: string, taken: Set<string>) {
   let id = base;
   for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
   return id;
-}
-
-/** 编辑默认值时的下拉框：这种 agent 上次报的模式 / 配置项，新角色还没开过会话就用底子的（后端已经替它退过一次）。 */
-function optionsOf(agents: AgentInfo[], id: string, base: string) {
-  return agents.find((a) => a.id === id)?.options ?? agents.find((a) => a.id === base)?.options;
 }
 
 /** 一行摘要：「默认：计划模式 · Opus 5.5」。 */

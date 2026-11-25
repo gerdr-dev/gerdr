@@ -1,5 +1,5 @@
 import { get, setConfig, type Config } from "./store";
-import type { ConfigOption } from "./types";
+import type { AgentInfo, ConfigOption } from "./types";
 
 // 新会话的默认模式 / 配置项（模型、思考强度…），按 agent id 存在 config.json：
 //   defaultModes[agent]、defaultConfig[agent][配置项 id]；Gerdr Agent（native）的默认模型例外，就是 llm.defaultModel ——
@@ -14,12 +14,28 @@ export function flatOptions(o: ConfigOption) {
   return arr.flatMap((x) => (x.options ? x.options : [x])) as { value: string; name: string; description?: string }[];
 }
 
-/** 这个 agent 的新会话默认值（key = MODE 或配置项 id），没设的不在里面。 */
+// The mode a new session starts in when Settings has none for its agent, by engine: mirrors hub.BuiltinMode
+// (internal/hub/hub.go), which is what the backend applies, so the picker shows the mode sessions really get.
+const BUILTIN_MODES: Record<string, string> = { claude: "auto", native: "bypassPermissions" };
+
+/** Use the engine's cached options for roles that have yet to open a session. */
+export function optionsOf(agents: AgentInfo[], id: string, base: string) {
+  return agents.find((a) => a.id === id)?.options ?? agents.find((a) => a.id === base)?.options;
+}
+
+/** Effective new-session defaults, including the built-in fallbacks applied by the hub. */
 export function defaultsOf(agent: string): Record<string, string> {
-  const c = get().config;
+  const { agents, config: c } = get();
   const out: Record<string, string> = { ...(c.defaultConfig?.[agent] ?? {}) };
   if (agent === "native" && c.llm?.defaultModel) out.model = c.llm.defaultModel;
-  if (c.defaultModes[agent]) out[MODE] = c.defaultModes[agent];
+  const base = c.agents?.find((d) => d.id === agent)?.base ?? agent;
+  const mode = c.defaultModes[agent] || BUILTIN_MODES[base];
+  if (mode) out[MODE] = mode;
+  if (out.effort === undefined && (base === "claude" || base === "codex" || base === "native")) {
+    const config = optionsOf(agents, agent, base)?.config;
+    const effort = config?.find((option) => option.id === "effort");
+    if (!config || (effort && flatOptions(effort).some((option) => option.value === "medium"))) out.effort = "medium";
+  }
   return out;
 }
 
