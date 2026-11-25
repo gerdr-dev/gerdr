@@ -43,8 +43,8 @@ type RowProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   on?: boolean;
   /** Where the keyboard is: a brand ring, so it is told apart from hover at a glance. */
   focused?: boolean;
-  /** How a picked row is tinted: neutral, or warn for a card waiting on the user. */
-  tone?: "muted" | "warn";
+  /** How a picked row is tinted: neutral, warn for a card waiting on the user, ok once its answer went through. */
+  tone?: "muted" | "warn" | "ok";
   /** Something before the text (a checkbox). */
   lead?: ReactNode;
   /** The number / ✓ in front; off when `lead` already shows the state. */
@@ -52,6 +52,13 @@ type RowProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   /** Greyed out: the card is answered and this wasn't the pick. */
   dim?: boolean;
 };
+
+const pickedRow = {
+  muted: "bg-muted enabled:hover:bg-muted",
+  warn: "border-warn/40 bg-warn/10 enabled:hover:bg-warn/10",
+  ok: "border-ok/40 bg-ok/10 enabled:hover:bg-ok/10",
+};
+const pickedBadge = { muted: "bg-foreground/10 text-foreground", warn: "bg-warn/20 text-warn", ok: "bg-ok/20 text-ok" };
 
 /*
  * One option: a bordered row, its number in front (✓ when picked), then label and muted description.
@@ -65,7 +72,7 @@ export function ChoiceRow({ label, desc, n, on, focused, tone = "muted", lead, b
       type="button"
       className={cn(
         "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left text-[1em] leading-normal outline-none ring-1 ring-transparent ring-inset transition-colors enabled:hover:bg-muted/60",
-        on && (tone === "warn" ? "border-warn/40 bg-warn/10 enabled:hover:bg-warn/10" : "bg-muted enabled:hover:bg-muted"),
+        on && pickedRow[tone],
         focused && "bg-brand/10 ring-brand/50 enabled:hover:bg-brand/10",
         dim && "opacity-50",
         className,
@@ -79,7 +86,7 @@ export function ChoiceRow({ label, desc, n, on, focused, tone = "muted", lead, b
             className={cn(
               "flex size-5 items-center justify-center rounded-md bg-muted text-[11px] text-muted-foreground tabular-nums",
               focused && "bg-brand/15 text-brand",
-              on && (tone === "warn" ? "bg-warn/20 text-warn" : "bg-foreground/10 text-foreground"),
+              on && pickedBadge[tone],
             )}
           >
             {on ? <Check className="size-3" /> : n + 1}

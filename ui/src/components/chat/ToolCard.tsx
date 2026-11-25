@@ -221,10 +221,9 @@ export function BuiltinCard({ card, done, undoMs }: { card: Card; done?: CardDon
                 desc={desc}
                 n={n}
                 on={on}
-                tone="warn"
+                tone={ok ? "ok" : "warn"}
                 dim={!open && !on}
                 disabled={!open}
-                className={cn(on && ok && "bg-ok/10 enabled:hover:bg-ok/10")}
                 onClick={() => (multi ? tick(o) : choose(o))}
               />
             );
