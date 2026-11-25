@@ -13,7 +13,7 @@ import { addTab } from "@/lib/actions";
 import { showCode } from "@/lib/actions/views";
 import { copyText } from "@/lib/clipboard";
 import { t } from "@/lib/i18n";
-import { removePanel } from "@/lib/panelActions";
+import { removePanel, updatePanel } from "@/lib/panelActions";
 import { PanelIcon } from "./PanelIcon";
 
 /**
@@ -109,15 +109,8 @@ function PanelRow({ p }: { p: Panel }) {
     : p.source.remote?.replace(/^https?:\/\/(github\.com\/)?/, "");
   const update = async () => {
     setBusy("update");
-    try {
-      const r = await api.updateWork(p.key);
-      toast.success(t("workSource.updated"), { description: r.output });
-      panelsChanged();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setBusy("");
-    }
+    await updatePanel(p.key);
+    setBusy("");
   };
   const remove = () => removePanel({ key: p.key, title: p.title });
   // Changing a panel is an agent's work in its folder, started from here: nobody has to know where that folder is

@@ -295,7 +295,7 @@ export const api = {
   unremovePanel: (key: string, trash: string) => req<{ ok: boolean }>("POST", "/api/work/panels/unremove", { key, trash }),
   restoreWork: (project: string) => req<{ ok: boolean }>("POST", "/api/work/panels/restore", { project }),
   removePanel: (key: string) => req<{ trash: string }>("POST", "/api/work/panels/remove", { key }),
-  updateWork: (project: string) => req<{ output: string }>("POST", "/api/work/update", { project }),
+  updateWork: (project: string) => req<{ output: string; commits: number }>("POST", "/api/work/update", { project }),
   // In the interface's language: addon.json's i18n is applied here, once, so every place that shows a name reads it
   addons: () => req<AddonBuild[]>("GET", "/api/addons").then((l) => l.map(localizeAddon)),
   addonMessage: (id: string, data: unknown) => req("POST", `/api/addons/${encodeURIComponent(id)}/message`, { data }),

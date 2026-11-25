@@ -38,3 +38,23 @@ export async function removePanel(p: Pick<Panel, "key" | "title">) {
     toast.error(e?.message ?? String(e));
   }
 }
+
+/**
+ * Update a panel (the rail's menu, Settings → Panels): pull its repository and say in one line how many commits came
+ * in. git's own output (remote counting, rebase notes, the list of files) used to be the toast's text, a wall nobody
+ * reads; it stays in the response for `gerdr panel update`. A failure keeps only git's last lines, where the reason is.
+ */
+export async function updatePanel(key: string) {
+  try {
+    const { commits } = await api.updateWork(key);
+    panelsChanged();
+    toast.success(commits > 0 ? t("workSource.updatedN", { n: commits }) : t("workSource.upToDate"));
+  } catch (e: any) {
+    const lines = String(e?.message ?? e)
+      .replace(/^git pull:\s*/, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    toast.error(t("workSource.updateFailed"), { description: lines.slice(-3).join("\n") });
+  }
+}

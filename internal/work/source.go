@@ -309,10 +309,17 @@ func (r *Runner) addPanel(project, name string, fill func(dir string) error) (st
 // Update pulls the panel's repository. The user's own changes stay on top: their workflow (skills/), edits their
 // agent made, committed or not, are rebased onto what came in (--rebase --autostash), so a published panel's defaults
 // never overwrite their choices. A conflict is undone and reported, nothing is half-applied.
-func (r *Runner) Update(ctx context.Context, project string) (string, error) {
+// It returns git's output and how many commits came in: the UI says the count, as git's output is a wall of text
+// nobody reads in a toast.
+func (r *Runner) Update(ctx context.Context, project string) (string, int, error) {
 	dir, err := r.Dir(project)
 	if err != nil {
-		return "", err
+		return "", 0, err
+	}
+	// Measured on the upstream, not HEAD: the person's own commits are rebased, so HEAD moves even when nothing came in
+	before, err := git(dir, "rev-parse", "@{u}")
+	if err != nil {
+		before, _ = git(dir, "rev-parse", "HEAD")
 	}
 	liftUIPrefs(dir) // a rename older Gerdr wrote into ui/ui.json would be stashed, and lost on a conflict
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "-c", "user.name=Gerdr", "-c", "user.email=gerdr@localhost", "pull", "--rebase", "--autostash")
@@ -320,15 +327,21 @@ func (r *Runner) Update(ctx context.Context, project string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		_ = exec.Command("git", "-C", dir, "rebase", "--abort").Run()
-		return "", fmt.Errorf("git pull: %s", strings.TrimSpace(string(out)))
+		return "", 0, fmt.Errorf("git pull: %s", strings.TrimSpace(string(out)))
+	}
+	n := 0
+	if before != "" {
+		if c, err := git(dir, "rev-list", "--count", before+"..@{u}"); err == nil {
+			n, _ = strconv.Atoi(c)
+		}
 	}
 	r.mu.Lock()
 	delete(r.installed, dir) // built-in files it doesn't have come back
 	r.mu.Unlock()
 	if _, err := r.Ensure(project); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(string(out)), n, nil
 }
 
 func git(dir string, args ...string) (string, error) {

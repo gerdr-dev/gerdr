@@ -86,8 +86,12 @@ func TestPanels(t *testing.T) {
 	os.WriteFile(filepath.Join(src, "new.md"), []byte("upstream"), 0o644)
 	git(src, "add", "new.md")
 	git(src, "commit", "-qm", "upstream")
-	if _, err := r.Update(context.Background(), key); err != nil {
-		t.Fatal(err)
+	// One commit came in; the person's own commit is rebased, not counted
+	if _, n, err := r.Update(context.Background(), key); err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	if _, n, err := r.Update(context.Background(), key); err != nil || n != 0 {
+		t.Fatal("up to date:", n, err)
 	}
 	for f, want := range map[string]string{"mine.md": "my rule", "new.md": "upstream"} {
 		if b, _ := os.ReadFile(filepath.Join(pd, f)); string(b) != want {

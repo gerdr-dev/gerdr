@@ -39,7 +39,7 @@ func TestUIPrefs(t *testing.T) {
 	// Upstream changes the same file
 	os.WriteFile(filepath.Join(src, "ui", "ui.json"), []byte("{\n  \"title\": \"Board\",\n  \"icon\": \"orbit\"\n}\n"), 0o644)
 	git(src, "commit", "-qam", "y")
-	if _, err := r.Update(context.Background(), key); err != nil {
+	if _, _, err := r.Update(context.Background(), key); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := r.UIConfig(key)

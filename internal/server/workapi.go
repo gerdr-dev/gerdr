@@ -318,12 +318,12 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
-		out, err := s.Work.Update(r.Context(), b.Project)
+		out, n, err := s.Work.Update(r.Context(), b.Project)
 		if err != nil {
 			httpError(w, 400, err.Error())
 			return
 		}
-		writeJSON(w, map[string]any{"output": out})
+		writeJSON(w, map[string]any{"output": out, "commits": n})
 	})
 	// Undo a delete: the directory comes back from the trash (the UI puts the project's workspaces back after).
 	mux.HandleFunc("POST /api/projects/{name}/restore", func(w http.ResponseWriter, r *http.Request) {

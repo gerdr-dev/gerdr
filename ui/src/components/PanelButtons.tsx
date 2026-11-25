@@ -1,16 +1,14 @@
 import { useEffect } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pencil, Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { api } from "@/lib/api";
 import { currentSpace } from "@/lib/layout";
 import { codeKey, movePanel, railItems, usePanels, type Panel } from "@/lib/panels";
 import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { PanelIcon } from "./PanelIcon";
 import { t } from "@/lib/i18n";
-import { removePanel } from "@/lib/panelActions";
+import { removePanel, updatePanel } from "@/lib/panelActions";
 import { useBadges } from "@/lib/badges";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 
@@ -151,11 +149,7 @@ function PanelButton({
     setWorkPanel(space, p.name);
     setMode("work");
   };
-  const update = () =>
-    api.updateWork(p.key).then(
-      (r) => toast.success(t("workSource.updated"), { description: r.output }),
-      (e) => toast.error(e.message),
-    );
+  const update = () => updatePanel(p.key);
   const remove = () => removePanel({ key: p.key, title: label });
   const badge = useBadges((s) => s.byPanel[p.key]);
   return (
