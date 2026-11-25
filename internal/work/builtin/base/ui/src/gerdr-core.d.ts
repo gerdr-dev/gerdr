@@ -59,6 +59,9 @@ declare module "@gerdr/core" {
     children?: ReactNode;
   }): ReactNode;
 
+  /** An agent's icon as Gerdr draws it everywhere (`agent`: its id, a session's `agent`), for a page's own rows. */
+  export function AgentIcon(props: { agent: string; className?: string }): ReactNode;
+
   /** The chat's running indicator (the dots by "working…"). */
   export function PixelLoader(props: { className?: string }): ReactNode;
 
