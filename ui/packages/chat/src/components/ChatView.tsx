@@ -240,8 +240,18 @@ export function ChatView({
     // Not cleared when this runs again: that is only more rows of a reply streaming in, and the flash is still due
     clearTimeout(focusFlash.current);
     focusFlash.current = window.setTimeout(() => {
-      const el = scrollerEl.current?.querySelector<HTMLElement>(`[data-chat-key="${CSS.escape(key)}"]`);
-      el?.animate([{ boxShadow: "0 0 0 2px var(--color-brand)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1600, easing: "ease-out" });
+      const row = scrollerEl.current?.querySelector<HTMLElement>(`[data-chat-key="${CSS.escape(key)}"]`);
+      if (!row) return;
+      // A tint over the card itself that breathes twice. Not a ring around the row: the row is as wide as the chat, so
+      // its ring drew a stray line beside a narrower card (half of it under the pinned header). Not a shake: the card
+      // couldn't be read while it moved, just when the person looks for it. Not the card's coloured bar: only some
+      // cards have one. And box-shadow, never transform: the list places each row by its transform (translateY)
+      const on = "inset 0 0 0 100vmax color-mix(in oklab, var(--color-brand) 16%, transparent)";
+      const off = "inset 0 0 0 100vmax transparent";
+      flashTarget(row).animate([{ boxShadow: off }, { boxShadow: on }, { boxShadow: off }, { boxShadow: on }, { boxShadow: off }], {
+        duration: 1400,
+        easing: "ease-in-out",
+      });
     }, 350);
   }, [focus?.seq, rows, t.loaded, t.older]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => clearTimeout(focusFlash.current), []);
@@ -580,4 +590,16 @@ export function ChatView({
       </SessionContext.Provider>
     </SessionHost>
   );
+}
+
+/** The card in a row to flash: the first box inside it drawn with rounded corners or a border that is most of the
+ *  row's height (not a chip or inline code in it); the row's content when there's none (plain text). */
+function flashTarget(row: HTMLElement) {
+  const h = row.getBoundingClientRect().height;
+  for (const el of row.querySelectorAll<HTMLElement>("*")) {
+    const cs = getComputedStyle(el);
+    if (!(parseFloat(cs.borderTopLeftRadius) > 0 || parseFloat(cs.borderTopWidth) > 0 || parseFloat(cs.borderLeftWidth) > 0)) continue;
+    if (el.getBoundingClientRect().height >= h * 0.6) return el;
+  }
+  return (row.firstElementChild as HTMLElement | null) ?? row;
 }
