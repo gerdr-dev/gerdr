@@ -45,7 +45,6 @@ import { codeJump, codeJumpVersion, codeMenuItems, codePaneTags, paneTagVersion,
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
 import type { CodePaneTag } from "@/lib/codeMenu";
-import type { SessionSummary } from "@/lib/types";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
