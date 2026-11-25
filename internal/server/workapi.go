@@ -297,6 +297,9 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		}
 		setUIConfig(w, b.Key, map[string]string{"title": b.Title})
 	})
+	mux.HandleFunc("GET /api/work/panels/renamed", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.Work.RenamedKeys())
+	})
 	// Rename a panel's directory, and so its key (`gerdr panel rename --dir`): panelrename.go
 	mux.HandleFunc("POST /api/work/panels/rename-dir", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {

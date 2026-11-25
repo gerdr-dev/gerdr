@@ -527,6 +527,10 @@ function handle(m: any) {
     case "inbox":
       import("./inbox").then((p) => p.syncPanelInbox(m.data ?? []));
       break;
+    // A panel's directory was renamed: what this device keeps by its key moves first (lib/panelRename.ts)
+    case "panel_renamed":
+      void import("./panelRename").then((p) => p.applyPanelRename(m.data?.from, m.data?.to));
+      break;
     // Inbox cards clicked or closed in some window / device: the same cards go here too (lib/inbox.ts)
     case "cards_closed":
       import("./inbox").then((p) => p.closeCards(m.data ?? []));

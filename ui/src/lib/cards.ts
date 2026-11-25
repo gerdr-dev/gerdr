@@ -1,5 +1,6 @@
 import { useSyncExternalStore, type ComponentType } from "react";
 import type { Card } from "@/components/chat/ToolCard";
+import { canonPanel, onPanelAliases } from "@/lib/panelRename";
 
 /**
  * Card types a UI adds (core registerCard): a tool result `{ gerdrCard: { type: "task-step", … } }` is drawn by the
@@ -58,6 +59,8 @@ export function registerCard(type: string, component: ComponentType<CardProps>):
 }
 
 const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
+// A card stamped with a renamed panel's old key is drawn by the panel under its new key
+onPanelAliases(bump);
 
 /**
  * The component for a card, re-rendering when one is registered later (a panel's cards load after the chat): its own
@@ -67,6 +70,6 @@ const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 export function useCardType(type: string | undefined, panel?: string): ComponentType<CardProps> | undefined {
   useSyncExternalStore(subscribe, () => version);
   if (!type) return undefined;
-  if (panel) return scoped.get(`${panel}\n${type}`) ?? global.get(type);
+  if (panel) return scoped.get(`${canonPanel(panel)}\n${type}`) ?? global.get(type);
   return global.get(type) ?? latest.get(type);
 }

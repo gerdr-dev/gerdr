@@ -269,6 +269,10 @@ export const api = {
   installPanel: (project: string, url: string, name?: string) => req<{ key: string }>("POST", "/api/work/install", { project, url, name }),
   newPanel: (project: string, name: string) => req<{ key: string }>("POST", "/api/work/panels", { project, name }),
   /** A panel's rail icon in its ui.json: the same kinds as an agent's (IconPicker), and a colour. */
+  /** Rename a panel's directory, and so its key (server panelrename.go). */
+  renamePanelDir: (key: string, name: string) => req<{ key: string; from: string }>("POST", "/api/work/panels/rename-dir", { key, name }),
+  /** Every project's renamed panels: old key → current key (lib/panelRename.ts). */
+  renamedPanels: () => req<Record<string, string>>("GET", "/api/work/panels/renamed"),
   renamePanel: (key: string, title: string) => req<{ ok: boolean }>("POST", "/api/work/panels/title", { key, title }),
   setPanelIcon: (key: string, icon: string, color: string) => req<{ ok: boolean }>("POST", "/api/work/panels/icon", { key, icon, color }),
   /** A project's panels (its own Work first, unless removed), with their ui.json (the user's rename / icon over it) and where they came from. */

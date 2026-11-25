@@ -59,6 +59,24 @@ func (r *Runner) Renamed(project string) map[string]string {
 	return out
 }
 
+// RenamedKeys: every project's renamed panels, old key → current key.
+func (r *Runner) RenamedKeys() map[string]string {
+	out := map[string]string{}
+	projects := []string{DefaultProject}
+	ents, _ := os.ReadDir(filepath.Join(r.Root, "projects"))
+	for _, e := range ents {
+		if e.IsDir() && validProject(e.Name()) && e.Name() != DefaultProject {
+			projects = append(projects, e.Name())
+		}
+	}
+	for _, p := range projects {
+		for old, now := range r.Renamed(p) {
+			out[PanelKey(p, old)] = PanelKey(p, now)
+		}
+	}
+	return out
+}
+
 // Canon is the key a panel goes by now: an old name of a renamed panel becomes its current one. Any other key is
 // returned as it is.
 func (r *Runner) Canon(key string) string {

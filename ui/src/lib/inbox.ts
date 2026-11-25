@@ -439,7 +439,24 @@ export function syncPanelInbox(list: PanelInboxItem[]) {
 }
 
 function refreshPanelInbox() {
-  api.inbox().then(syncPanelInbox, () => {});
+  // Renamed panels first (lib/panelRename.ts): their items come under the new key and mustn't come in as new
+  void import("./panelRename").then((p) => p.loadRenamed().then(() => api.inbox().then(syncPanelInbox, () => {})));
+}
+
+/** A panel's directory was renamed (lib/panelRename.ts): its items and ×'d ones move to its new key, not notified again. */
+export function renamePanelItems(from: string, to: string) {
+  const pre = `pan:${from}:`;
+  const move = (id: string) => (id.startsWith(pre) ? `pan:${to}:${id.slice(pre.length)}` : id);
+  const items = get().items;
+  if (items.some((x) => x.id.startsWith(pre))) {
+    useInbox.setState({ items: items.map((x) => (x.id.startsWith(pre) ? { ...x, id: move(x.id), panel: to } : x)) });
+    save();
+  }
+  const g = gone();
+  if (g.some((id) => id.startsWith(pre)))
+    try {
+      localStorage.setItem(GONE, JSON.stringify(g.map(move)));
+    } catch {}
 }
 
 // ---- low battery ----

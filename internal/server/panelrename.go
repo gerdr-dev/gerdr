@@ -34,6 +34,8 @@ func (s *Server) renamePanelDir(key, name string) (map[string]any, error) {
 		s.Log.Warn("work: renamed panel not mounted", "key", nkey, "err", err)
 	}
 	if s.Hub != nil {
+		// Before the inbox moves: the page moves what it keeps by the key first, so the items aren't new to it
+		s.Hub.Broadcast("panel_renamed", map[string]string{"from": key, "to": nkey})
 		// Sessions recorded either path (a real directory, or the one with symlinks resolved): both are moved
 		n := s.Hub.MoveDir(oldDir, newDir, map[string][2]string{PanelTag: {key, nkey}})
 		if real, err := filepath.EvalSymlinks(filepath.Dir(oldDir)); err == nil && real != filepath.Dir(oldDir) {

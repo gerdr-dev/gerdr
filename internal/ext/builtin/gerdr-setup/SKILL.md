@@ -228,6 +228,7 @@ gerdr panel new <name>                             # a blank one, for its agent 
 gerdr panel check                                  # fetch the panels' repositories, list those with new commits (nothing applied)
 gerdr panel update [<panel>]                       # git pull; the user's own changes stay on top
 gerdr panel rename <panel> "任务看板"                # the name shown for it, for this person
+gerdr panel rename <panel> tasks --dir             # its directory (and key: <project>/tasks) instead; see below
 gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, sprite:<key>, --text 任务, --image f.png; none = default
 gerdr panel move <panel> 1                         # its place on the rail (1 = top, Code counts), as dragging does; `.` = Code
 gerdr panel badge <panel> 3 | dot | clear          # a red number / dot on its rail button ("something new"); --add N adds to it
@@ -245,6 +246,10 @@ The order (`move`) is this person's, kept in the project's `panels/.order.json`;
 
 rename / icon are the user's own choice: kept in the panel's `user/ui.json` over its `ui/ui.json`, never shared, and
 an update leaves them alone. A panel's name for everyone who installs it (its author's) is `title` in `ui/ui.json`.
+
+`rename --dir` renames the panel's directory, so its key changes: Gerdr moves its conversations, inbox, badges,
+agent chat, rail place, schedules' state, logs and artifacts along. Agents already running for it keep working (the
+old name stays as a symlink, the old key leads to the new one). Refused while one of its functions is running: retry.
 
 ## Remote access: `gerdr remote`
 

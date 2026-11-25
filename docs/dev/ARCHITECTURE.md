@@ -765,6 +765,18 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   skill above all, stay on top of what the published panel brings; a conflict is aborted and reported) or removes it (to
   `trash/panels/`, with an undo in the toast like deleting a project: `UnremovePanel` puts it back as it was). esbuild writes UTF-8 (`Charset`): a panel named 任务看板 has it in its module paths, and escaped
   `\uXXXX` placeholders never matched in `link`.
+- **Renaming a panel's directory** (`gerdr panel rename <panel> <name> --dir`, `POST /api/work/panels/rename-dir`)
+  changes its key, which is written down all over: session tags / cwd / skill dirs / system prompt file, inbox,
+  badges, `workSessions`, the layout, artifacts owners, schedules' state, run logs, `.order.json`, and per device the
+  page's localStorage. `work/rename.go` moves the directory and what the Runner keeps; `server/panelrename.go` the
+  rest (`hub.MoveDir`, `artifacts.RenamePanel`), then a `panel_renamed` message makes each page move its own
+  (`lib/panelRename.ts`; a device that was away does it on load from `GET /api/work/panels/renamed`, before the inbox's
+  first fetch, or every item would come back as new). Agents already running for the panel are not restarted, so the
+  old name keeps working: `<panels>/.renamed.json` maps it to the new one and `Runner.Canon` applies it wherever a key
+  comes in (`Dir`, `WorkKey`, the Runner's entry points: a still-running `gerdr panel mcp --project <old key>` mustn't
+  bring the old key back with state of its own), and `<panels>/<old>` stays a symlink for old absolute paths (`Panels`
+  skips symlinks, so it isn't a second panel). Old chat cards keep the old key they were stamped with; `canonPanel`
+  in lib/cards.ts finds their panel. Refused while one of the panel's functions or schedules runs.
 - Page logic lives in local functions `<GERDR_DIR>/work/local/*.ts` (esbuild → moejs, `ctx.mcp(server, tool, args)`; a new runtime per run, its builtins frozen and shared — `internal/work/fn.go`), called by
   name (`gerdr panel run file.export`). Bundled files (`internal/work/builtin/base` for every project: site skeleton, blank
   home page, CLAUDE.md — the same for the default project; it used to get an OKR page on top) are upgraded unless edited,
