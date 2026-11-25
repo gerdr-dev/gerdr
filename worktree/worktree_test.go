@@ -73,6 +73,9 @@ func TestEnterAndRemove(t *testing.T) {
 	if _, err := os.Stat(e.Root); !os.IsNotExist(err) {
 		t.Fatalf("still there: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(r, ".gerdr", "worktrees", "fix")); !os.IsNotExist(err) {
+		t.Fatalf("empty parent folder left: %v", err)
+	}
 	if b := run(t, r, "branch", "--list", "fix/thing"); b != "" {
 		t.Fatalf("branch kept: %q", b)
 	}

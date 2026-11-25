@@ -209,6 +209,13 @@ func Remove(ctx context.Context, root string, discard bool) error {
 	if _, err := git(ctx, main, args...); err != nil {
 		return err
 	}
+	// A name with slashes (fix/x) leaves its parent folders behind: drop the empty ones, up to the worktrees' folder
+	top := filepath.Join(main, filepath.FromSlash(Sub))
+	for d := filepath.Dir(root); strings.HasPrefix(d, top+string(filepath.Separator)); d = filepath.Dir(d) {
+		if os.Remove(d) != nil {
+			break
+		}
+	}
 	if branch != "" {
 		_, _ = git(ctx, main, "branch", "-D", branch) // its commits are on a remote, or the caller chose to discard them
 	}
