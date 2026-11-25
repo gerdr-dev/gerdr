@@ -1,9 +1,10 @@
 import { GalleryHorizontalEnd } from "lucide-react";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { focusTile, setOverview } from "@/lib/overview";
-import { phoneOrder } from "@/lib/overviewState";
+import { panelTiles, phoneOrder } from "@/lib/overviewState";
 import { useCaughtUp } from "@/lib/catchup";
 import { get, useStore } from "@/lib/store";
+import { currentSpace } from "@/lib/layout";
 import { syncWatch } from "@/lib/sync";
 import { GAP, pageX, useSwipePager } from "@/lib/swipePager";
 import { TabActive } from "./Panes";
@@ -28,15 +29,27 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
   // held (phoneOrder): a swipe has to land where the strip said it would.
   // Followed as the order itself (a string), not the sessions map: every summary pushed while agents run used to
   // re-render the whole overview mid-swipe, and the tiles and chips already follow their own sessions.
-  const sorted = useStore((s) => phoneOrder(ids, s.sessions, s.unread, frozen).join(","))
+  // A hosting panel on screen gave the tiles (core useCodeOverview): its order as given, not re-sorted
+  const asGiven = useStore((s) => !!panelTiles(s));
+  const sorted = useStore((s) => phoneOrder(ids, s.sessions, s.unread, frozen, asGiven).join(","))
     .split(",")
     .filter(Boolean);
+  const order = () => phoneOrder(ids, get().sessions, get().unread, undefined, asGiven);
   // Take the order on opening, drop it on leaving (the next opening sorts afresh). A layout effect: the first frame
   // already sorts the same way, so nothing moves when the frozen order arrives.
   useLayoutEffect(() => {
-    if (shown && !frozen) setOverview((o) => ({ ...o, phone: phoneOrder(ids, get().sessions, get().unread) }));
+    if (shown && !frozen) setOverview((o) => ({ ...o, phone: order() }));
     else if (!shown && frozen) setOverview((o) => ({ ...o, phone: undefined }));
   }, [shown, frozen]);
+  // Going between Code and a hosting panel (or panel to panel) with the overview open swaps the whole list: take the
+  // new one's order afresh, else the old frozen order would hold the few tiles the two share in its places
+  const src = useStore((s) => (panelTiles(s) ? `${currentSpace(s.layout)}/${s.workPanels[currentSpace(s.layout)] ?? ""}` : ""));
+  const lastSrc = useRef(src);
+  useLayoutEffect(() => {
+    if (lastSrc.current === src) return;
+    lastSrc.current = src;
+    if (shown) setOverview((o) => ({ ...o, phone: order() }));
+  }, [src]);
   // The one switched to from a chip or the list may not be loaded or caught up: keep the current tile up until it is
   // (lib/catchup) instead of drawing "loading" / the old state and then flashing to the new.
   const tile = useCaughtUp(focus, focus ? [focus] : [], (id) => sorted.includes(id));
@@ -202,7 +215,7 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
             {/* The selection box while a page is dragged (progress above); last, so the chips keep their indexes */}
             <div ref={box} aria-hidden className="pointer-events-none absolute hidden rounded-md border border-brand" />
           </div>
-          <PhoneMenu focus={tile} onResort={() => setOverview((o) => ({ ...o, phone: phoneOrder(ids, get().sessions, get().unread) }))} />
+          <PhoneMenu focus={tile} panel={asGiven} onResort={() => setOverview((o) => ({ ...o, phone: order() }))} />
         </div>
         {/* The gap between two pages while one is dragged shows this background */}
         <div ref={body} className="relative min-h-0 flex-1 overflow-hidden bg-sidebar">
@@ -228,7 +241,8 @@ export function PhoneOverview({ ids, focus, shown }: { ids: string[]; focus?: st
             <div className="flex h-full flex-col items-center justify-center gap-3 bg-background px-8 text-center text-[13px] text-muted-foreground">
               <GalleryHorizontalEnd className="size-6" />
               {t("nav.activeEmpty")}
-              <PickButton />
+              {/* Picked ones go into Code's "active", which a hosting panel's overview doesn't show */}
+              {!asGiven && <PickButton />}
             </div>
           )}
         </div>

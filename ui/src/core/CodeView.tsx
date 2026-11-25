@@ -5,6 +5,7 @@ import { addTab, addTabForSession, focusPane, replaceSessionInPane } from "@/lib
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
 import { type CodeMenuFn, type CodePaneTagFn, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
+import { syncWatch } from "@/lib/sync";
 import {
   type CodeDir,
   type CodeStartFn,
@@ -15,6 +16,7 @@ import {
   setCodeDirs,
   setCodeHost,
   setCodeOrder,
+  setCodeOverview,
   setCodeStart,
   hostOrder,
   useStore,
@@ -215,6 +217,23 @@ export function useCodeOrder(sessions: string[]) {
     if (!key) return;
     setCodeOrder(key, sig ? sig.split(",") : []);
     return () => setCodeOrder(key, null);
+  }, [key, sig]);
+}
+
+/**
+ * The conversations the phone overview pages through while this panel hosts Code, in this order: its strip of tabs
+ * and the swipe between them. Without it the overview is Code's "active" (every agent that ran in the project), which
+ * the panel's list doesn't show. Give the ones worth swiping between (at work, waiting on the person), not the whole
+ * list; [] is an empty overview, unmounting gives Code's back.
+ */
+export function useCodeOverview(sessions: string[]) {
+  const key = useContext(PanelKeyContext);
+  const sig = sessions.join(",");
+  useEffect(() => {
+    if (!key) return;
+    setCodeOverview(key, sig ? sig.split(",") : []);
+    syncWatch(); // the pages around the shown tile are streamed (overviewState.phonePages): they move with the list
+    return () => (setCodeOverview(key, null), syncWatch());
   }, [key, sig]);
 }
 

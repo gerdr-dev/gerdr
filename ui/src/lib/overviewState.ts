@@ -103,7 +103,27 @@ export type ActiveSrc = {
   sessions: Record<string, SessionSummary>;
   config: { active?: ActiveConf };
   unread: Record<string, true>;
+  /** Which panel shows and what a hosting one gave as the overview (store fields; see panelTiles). Optional: callers
+   * asking only for "active" pass without them. */
+  mode?: string;
+  workPanels?: Record<string, string>;
+  codeHosts?: Record<string, unknown>;
+  codeOverviews?: Record<string, string[]>;
 };
+
+/**
+ * The tiles a panel hosting Code gave (core useCodeOverview), while it is the one shown; undefined otherwise. Its list
+ * replaces Code's, so "active" (every agent that ran in the project, pinned until taken out) made the phone's strip a
+ * mix of the panel's done tasks and Code conversations its list hides (reported on the Superagent panel). Same key as
+ * store.codeHost, worked out here: this file can't import the store.
+ */
+export function panelTiles(st: ActiveSrc): string[] | undefined {
+  if (st.mode !== "work" || !st.codeOverviews) return undefined;
+  const space = currentSpace(st.layout);
+  const panel = st.workPanels?.[space];
+  const key = panel ? `${space}/${panel}` : space;
+  return st.codeHosts?.[key] ? st.codeOverviews[key] : undefined;
+}
 
 /**
  * Open agents (some pane shows them) with their project, each once. A panel's agent conversation is no pane's, so it's
@@ -191,6 +211,9 @@ function computeActiveIds(st: ActiveSrc): string[] {
  * doesn't reshuffle every time a status changes; newcomers after them.
  */
 export function overviewIds(st: ActiveSrc): string[] {
+  // A hosting panel's tiles are its order as given: not merged with the kept order, phoneOrder holds them still
+  const panel = panelTiles(st);
+  if (panel) return panel.filter((id) => st.sessions[id]).slice(0, MAX_TILES);
   const top = activeIds(st).slice(0, MAX_TILES);
   const kept = st.overview.ids.filter((id) => top.includes(id));
   return [...kept, ...top.filter((id) => !kept.includes(id))];
@@ -202,9 +225,16 @@ export function overviewIds(st: ActiveSrc): string[] {
  * live, reading a tile reordered the strip under the finger and a swipe landed somewhere unexpected (asked for). While
  * it stays open the frozen order holds, those taken out just drop out and newcomers go on the end.
  */
-export function phoneOrder(ids: string[], sessions: Record<string, SessionSummary>, unread: Record<string, true>, frozen?: string[]): string[] {
+export function phoneOrder(
+  ids: string[],
+  sessions: Record<string, SessionSummary>,
+  unread: Record<string, true>,
+  frozen?: string[],
+  /** The ids are a hosting panel's (panelTiles), already in its order: kept as given, newcomers in that order too. */
+  asGiven = false,
+): string[] {
   const live = ids.filter((id) => sessions[id]);
-  const sorted = (xs: string[]) => xs.sort((a, b) => compareSessions(sessions[a], sessions[b], unread));
+  const sorted = (xs: string[]) => (asGiven ? xs : xs.sort((a, b) => compareSessions(sessions[a], sessions[b], unread)));
   if (!frozen) return sorted(live);
   const kept = frozen.filter((id) => live.includes(id));
   return [...kept, ...sorted(live.filter((id) => !kept.includes(id)))];
@@ -218,7 +248,7 @@ export function phoneOrder(ids: string[], sessions: Record<string, SessionSummar
  * had nothing to show.
  */
 export function phonePages(st: ActiveSrc): string[] {
-  const order = phoneOrder(overviewIds(st), st.sessions, st.unread, st.overview.phone);
+  const order = phoneOrder(overviewIds(st), st.sessions, st.unread, st.overview.phone, !!panelTiles(st));
   const i = order.indexOf(overviewFocus(st) ?? "");
   return i < 0 ? [] : order.slice(Math.max(0, i - 2), i + 3);
 }

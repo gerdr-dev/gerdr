@@ -19,6 +19,7 @@ import {
   openSessionsWithProject,
   overviewFocus,
   overviewIds,
+  panelTiles,
   phoneOrder,
   toPin,
   type ActiveConf,
@@ -168,7 +169,7 @@ function besideTile(id: string): string | undefined {
   const st = get();
   const o = st.overview;
   const ids = overviewIds(st);
-  const order = o.phone ? phoneOrder(ids, st.sessions, st.unread, o.phone) : ids.filter((x) => x === id || !o.mini?.includes(x));
+  const order = o.phone ? phoneOrder(ids, st.sessions, st.unread, o.phone, !!panelTiles(st)) : ids.filter((x) => x === id || !o.mini?.includes(x));
   const i = order.indexOf(id);
   return i < 0 ? undefined : (order[i + 1] ?? order[i - 1]);
 }

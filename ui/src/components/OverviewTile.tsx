@@ -5,6 +5,7 @@ import { basename, focusSession } from "@/lib/actions";
 import { removeActive, toggleMain, toggleOverview } from "@/lib/overview";
 import { useWindowInFront } from "@/lib/front";
 import { markRead, useStore } from "@/lib/store";
+import { panelTiles } from "@/lib/overviewState";
 import { cn } from "@/lib/utils";
 import { FadeText } from "./FadeText";
 import { BorderFlow, useSlowCatchUp } from "./BorderFlow";
@@ -85,6 +86,7 @@ export function Tile({
   const session = useStore((s) => s.sessions[id]);
   const unread = useStore((s) => !!s.unread[id]);
   const where = useStore((s) => whereOf(s.layout, id, !phone));
+  const fromPanel = useStore((s) => !!panelTiles(s));
   const front = useWindowInFront();
   // Only while the window is in front (lib/front.ts)
   useEffect(() => {
@@ -136,7 +138,7 @@ export function Tile({
         onPointerDown={onDragStart && ((e) => onDragStart(e, title))}
         // Middle click closes it, like a browser tab (mousedown is cancelled so the browser doesn't start auto-scroll)
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}
-        onAuxClick={(e) => e.button === 1 && removeActive(id)}
+        onAuxClick={(e) => e.button === 1 && !fromPanel && removeActive(id)}
         title={t("overviewTile.dragHint")}
       >
         {onDragStart && <GripVertical className="-mx-1.5 size-3.5 shrink-0 text-muted-foreground/60" />}
@@ -167,9 +169,13 @@ export function Tile({
         <TileButton title={t("overviewTile.backToTab")} onClick={jump}>
           <ArrowUpRight className="size-3.5" />
         </TileButton>
-        <TileButton title={t("overviewTile.done")} onClick={() => removeActive(id)}>
-          <X className="size-3.5" />
-        </TileButton>
+        {/* A hosting panel's tiles (core useCodeOverview) come and go with its list: taking one out of Code's "active"
+            would do nothing there */}
+        {!fromPanel && (
+          <TileButton title={t("overviewTile.done")} onClick={() => removeActive(id)}>
+            <X className="size-3.5" />
+          </TileButton>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-clip">
         {/* Own pane id: the composer's draft here is separate from the one in the session's real pane */}

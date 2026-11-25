@@ -36,7 +36,7 @@ export function PickButton() {
  * tile), a new tab to pick any agent / folder in (it joins "active" once started), pick open ones, and re-sort the strip by "look at first" (its order is frozen on opening, phoneOrder, so one
  * finished or waiting since stays where it was until asked for).
  */
-export function PhoneMenu({ focus, onResort }: { focus?: string; onResort: () => void }) {
+export function PhoneMenu({ focus, panel, onResort }: { focus?: string; panel?: boolean; onResort: () => void }) {
   const s = useStore((st) => (focus ? st.sessions[focus] : undefined));
   const [pick, setPick] = useState(false);
   return (
@@ -58,12 +58,18 @@ export function PhoneMenu({ focus, onResort }: { focus?: string; onResort: () =>
           <DropdownMenuItem onClick={() => newTabForOverview()}>
             <SquarePlus /> {t("overviewPick.newTab")}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setPick(true)}>
-            <ListPlus /> {t("overviewPick.addExisting")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onResort}>
-            <ArrowDownWideNarrow /> {t("overviewPick.resort")}
-          </DropdownMenuItem>
+          {/* A hosting panel's overview (`panel`, core useCodeOverview) is its list in its order: nothing to add to it by
+              hand (picks go into Code's "active"), no order of ours to re-sort */}
+          {!panel && (
+            <DropdownMenuItem onClick={() => setPick(true)}>
+              <ListPlus /> {t("overviewPick.addExisting")}
+            </DropdownMenuItem>
+          )}
+          {!panel && (
+            <DropdownMenuItem onClick={onResort}>
+              <ArrowDownWideNarrow /> {t("overviewPick.resort")}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           {/* Back to the tabs, on the agent shown here (the drawer's Overview toggle was the only way out, two taps deep) */}
           <DropdownMenuItem onClick={() => (toggleOverview(false), focus && focusSession(focus))}>

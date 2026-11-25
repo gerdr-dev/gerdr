@@ -136,6 +136,12 @@ type State = {
    * where work goes (the repositories in its settings).
    */
   codeDirs: Record<string, CodeDir[]>;
+  /**
+   * The conversations a hosting panel wants as the phone overview's tiles, in its order (core useCodeOverview), by
+   * panel key: while it shows, the overview is these instead of Code's "active", which the panel's list doesn't show.
+   * In the store, not a plain map like the keys' order: the overview's tiles are drawn from it and must follow it.
+   */
+  codeOverviews: Record<string, string[]>;
   /** How many installed panels (every project) have an update waiting (lib/panels.ts refreshPanelUpdates): the settings dot. */
   panelUpdates: number;
   /** Where a hosting panel's sidebar part is drawn: an element at the top of Code's list (UnifiedSidebar), while it shows. */
@@ -212,6 +218,7 @@ export const useStore = create<State>(() => ({
   workPanels: loadWorkPanels(),
   codeHosts: {},
   codeDirs: {},
+  codeOverviews: {},
   panelUpdates: 0,
   codeSlot: null,
   overview: loadOverview(),
@@ -414,6 +421,16 @@ export function setCodeDirs(key: string, dirs: CodeDir[] | null) {
   if (dirs) next[key] = dirs;
   else delete next[key];
   set({ codeDirs: next });
+}
+
+/** core useCodeOverview: panel `key`'s overview tiles; null gives the overview back to Code's "active". */
+export function setCodeOverview(key: string, ids: string[] | null) {
+  const cur = get().codeOverviews;
+  if (ids ? cur[key]?.join(",") === ids.join(",") : !cur[key]) return;
+  const next = { ...cur };
+  if (ids) next[key] = ids;
+  else delete next[key];
+  set({ codeOverviews: next });
 }
 
 /** The panel on screen hosts Code (core CodeView). */

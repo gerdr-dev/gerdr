@@ -368,6 +368,12 @@ declare module "@gerdr/core" {
    * the workspace keys do nothing. CodeRow numbers itself while ⌘ is held; for a row you draw yourself, useCodeNumber.
    */
   export function useCodeOrder(sessions: string[]): void;
+  /**
+   * With CodeView: the conversations a phone's overview pages through while you host Code (its strip of tabs, the
+   * swipe between them), in this order. Without it the overview is Code's "active" list, which yours doesn't show.
+   * Give the ones worth swiping between (at work, waiting on the person), not your whole list.
+   */
+  export function useCodeOverview(sessions: string[]): void;
   /** With useCodeOrder: the number (1–9) to show on this conversation's row while ⌘ is held, else undefined. */
   export function useCodeNumber(session?: string): number | undefined;
   export function useCodeStart(fn: (o: { agent: string; cwd: string; mode?: string; continueFrom?: string }) => Promise<string>): void;
