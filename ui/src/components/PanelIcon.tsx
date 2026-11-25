@@ -8,7 +8,6 @@ import { panelsChanged } from "@/lib/panels";
 import { set, useStore } from "@/lib/store";
 import { setSpaceIcon } from "@/lib/actions";
 import { spaceInitials } from "@/lib/layout";
-import { isImageIcon } from "@/lib/iconImage";
 import { cn } from "@/lib/utils";
 import { IconPicker, StoredIcon, TextIcon } from "./IconPicker";
 
@@ -51,7 +50,6 @@ export function PanelIconDialog() {
   const [color, setColor] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
-  const picture = isImageIcon(icon);
   const id = ask?.kind === "projectIcon" ? "p:" + ask.project : ask?.key;
   useEffect(() => {
     setIcon(ask?.icon ?? "");
@@ -85,12 +83,8 @@ export function PanelIconDialog() {
         </DialogHeader>
         <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
           {/* What it will look like, at the rail's size */}
-          <div className={cn("flex size-9 items-center justify-center rounded-lg", !picture && "border")}>
-            {isProject ? (
-              <ProjectIcon name={name} icon={icon} color={color} className={picture ? "size-full rounded-[inherit]" : "size-7"} />
-            ) : (
-              <PanelIcon icon={icon} color={color} className={picture ? "size-full rounded-[inherit]" : "size-5"} />
-            )}
+          <div className="flex size-9 items-center justify-center rounded-lg border">
+            {isProject ? <ProjectIcon name={name} icon={icon} color={color} className="size-7" /> : <PanelIcon icon={icon} color={color} className="size-5" />}
           </div>
           <span className="min-w-0 truncate text-[13px]">{name}</span>
         </div>
