@@ -356,7 +356,8 @@ declare module "@gerdr/core" {
    * status); with `items`, a menu on it (move it). Data, drawn by Gerdr. Asked again whenever your component renders.
    */
   export type CodePaneTag = { label: string; icon?: ReactNode; tone?: "warn" | "ok" | "brand"; title?: string; items?: CodeMenuItem[] };
-  export function useCodePaneTag(fn: (row: { pane: string; session?: string }) => CodePaneTag | null | undefined): void;
+  /** Several tags come out as several chips, each with its own menu (where a task stands; what in it waits on the person). */
+  export function useCodePaneTag(fn: (row: { pane: string; session?: string }) => CodePaneTag | CodePaneTag[] | null | undefined): void;
   /** With CodeView: a new tab in Code (the "new conversation" page), in `cwd` when given. */
   export function newCodeTab(opts?: { cwd?: string }): void;
   /**
@@ -365,6 +366,8 @@ declare module "@gerdr/core" {
    * Under list="add", this panel's conversations aren't listed in Code's workspaces while the panel shows: list them in `sidebar`.
    */
   export function showInCodeView(session: string): void;
+  /** showInCodeView, then scroll its chat to the card with `ref` (a panel tool's gerdrCard.ref) and flash it. */
+  export function jumpInCode(session: string, ref: string): void;
   /** With CodeView: the conversation in Code's focused pane, to mark its row in `sidebar`. */
   export function useCodeSession(): string | undefined;
 

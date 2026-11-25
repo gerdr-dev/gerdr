@@ -3,7 +3,7 @@ import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
 import { addTab, addTabForSession, focusPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
-import { type CodeMenuFn, type CodePaneTagFn, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
+import { type CodeMenuFn, type CodePaneTagFn, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
 import { type CodeDir, focusedSession, get, markRead, set, setCodeDirs, setCodeHost, useStore } from "@/lib/store";
 import { PanelKeyContext } from "./visible";
@@ -108,6 +108,16 @@ export function showInCodeView(id: string) {
   markRead(id);
 }
 
+/**
+ * Show a conversation in the hosted Code and scroll it to the card with `ref` (a panel tool's gerdrCard.ref), flashing
+ * it: from a list of what waits on the person straight to the question. Older parts of a long chat are loaded until it
+ * is found.
+ */
+export function jumpInCode(session: string, ref: string) {
+  showInCodeView(session);
+  setCodeJump(session, ref);
+}
+
 /** The conversation in the focused pane of Code's layout, for the panel's part to mark its row. */
 export function useCodeSession(): string | undefined {
   return useStore((s) => focusedSession(s.layout));
@@ -179,7 +189,7 @@ export type { CodeDir } from "@/lib/store";
 /**
  * A tag after a pane's title, from the panel: what it knows about the conversation in that pane (a task's number and
  * status), and with `items` a menu on it (move it). `fn` is asked whenever this component renders, so call the hook
- * where the data it reads lives. Return null for no tag.
+ * where the data it reads lives. Return null for no tag, a list for several (each its own chip and menu).
  */
 export function useCodePaneTag(fn: CodePaneTagFn) {
   const key = useContext(PanelKeyContext);

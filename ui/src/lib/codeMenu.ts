@@ -52,7 +52,8 @@ export function codeMenuItems(pane: string, session?: string): CodeMenuItem[] {
  * one tap from the pane on a phone too).
  */
 export type CodePaneTag = { label: string; icon?: ReactNode; tone?: "warn" | "ok" | "brand"; title?: string; items?: CodeMenuItem[] };
-export type CodePaneTagFn = (row: { pane: string; session?: string }) => CodePaneTag | null | undefined;
+// Several for one pane when the panel tells apart what it knows: where a task stands and what in it waits on the person
+export type CodePaneTagFn = (row: { pane: string; session?: string }) => CodePaneTag | CodePaneTag[] | null | undefined;
 
 const tagByPanel = new Map<string, CodePaneTagFn>();
 let tagVersion = 0;
@@ -69,17 +70,38 @@ export function setCodePaneTag(key: string, fn: CodePaneTagFn | null) {
 export const subscribePaneTags = (f: () => void) => (tagSubs.add(f), () => void tagSubs.delete(f));
 export const paneTagVersion = () => tagVersion;
 
-/** The hosting panel's tag for a pane, while that panel is the one shown. */
-export function codePaneTag(pane: string, session?: string): CodePaneTag | null {
+/** The hosting panel's tags for a pane, while that panel is the one shown. */
+export function codePaneTags(pane: string, session?: string): CodePaneTag[] {
   const s = get();
-  if (s.mode !== "work") return null;
+  if (s.mode !== "work") return [];
   const space = currentSpace(s.layout);
   const panel = s.workPanels[space];
   const key = panel ? `${space}/${panel}` : space;
-  if (!s.codeHosts[key]) return null;
+  if (!s.codeHosts[key]) return [];
   try {
-    return tagByPanel.get(key)?.({ pane, session }) ?? null;
+    const got = tagByPanel.get(key)?.({ pane, session });
+    return (Array.isArray(got) ? got : got ? [got] : []).filter(Boolean);
   } catch {
-    return null;
+    return [];
   }
+}
+
+/**
+ * A jump the hosting panel asked for (core jumpInCode): scroll the pane showing `session` to the card with `ref` (a
+ * tool result's gerdrCard.ref) and flash it, as a panel's own SessionChat does with its `jump`. Kept for a few seconds
+ * only: the pane's chat remounts (a subagent's view and back, a split), and a jump still standing would scroll it back
+ * to that card each time and lose the person's place.
+ */
+const jumps = new Map<string, { ref: string; seq: number; at: number }>();
+let jumpSeq = 0;
+const jumpSubs = new Set<() => void>();
+export function setCodeJump(session: string, ref: string) {
+  jumps.set(session, { ref, seq: ++jumpSeq, at: Date.now() });
+  for (const f of jumpSubs) f();
+}
+export const subscribeCodeJumps = (f: () => void) => (jumpSubs.add(f), () => void jumpSubs.delete(f));
+export const codeJumpVersion = () => jumpSeq;
+export function codeJump(session: string) {
+  const j = jumps.get(session);
+  return j && Date.now() - j.at < 5000 ? j : undefined;
 }

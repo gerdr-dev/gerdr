@@ -22,6 +22,7 @@ export {
   useCodeRowMenu,
   type CodeMenuItem,
   showInCodeView,
+  jumpInCode,
   closeCodeDrawer,
   useCodePaneTag,
   type CodePaneTag,

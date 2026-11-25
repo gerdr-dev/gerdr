@@ -31,7 +31,7 @@ import {
   CircleX,
   X,
 } from "lucide-react";
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,11 @@ import { Folder } from "./folder/Folder";
 import { BrowserScreen } from "./browser/BrowserScreen";
 import { BrowserOutCard, PopOutItem } from "./browser/BrowserOut";
 import { NewsDot } from "./browser/NewsDot";
-import { codeMenuItems, codePaneTag, paneTagVersion, subscribePaneTags, type CodeMenuItem } from "@/lib/codeMenu";
+import { codeJump, codeJumpVersion, codeMenuItems, codePaneTags, paneTagVersion, subscribeCodeJumps, subscribePaneTags, type CodeMenuItem } from "@/lib/codeMenu";
+import { cardOf } from "@/components/chat/ToolCard";
+import type { GPart } from "@gerdr/chat";
+import type { CodePaneTag } from "@/lib/codeMenu";
+import type { SessionSummary } from "@/lib/types";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   basename,
@@ -1367,7 +1371,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       </div>
       <PaneBody>
         {session ? (
-          <ChatView key={session.id} session={session} paneId={pane.id} focused={focused} />
+          <PaneChat session={session} paneId={pane.id} focused={focused} />
         ) : starting ? (
           <div className="flex h-full items-center justify-center gap-2 text-[12px] text-muted-foreground">
             <PixelLoader className="size-4" />
@@ -1496,8 +1500,10 @@ function PaneTag({ pane, session }: { pane: string; session?: string }) {
   useSyncExternalStore(subscribePaneTags, paneTagVersion);
   // The panel showing or not, and which one, decides whether there is a tag at all
   useStore((s) => `${s.mode}/${Object.keys(s.codeHosts).join()}/${JSON.stringify(s.workPanels)}`);
-  const tag = codePaneTag(pane, session);
-  if (!tag) return null;
+  return codePaneTags(pane, session).map((tag, i) => <OnePaneTag key={i} tag={tag} />);
+}
+
+function OnePaneTag({ tag }: { tag: CodePaneTag }) {
   const chip = (
     <span
       title={tag.title}
@@ -1524,13 +1530,27 @@ function PaneTag({ pane, session }: { pane: string; session?: string }) {
       <DropdownMenuTrigger asChild onPointerDown={(e) => e.stopPropagation()}>
         <button className="shrink-0 rounded-full outline-none">{chip}</button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
+      <DropdownMenuContent align="start" className="max-w-[min(28rem,90vw)]">
         {tag.items.map((it) => (
           <DropdownMenuItem key={it.id} disabled={it.disabled} onClick={it.onSelect}>
-            {it.icon} {it.label}
+            {it.icon} <span className="truncate">{it.label}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/**
+ * A pane's conversation, scrolled to a card when the hosting panel asks (core jumpInCode: a 等你 tag's item going to
+ * the question it names).
+ */
+function PaneChat({ session, paneId, focused }: { session: SessionSummary; paneId: string; focused: boolean }) {
+  useSyncExternalStore(subscribeCodeJumps, codeJumpVersion);
+  const jump = codeJump(session.id);
+  const focus = useMemo(
+    () => (jump ? { match: (p: GPart) => cardOf(p)?.ref === jump.ref, seq: jump.seq } : undefined),
+    [jump?.ref, jump?.seq], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  return <ChatView key={session.id} session={session} paneId={paneId} focused={focused} focus={focus} />;
 }
