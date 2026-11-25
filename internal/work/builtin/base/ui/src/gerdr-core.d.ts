@@ -365,7 +365,7 @@ declare module "@gerdr/core" {
    * Call it from onShowSession too, so this panel's conversations brought up from a notification open as panes.
    * Under list="add", this panel's conversations aren't listed in Code's workspaces while the panel shows: list them in `sidebar`.
    */
-  export function showInCodeView(session: string): void;
+  export function showInCodeView(session: string, replace?: string): void;
   /** showInCodeView, then scroll its chat to the card with `ref` (a panel tool's gerdrCard.ref) and flash it. */
   export function jumpInCode(session: string, ref: string): void;
   /** With CodeView: the conversation in Code's focused pane, to mark its row in `sidebar`. */

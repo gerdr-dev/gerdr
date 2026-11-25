@@ -83,10 +83,15 @@ export async function switchAgentInPane(paneId: string, sessionId: string, agent
   const from = get().sessions[sessionId];
   if (!from || from.agent === agent || locateSession(get().layout, sessionId)?.pane.id !== paneId) return;
   const s = await continueSession(from, agent);
+  replaceSessionInPane(sessionId, s.id, paneId);
+}
+
+/** Replace the conversation without navigating away from the current pane or view. */
+export function replaceSessionInPane(sessionId: string, nextId: string, paneId?: string) {
   const pane = locateSession(get().layout, sessionId)?.pane;
   // The pane may have been closed or switched while the new agent was starting.
-  if (pane?.id !== paneId) return;
-  setPane0(paneId, { sessionId: s.id, draft: undefined });
+  if (!pane || (paneId && pane.id !== paneId)) return;
+  setPane0(pane.id, { sessionId: nextId, draft: undefined });
   shutdownGone([pane]);
 }
 

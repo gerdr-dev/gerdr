@@ -1,7 +1,7 @@
 import { type ReactNode, useContext, useEffect, useMemo, useRef } from "react";
 import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
-import { addTab, addTabForSession, focusPane } from "@/lib/actions";
+import { addTab, addTabForSession, focusPane, replaceSessionInPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
 import { type CodeMenuFn, type CodePaneTagFn, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
@@ -100,7 +100,8 @@ export function newCodeTab(opts?: { cwd?: string }) {
  * directory. For the hosting panel's own conversations, which Gerdr otherwise hands back to the panel to show
  * (onShowSession): here "showing it" is a pane like any other.
  */
-export function showInCodeView(id: string) {
+export function showInCodeView(id: string, replace?: string) {
+  if (replace && replace !== id) return replaceSessionInPane(replace, id);
   toggleOverview(false);
   const loc = locateSession(get().layout, id);
   if (loc) focusPane(loc.pane.id);
