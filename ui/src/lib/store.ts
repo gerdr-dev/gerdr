@@ -182,6 +182,35 @@ type State = {
   starting: Record<string, true>;
 };
 
+/**
+ * The panels that hosted Code last time, remembered on this device: after a reload they show Code at once, while their
+ * module is still loading, instead of an empty page (asked for: on a phone through the relay the Superagent panel was
+ * a blank screen for seconds before its CodeView mounted). Taken as a guess until the panel's own CodeView confirms it:
+ * MountRoot drops a guess the panel didn't confirm (dropGuessedHost), so a panel that stopped hosting Code, or broke,
+ * still gets its page back.
+ */
+const HOSTS_KEY = "gerdr.codeHosts";
+const guessedHosts = new Set<string>();
+function loadCodeHosts(): Record<string, CodeHost> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(HOSTS_KEY) || "{}") ?? {};
+    const out: Record<string, CodeHost> = {};
+    for (const [k, v] of Object.entries(saved))
+      if (v === "add" || v === "replace") {
+        out[k] = { list: v };
+        guessedHosts.add(k);
+      }
+    return out;
+  } catch {
+    return {};
+  }
+}
+function saveCodeHosts(hosts: Record<string, CodeHost>) {
+  try {
+    localStorage.setItem(HOSTS_KEY, JSON.stringify(Object.fromEntries(Object.entries(hosts).map(([k, v]) => [k, v.list]))));
+  } catch {}
+}
+
 export const useStore = create<State>(() => ({
   ready: false,
   authError: false,
@@ -216,7 +245,7 @@ export const useStore = create<State>(() => ({
   workPeek: null,
   mountWatch: {},
   workPanels: loadWorkPanels(),
-  codeHosts: {},
+  codeHosts: loadCodeHosts(),
   codeDirs: {},
   codeOverviews: {},
   panelUpdates: 0,
@@ -445,12 +474,19 @@ export const codeShown = (s: Pick<State, "mode" | "layout" | "workPanels" | "cod
 
 /** core CodeView mounting / unmounting in panel `key`. */
 export function setCodeHost(key: string, host: CodeHost | null) {
+  guessedHosts.delete(key);
   const cur = get().codeHosts;
   if (cur[key]?.list === host?.list) return;
   const next = { ...cur };
   if (host) next[key] = host;
   else delete next[key];
   set({ codeHosts: next });
+  saveCodeHosts(next);
+}
+
+/** Panel `key` has drawn (or failed) without mounting CodeView: a remembered "it hosts Code" was wrong, give its page back. */
+export function dropGuessedHost(key: string) {
+  if (guessedHosts.has(key)) setCodeHost(key, null);
 }
 
 export function setMode(mode: "agents" | "work") {

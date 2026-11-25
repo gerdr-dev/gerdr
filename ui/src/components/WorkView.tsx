@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { spaceList, type Layout } from "@/lib/layout";
 import { usePhone } from "@/lib/phone";
-import { set, setMode, useStore } from "@/lib/store";
+import { dropGuessedHost, set, setMode, useStore } from "@/lib/store";
 import { syncWatch } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import { openInCode } from "@/core/sessions";
@@ -176,6 +176,9 @@ function MountRoot({ project }: { project: string }) {
   const entry = useRef(info?.entry);
   entry.current = info?.entry;
   const [failed, setFailed] = useState("");
+  // The loader stays until the page has drawn something: the module's import (seconds on a phone through the relay)
+  // used to be an empty area under the bar, which looked broken (asked for)
+  const [drawn, setDrawn] = useState(false);
   const ok = !!info?.entry;
   useEffect(() => {
     const el = ref.current;
@@ -183,7 +186,13 @@ function MountRoot({ project }: { project: string }) {
     if (!el || !url) return;
     let root: Root | null = null;
     let dead = false;
+    let guess = 0;
     setFailed("");
+    setDrawn(el.childElementCount > 0);
+    const seen = new MutationObserver(() => el.childElementCount > 0 && setDrawn(true));
+    seen.observe(el, { childList: true });
+    // A page that draws nothing at all still loses the loader, after a while
+    const giveUp = setTimeout(() => setDrawn(true), 10_000);
     (async () => {
       await registerMount(project);
       const app = await import(/* @vite-ignore */ url);
@@ -193,6 +202,8 @@ function MountRoot({ project }: { project: string }) {
         path = localStorage.getItem(pathKey(project)) || "/";
       } catch {}
       root = createRoot(el);
+      // Remembered as hosting Code (store loadCodeHosts) but no CodeView once it has had time to mount: show its page
+      guess = window.setTimeout(() => dropGuessedHost(project), 3000);
       root.render(
         createElement(
           PanelKeyContext.Provider,
@@ -211,15 +222,25 @@ function MountRoot({ project }: { project: string }) {
           ),
         ),
       );
-    })().catch((e) => !dead && setFailed(String(e?.stack ?? e)));
+    })().catch((e) => {
+      if (dead) return;
+      setFailed(String(e?.stack ?? e));
+      dropGuessedHost(project);
+    });
     return () => {
       dead = true;
+      seen.disconnect();
+      clearTimeout(giveUp);
+      clearTimeout(guess);
       const r = root;
       // Not during React's own render of this tree: unmounting another root synchronously from a cleanup warns
       if (r) setTimeout(() => r.unmount());
     };
   }, [project, seq, ok]);
   const error = info?.error || failed;
+  useEffect(() => {
+    if (error) dropGuessedHost(project);
+  }, [error, project]);
   return (
     // transform: the containing block of the panel's fixed overlays (its drawers, dialogs), so they cover the panel's
     // own area and not the agent / browser columns beside it (asked for: a task's drawer hid the browser column, and
@@ -231,8 +252,8 @@ function MountRoot({ project }: { project: string }) {
       <div ref={ref} className={cn("size-full", error && "hidden")} />
       <div ref={portal} data-gerdr-portal="" />
       {error && <MountError project={project} error={error} />}
-      {!info && (
-        <div className="flex size-full items-center justify-center">
+      {!error && !drawn && (
+        <div className="absolute inset-0 flex items-center justify-center">
           <PixelLoader className="size-4" />
         </div>
       )}
