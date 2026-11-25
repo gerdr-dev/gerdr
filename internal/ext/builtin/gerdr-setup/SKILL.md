@@ -1,6 +1,6 @@
 ---
 name: gerdr-setup
-description: "Changing how Gerdr (the GUI you run in) is set up, from the command line: its settings (theme, default agent / mode / model, shortcuts, model providers: `gerdr config`); agents (roles) with their own prompt, skills and MCP servers (`gerdr agent / skill / mcp`); Gerdr projects (`gerdr project list / new`) and a project's own skills and shared memory (`gerdr skill --project`); add-ons (`gerdr addon`: stores, install, settings); a project's panels (`gerdr panel`: install, new, update, icon, order, badge, remove); the layout (workspaces, tabs, splits, a moved project folder: `gerdr workspace / tab / pane`); remote access from a phone (`gerdr remote`). Changing Gerdr's UI code is gerdr-ui. Requires GERDR_ENV=1."
+description: "Changing how Gerdr (the GUI you run in) is set up, from the command line: its settings (theme, default agent / mode / model, shortcuts, model providers: `gerdr config`); agents (roles) with their own prompt, skills and MCP servers (`gerdr agent / skill / mcp`); Gerdr projects (`gerdr project list / new / icon`) and a project's own skills and shared memory (`gerdr skill --project`); add-ons (`gerdr addon`: stores, install, settings); a project's panels (`gerdr panel`: install, new, update, icon, order, badge, remove); the layout (workspaces, tabs, splits, a moved project folder: `gerdr workspace / tab / pane`); remote access from a phone (`gerdr remote`). Changing Gerdr's UI code is gerdr-ui. Requires GERDR_ENV=1."
 ---
 
 # Gerdr: settings, agents, add-ons, panels, layout
@@ -154,6 +154,9 @@ Projects are listed and created from the command line too (the sidebar's New pro
 ```bash
 gerdr project list
 gerdr project new lb [--cwd ~/dev/lb]
+gerdr project icon lb rocket --color teal          # its square on the rail: a glyph / line icon key,
+gerdr project icon lb --text LB --color "#2563eb"  # up to 3 characters on a tile of the colour,
+gerdr project icon lb --image ~/logo.png           # or a picture (cut square, shrunk); no icon = its initials
 ```
 
 - **Skills**: when a skill is meant for one project (its deploy routine, its team's tools), put it there, not in
@@ -215,7 +218,7 @@ gerdr addon store add owner/repo        # or an absolute folder; store rm / stor
 ## Panels
 
 Besides Code, a project has panels: each a whole app of its own (pages, local functions, skills, schedules, data, its
-agent), level with Code on the strip at the left. `gerdr panel` manages them, the same as Settings → Panels; the
+agent), level with Code on the strip at the left. `gerdr panel` manages them, the same as Settings → Projects & panels; the
 project is the current directory's (or `--project`). A panel is named by its name, the project's own by the project id.
 
 ```bash
@@ -225,7 +228,7 @@ gerdr panel new <name>                             # a blank one, for its agent 
 gerdr panel check                                  # fetch the panels' repositories, list those with new commits (nothing applied)
 gerdr panel update [<panel>]                       # git pull; the user's own changes stay on top
 gerdr panel rename <panel> "任务看板"                # the name shown for it, for this person
-gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, or sprite:<key>; no icon = default
+gerdr panel icon <panel> kanban [--color blue]     # glyph / line icon key, sprite:<key>, --text 任务, --image f.png; none = default
 gerdr panel move <panel> 1                         # its place on the rail (1 = top, Code counts), as dragging does; `.` = Code
 gerdr panel badge <panel> 3 | dot | clear          # a red number / dot on its rail button ("something new"); --add N adds to it
 gerdr panel rm <panel>                             # to the trash, data and all

@@ -108,7 +108,8 @@ export type Workspace = {
  * locating a session — keeps working); views filter by space. active：switching back lands on the workspace you left.
  */
 /** renamed: the name was changed after creation; the id (address, directory) stays, and nameSpaceIds leaves it alone. */
-export type Space = { id: string; name: string; active?: string; renamed?: true };
+/** icon / color: its face on the rail, the same values a panel's icon takes (IconPicker); none = its initials. */
+export type Space = { id: string; name: string; active?: string; renamed?: true; icon?: string; color?: string };
 export type Layout = { version: 1; workspaces: Workspace[]; active: string; lastActive?: string; spaces?: Space[] };
 
 export const DEFAULT_SPACE = "default";

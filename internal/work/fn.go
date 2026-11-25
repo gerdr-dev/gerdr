@@ -70,6 +70,7 @@ func source(dir, file string) (string, error) {
 
 // List is every function the project's local/ files export.
 func (r *Runner) List(project string) ([]Fn, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	dir, err := r.Ensure(project)
 	if err != nil {
 		return nil, err

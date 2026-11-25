@@ -99,7 +99,7 @@ export const zh = {
   "rail.newProjectHint": "新项目（每个项目有自己的工作空间、Agent 和面板，互相看不见；右键项目可重命名、删除，拖动排序）",
   "rail.settingsDoctorBad": "设置（诊断发现了问题：设置 → 实验室 → 诊断）",
   "rail.settingsUpdate": "设置（有更新等你点：设置 → 通用 → 版本与后台）",
-  "rail.settingsPanelUpdates": "设置（{n} 个面板有更新：设置 → 面板）",
+  "rail.settingsPanelUpdates": "设置（{n} 个面板有更新：设置 → 项目与面板）",
 
   "sidebarChrome.doctorBad": "诊断发现了问题：设置 → 实验室 → 诊断",
   "sidebarChrome.hasProblem": "有问题",
@@ -339,7 +339,7 @@ export const en: Record<keyof typeof zh, string> = {
     "New project (each project has its own workspaces, agents and panels, invisible to the others; right-click a project to rename or delete it, drag to reorder)",
   "rail.settingsDoctorBad": "Settings (diagnostics found a problem: Settings → Labs → Diagnostics)",
   "rail.settingsUpdate": "Settings (an update is waiting for you: Settings → General → Version and background)",
-  "rail.settingsPanelUpdates": "Settings ({n} panel(s) have an update: Settings → Panels)",
+  "rail.settingsPanelUpdates": "Settings ({n} panel(s) have an update: Settings → Projects & panels)",
 
   "sidebarChrome.doctorBad": "Diagnostics found a problem: Settings → Labs → Diagnostics",
   "sidebarChrome.hasProblem": "Problem",

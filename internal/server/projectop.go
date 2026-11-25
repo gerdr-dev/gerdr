@@ -8,6 +8,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -84,6 +85,16 @@ func (c *layoutCall) projectView(s node) node {
 		}
 	}
 	v := node{"id": id, "name": spaceName(s), "workspace_count": n}
+	if ic := str(s, "icon"); ic != "" {
+		// A picture is a data URL of several KB: said, not printed
+		if strings.HasPrefix(ic, "data:") {
+			ic = "(picture)"
+		}
+		v["icon"] = ic
+	}
+	if c := str(s, "color"); c != "" {
+		v["color"] = c
+	}
 	if c.space != "" && id == c.space {
 		v["current"] = true
 	}
@@ -135,6 +146,31 @@ func (c *layoutCall) projectNew(p LayoutParams) (any, error) {
 		ws = append(ws, c.wsView(w, i+1))
 	}
 	return node{"project": c.projectView(sp), "workspaces": ws, "restored": restored}, nil
+}
+
+// projectIcon sets the icon a project shows on the rail (ui/src/lib/actions/spaces.ts setSpaceIcon): p.ID is its id
+// or name, p.Icon / p.Color the values ("" = none, its initials).
+func (c *layoutCall) projectIcon(p LayoutParams) (any, error) {
+	if err := IconError(p.Icon, p.Color); err != nil {
+		return nil, err
+	}
+	list := c.spaceList()
+	for _, s := range list {
+		if str(s, "id") != p.ID && !strings.EqualFold(spaceName(s), p.ID) {
+			continue
+		}
+		for k, v := range map[string]string{"icon": p.Icon, "color": p.Color} {
+			if v == "" {
+				delete(s, k)
+			} else {
+				s[k] = v
+			}
+		}
+		c.l["spaces"] = anys(list)
+		c.changed = true
+		return node{"project": c.projectView(s)}, nil
+	}
+	return nil, fmt.Errorf(i18n.S("没有项目 %q（gerdr project list 看有哪些）", "no project %q (gerdr project list shows them)"), p.ID)
 }
 
 func (c *layoutCall) wsByID(id string) node {

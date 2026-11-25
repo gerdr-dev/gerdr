@@ -444,6 +444,7 @@ func cut(s string, n int) string {
 
 // Schedules lists a project's schedules with their state and next time.
 func (r *Runner) Schedules(project string) ([]ScheduleInfo, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	r.sched_.mu.Lock()
 	defer r.sched_.mu.Unlock()
 	p := r.sched(project)
@@ -475,6 +476,7 @@ func (r *Runner) Schedules(project string) ([]ScheduleInfo, error) {
 
 // RunSchedule runs one now (the user's "run now"), whatever its time.
 func (r *Runner) RunSchedule(project, id string) error {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	s, err := r.findSchedule(project, id)
 	if err != nil {
 		return err
@@ -487,6 +489,7 @@ func (r *Runner) RunSchedule(project, id string) error {
 
 // PauseSchedule pauses (or resumes) one; the state is this machine's.
 func (r *Runner) PauseSchedule(project, id string, paused bool) error {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	if _, err := r.findSchedule(project, id); err != nil {
 		return err
 	}

@@ -30,7 +30,10 @@ type Dialog =
   | { kind: "newWorkspace" }
   | { kind: "editWorkspace"; id: string }
   | { kind: "workSource"; project: string; action: "install" | "new" }
-  | { kind: "panelIcon"; key: string; title: string; icon?: string; color?: string }
+  /** back: opened from Settings → Projects & panels, which it reopens when it closes (one dialog shows at a time) */
+  | { kind: "panelIcon"; key: string; title: string; icon?: string; color?: string; back?: "settings" }
+  /** a project's icon on the rail (layout.ts Space icon / color); project = its space id */
+  | { kind: "projectIcon"; project: string; name: string; icon?: string; color?: string; back?: "settings" }
   /** a project's skills / MCP (ProjectExtDialog); project = its space id */
   | { kind: "projectExt"; project: string; name: string; tab?: "skills" | "memory" | "off" }
   | { kind: "importHerdr" }

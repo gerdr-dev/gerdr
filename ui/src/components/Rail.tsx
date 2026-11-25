@@ -4,6 +4,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { switchSpace } from "@/lib/actions";
 import { useLanRoute } from "@/lib/android";
+import { hasProjectIcon, ProjectIcon } from "./PanelIcon";
 import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout";
 import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -64,14 +65,23 @@ function RailProjects() {
                 aria-current={on || undefined}
                 className={cn(
                   "relative flex size-9 shrink-0 items-center justify-center rounded-lg border text-[12px] font-semibold",
-                  on ? "border-foreground bg-foreground text-background" : "bg-background text-muted-foreground hover:text-foreground",
+                  hasProjectIcon(sp)
+                    ? cn("bg-background", on ? "border-foreground" : "border-transparent opacity-80 hover:opacity-100")
+                    : on
+                      ? "border-foreground bg-foreground text-background"
+                      : "bg-background text-muted-foreground hover:text-foreground",
                   "data-[state=open]:ring-2 data-[state=open]:ring-brand/60",
                 )}
                 onClick={() => switchSpace(sp.id)}
                 onPointerDown={(e) => startSpaceDrag(e, sp.id, "y")}
               >
                 {on && <span className="absolute top-2 -left-1.5 h-5 w-1 rounded-r bg-foreground" />}
-                <span className="max-w-full truncate px-0.5">{spaceInitials(sp.name)}</span>
+                {hasProjectIcon(sp) ? (
+                  // Its own icon fills the button; the bar at the left still says which project is on
+                  <ProjectIcon name={sp.name} icon={sp.icon} color={sp.color} className="size-7" />
+                ) : (
+                  <span className="max-w-full truncate px-0.5">{spaceInitials(sp.name)}</span>
+                )}
                 {st && <StatusDot status={st.status} unread={st.unread} className="absolute -top-0.5 -right-0.5 ring-2 ring-sidebar" />}
               </button>
             </ContextMenuTrigger>

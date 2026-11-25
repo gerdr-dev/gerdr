@@ -572,3 +572,36 @@ func writeAtomic(p string, b []byte) error {
 	}
 	return nil
 }
+
+// RenamePanel moves the tasks' folders of a renamed panel (key old → new) to the new key: in the index and in each
+// folder's own folder.json. Without it a task's next record made it a second folder under the new key. The folders
+// themselves stay where they are. Returns how many owners moved.
+func (s *Store) RenamePanel(old, new string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ix := s.loadIndex()
+	prefix := "task:" + old + "/" // Owner.key of a panel task
+	n := 0
+	for k, id := range ix.Owners {
+		task, ok := strings.CutPrefix(k, prefix)
+		if !ok {
+			continue
+		}
+		o := Owner{Panel: new, Task: task}
+		delete(ix.Owners, k)
+		ix.Owners[o.key()] = id
+		n++
+		if rel, ok := ix.Folders[id]; ok {
+			p := s.abs(rel)
+			if f, err := Read(p); err == nil && f.ID == id {
+				f.Owner = o
+				b, _ := json.MarshalIndent(f, "", "  ")
+				_ = writeAtomic(filepath.Join(p, Meta, "folder.json"), b)
+			}
+		}
+	}
+	if n > 0 {
+		_ = s.saveIndex(ix)
+	}
+	return n
+}

@@ -55,6 +55,8 @@ type LayoutParams struct {
 	Lines        int     `json:"lines,omitempty"`    // pane.read: how many of the last lines
 	Text         string  `json:"text,omitempty"`     // pane.send: what to type
 	NoEnter      bool    `json:"no_enter,omitempty"` // pane.send: don't press Enter after it
+	Icon         string  `json:"icon,omitempty"`  // project.icon: the icon value (internal/server/icon.go); "" = its initials
+	Color        string  `json:"color,omitempty"` // project.icon: a palette name or #rrggbb
 	Fit          string  `json:"fit,omitempty"`      // pane.float / pane.fit: the page's size, pc / pad / mobile (ui/src/lib/layout.ts FLOAT_FITS); pane.fit also auto
 }
 
@@ -103,6 +105,8 @@ func (c *layoutCall) run(method string, p LayoutParams) (any, error) {
 		return c.projectList(), nil
 	case "project.new":
 		return c.projectNew(p)
+	case "project.icon":
+		return c.projectIcon(p)
 	case "workspace.list":
 		out := []node{}
 		for i, w := range c.visibleWs() {

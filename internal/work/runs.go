@@ -103,6 +103,13 @@ func (rn *Run) Wait(ctx context.Context) (any, error) {
 
 func (rn *Run) Abort() { rn.cancel() }
 
+// ended: its result or error is in.
+func (rn *Run) ended() bool {
+	rn.mu.Lock()
+	defer rn.mu.Unlock()
+	return rn.done
+}
+
 // Start runs a function in the background and returns at once.
 func (r *Runner) Start(project, name string, input any) *Run {
 	return r.StartAs(project, name, input, "")
@@ -110,6 +117,7 @@ func (r *Runner) Start(project, name string, input any) *Run {
 
 // StartAs is Start for a call made by a conversation (a Work tool): ctx.caller.session is that session's id.
 func (r *Runner) StartAs(project, name string, input any, caller string) *Run {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	if project == "" {
 		project = DefaultProject
 	}
@@ -273,6 +281,7 @@ type RunSummary struct {
 
 // Logs lists the project's recent runs, newest first (fn filters by function name, "file" or "file.export").
 func (r *Runner) Logs(project, fn string, limit int) ([]RunSummary, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	dir := r.logDir(project)
 	ents, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
@@ -316,6 +325,7 @@ func (r *Runner) Logs(project, fn string, limit int) ([]RunSummary, error) {
 
 // LogOf is one run's log lines.
 func (r *Runner) LogOf(project, id string) ([]LogLine, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	if !strings.HasPrefix(id, "r") || strings.ContainsAny(id, `/\.`) {
 		return nil, fmt.Errorf("bad run id %q", id)
 	}

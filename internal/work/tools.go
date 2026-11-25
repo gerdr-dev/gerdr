@@ -33,6 +33,7 @@ type Tool struct {
 
 // Tools lists the project's declared tools; a name declared twice keeps the first file's (files by name).
 func (r *Runner) Tools(project string) ([]Tool, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	dir, err := r.Ensure(project)
 	if err != nil {
 		return nil, err
@@ -99,6 +100,7 @@ func (r *Runner) Tools(project string) ([]Tool, error) {
 // compaction. A board says there which task the conversation works on (a worker that had /clear didn't know it was
 // one, 2026-11-05).
 func (r *Runner) Instructions(ctx context.Context, project, session string) (string, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	dir, err := r.Ensure(project)
 	if err != nil {
 		return "", err
@@ -144,6 +146,7 @@ func (r *Runner) Instructions(ctx context.Context, project, session string) (str
 
 // CallTool runs a declared tool for the conversation that called it (ctx.caller.session).
 func (r *Runner) CallTool(ctx context.Context, project, name, session string, args any) (any, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	tools, err := r.Tools(project)
 	if err != nil {
 		return nil, err

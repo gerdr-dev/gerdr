@@ -59,6 +59,7 @@ func writeJSONMap(p string, m map[string]any) error {
 // UIConfig is the panel's ui.json with this person's choices over it: what the rail shows. A broken user/ui.json is
 // skipped (the panel's own still shows); a broken ui/ui.json is the error.
 func (r *Runner) UIConfig(key string) (map[string]any, error) {
+	key = r.Canon(key) // an old name of a renamed panel (rename.go)
 	dir, err := r.Dir(key)
 	if err != nil {
 		return nil, err
@@ -80,6 +81,7 @@ func (r *Runner) UIConfig(key string) (map[string]any, error) {
 // SetUIPrefs records this person's name / icon / color for the panel in user/ui.json. An empty value is kept as ""
 // (not dropped): clearing a color has to hide the panel's own color, not fall back to it.
 func (r *Runner) SetUIPrefs(key string, vals map[string]string) error {
+	key = r.Canon(key) // an old name of a renamed panel (rename.go)
 	dir, err := r.Dir(key)
 	if err != nil {
 		return err

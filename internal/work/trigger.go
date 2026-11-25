@@ -337,6 +337,7 @@ func (r *Runner) triggerPrompt(project string, t Trigger, e ev.Event) error {
 
 // Triggers lists a project's triggers with their last run.
 func (r *Runner) Triggers(project string) ([]TriggerInfo, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	r.trig_.mu.Lock()
 	defer r.trig_.mu.Unlock()
 	p := r.trig(project)

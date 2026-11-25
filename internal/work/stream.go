@@ -339,6 +339,7 @@ func (r *Runner) streamTarget(ctx context.Context, project, fn string) (string, 
 
 // Streams lists a project's streams with how each is doing.
 func (r *Runner) Streams(project string) ([]StreamInfo, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	if project == "" {
 		project = DefaultProject
 	}

@@ -124,6 +124,11 @@ export function renameSpace(id: string, name: string): string {
   return "";
 }
 
+/** Set the icon a project shows on the rail ("" = back to its initials); the same values as a panel's (IconPicker). */
+export function setSpaceIcon(id: string, icon: string, color: string) {
+  setLayout((l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, icon: icon || undefined, color: color || undefined } : s)) }));
+}
+
 /** Put project `id` at position `to` of the list (counted without it). */
 export function moveSpace(id: string, to: number) {
   setLayout((l) => {

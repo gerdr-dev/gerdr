@@ -238,15 +238,29 @@ export function autoGlyph(id: string): string {
   return AUTO[Math.abs(h) % AUTO.length];
 }
 
-/** color: a PALETTE key; none / unknown = the glyph's own colours. */
+/** A custom colour as stored: "#rrggbb", picked freely next to the PALETTE (projects' and panels' icons). */
+export const isHexColor = (c?: string) => !!c && /^#[0-9a-f]{6}$/i.test(c);
+
+/** A stored colour's gradient: a PALETTE key's, or for "#rrggbb" a lighter tint of it down to itself; else none. */
+export function colorStops(color?: string): { from: string; to: string } | undefined {
+  if (!color) return undefined;
+  if (PALETTE[color]) return PALETTE[color];
+  if (!isHexColor(color)) return undefined;
+  const n = parseInt(color.slice(1), 16);
+  const tint = (v: number) => Math.round(v + (255 - v) * 0.45);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(tint);
+  return { from: `rgb(${r}, ${g}, ${b})`, to: color };
+}
+
+/** color: a PALETTE key or "#rrggbb"; none / unknown = the glyph's own colours. */
 export function AgentGlyph({ name, color, className }: { name: string; color?: string; className?: string }) {
   const line = LINES[name];
   const key = line || GLYPHS[name] ? name : autoGlyph(name);
   const g = GLYPHS[key];
-  const c = (color && PALETTE[color]) || (g ? { from: g.from, to: g.to } : undefined);
+  const c = colorStops(color) || (g ? { from: g.from, to: g.to } : undefined);
   // Gradients and masks need an id unique on the page (the same glyph is drawn many times). The glyph's name and colour
   // are part of it so that ids from two React roots that do collide still point at the same colours.
-  const id = useId().replace(/[^\w-]/g, "") + key + (color ?? "");
+  const id = (useId() + key + (color ?? "")).replace(/[^\w-]/g, "");
   const grad = c && (
     <defs>
       <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="4" y1="2" x2="20" y2="22">

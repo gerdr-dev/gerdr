@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blocks, Check, ChevronsUpDown, Download, Pencil, Plus, SquarePlus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blocks, Palette, Check, ChevronsUpDown, Download, Pencil, Plus, SquarePlus, Trash2, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
@@ -24,6 +24,7 @@ import { canNewWindow, nativeNewWindow } from "@/lib/native";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 import { tabStatus } from "./TabBar";
 import { useBadges } from "@/lib/badges";
+import { hasProjectIcon, ProjectIcon } from "./PanelIcon";
 import { t } from "@/lib/i18n";
 
 /** A session's overall state for the switcher: the most urgent of its workspaces' (same ranking as WsDot). Muted ones say nothing. */
@@ -112,6 +113,8 @@ export async function askDeleteSpace(sp: Space) {
 
 export const newSpaceDialog = () => set({ dialog: { kind: "rename", target: "newSpace", id: "", value: "" } });
 export const renameSpaceDialog = (sp: Space) => set({ dialog: { kind: "rename", target: "space", id: sp.id, value: sp.name } });
+export const projectIconDialog = (sp: Space, back?: "settings") =>
+  set({ dialog: { kind: "projectIcon", project: sp.id, name: sp.name, icon: sp.icon, color: sp.color, back } });
 export const projectExtDialog = (sp: Space) => set({ dialog: { kind: "projectExt", project: sp.id, name: sp.name } });
 
 /**
@@ -127,6 +130,9 @@ export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
       {canNewWindow() && <ContextMenuItem onClick={() => nativeNewWindow(sp.id)}>{t("nav.openInNewWindow")}</ContextMenuItem>}
       <ContextMenuItem onClick={() => renameSpaceDialog(sp)}>
         <Pencil /> {t("spaceSwitcher.renameEllipsis")}
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => projectIconDialog(sp)}>
+        <Palette /> {t("projectIcon.menu")}
       </ContextMenuItem>
       <ContextMenuItem onClick={() => projectExtDialog(sp)}>
         <Blocks /> {t("spaceSwitcher.extEllipsis")}
@@ -217,6 +223,7 @@ export function SpaceSwitcher() {
         onClick={live && !phone ? () => switchSpace(sp.id) : undefined}
         onPointerDown={live ? (e) => startSpaceDrag(e, sp.id, "x") : undefined}
       >
+        {hasProjectIcon(sp) && <ProjectIcon name={sp.name} icon={sp.icon} color={sp.color} className="size-3.5" />}
         <span className="min-w-0 truncate">{sp.name}</span>
         {st && <StatusDot status={st.status} unread={st.unread} />}
       </button>

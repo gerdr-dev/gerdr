@@ -1772,18 +1772,40 @@ func panelCmd() *cobra.Command {
 			return nil
 		},
 	})
-	cmd.AddCommand(&cobra.Command{
-		Use:   "rename <panel> <title>",
-		Short: "Rename a panel for this person (kept in its user/ui.json, not shared); its directory, data and ui.json stay as they are",
-		Args:  cobra.ExactArgs(2),
+	var renameDir bool
+	rename := &cobra.Command{
+		Use:   "rename <panel> <name>",
+		Short: "Rename a panel for this person (its title, kept in user/ui.json); --dir renames its directory, and so its key, instead",
+		Long: `Rename a panel.
+
+  gerdr panel rename board 任务          the title on the rail and in Settings, for this person (user/ui.json);
+                                         the directory, key, data and ui.json stay as they are
+  gerdr panel rename board tasks --dir   the directory itself: <project>/board becomes <project>/tasks
+
+--dir moves everything Gerdr keeps under the panel's key or path along: its conversations (their panel tag,
+folder, skills, system prompt file), the inbox, badges, its agent conversation, the rail order, schedules' state,
+run logs, Code workspaces opened in it and its tasks' artifact folders. Agents already running for the panel keep
+working: the old name stays as a symlink to the new directory and the old key leads to the new one. It is refused
+while one of the panel's functions or schedules is running; try again when it ends.`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := client()
 			if err != nil {
 				return err
 			}
+			if renameDir {
+				var out map[string]any
+				if err := c.do("POST", "/api/work/panels/rename-dir", map[string]any{"key": keyOf(args[0]), "name": args[1]}, &out); err != nil {
+					return err
+				}
+				printJSON(out)
+				return nil
+			}
 			return c.do("POST", "/api/work/panels/title", map[string]any{"key": keyOf(args[0]), "title": args[1]}, nil)
 		},
-	})
+	}
+	rename.Flags().BoolVar(&renameDir, "dir", false, "rename the panel's directory (its key) instead of its title")
+	cmd.AddCommand(rename)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "move <panel> <position>",
 		Short: "Move a panel's button on the rail, for this person: position 1 is the top (as dragging the button does); `.` is Code, which counts as a place too; `gerdr panel list` shows the order (codeAt: Code's place among the panels, 0-based)",
@@ -1800,11 +1822,19 @@ func panelCmd() *cobra.Command {
 			return c.do("POST", "/api/work/panels/move", map[string]any{"key": keyOf(args[0]), "to": n - 1}, nil)
 		},
 	})
-	var color string
+	var color, iconText, iconImage string
 	icon := &cobra.Command{
 		Use:   "icon <panel> [icon]",
-		Short: "Set the panel's rail icon for this person (its user/ui.json): a glyph or line icon key (kanban, rocket, orbit…) or sprite:<key> from an add-on; none = the default",
-		Args:  cobra.RangeArgs(1, 2),
+		Short: "Set the panel's rail icon for this person (its user/ui.json): a glyph or line icon key (kanban, rocket, orbit…), sprite:<key> from an add-on, --text, or --image; none = the default",
+		Long: `Set the panel's rail icon for this person (its user/ui.json; Settings → Projects & panels does the same):
+
+  gerdr panel icon board rocket --color teal     a built-in glyph / line icon, in a palette colour
+  gerdr panel icon board --text 任务 --color "#e11d48"   up to 3 characters on a tile of the colour
+  gerdr panel icon board --image ~/logo.png       a picture (cut to a square and shrunk to 112px)
+  gerdr panel icon board                          back to the default
+
+--color: a palette name (red rose orange amber green teal cyan sky indigo violet pink slate) or #rrggbb.`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := client()
 			if err != nil {
@@ -1814,10 +1844,15 @@ func panelCmd() *cobra.Command {
 			if len(args) == 2 {
 				ic = args[1]
 			}
+			if ic, err = iconFlags(ic, iconText, iconImage); err != nil {
+				return err
+			}
 			return c.do("POST", "/api/work/panels/icon", map[string]any{"key": keyOf(args[0]), "icon": ic, "color": color}, nil)
 		},
 	}
-	icon.Flags().StringVar(&color, "color", "", "a palette colour for a built-in icon (as in Settings → Agent)")
+	icon.Flags().StringVar(&color, "color", "", "a palette colour (red, teal…) or #rrggbb")
+	icon.Flags().StringVar(&iconText, "text", "", "a text icon: up to 3 characters")
+	icon.Flags().StringVar(&iconImage, "image", "", "a picture file (PNG, JPEG, GIF, WebP) as the icon")
 	cmd.AddCommand(icon)
 	var badgeAdd bool
 	badge := &cobra.Command{

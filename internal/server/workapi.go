@@ -169,7 +169,9 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			}
 			add(work.PanelKey(project, n), n)
 		}
-		writeJSON(w, map[string]any{"panels": list, "codeAt": codeAt, "ownRemoved": s.Work.WorkRemoved(project)})
+		// renamed: old name → current name of panels whose directory was renamed (work/rename.go). The page moves
+		// what it keeps per panel key on this device (lib/panels.ts) and finds old chat cards' panel by it
+		writeJSON(w, map[string]any{"panels": list, "codeAt": codeAt, "ownRemoved": s.Work.WorkRemoved(project), "renamed": s.Work.Renamed(project)})
 	})
 	// Panels whose repository has commits they don't have yet (as of the last fetch, panelupdates.go), every project's:
 	// the rail's settings button and Settings → Panels tell of them. Nothing is updated by itself.
@@ -253,8 +255,8 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		_, _ = s.mountWork(key)
 		writeJSON(w, map[string]any{"key": key})
 	})
-	// A panel's name and its icon on the rail: "title", "icon" / "color" (icon: the same kinds as an agent's, a glyph or
-	// line icon key or "sprite:<key>"; color: a palette key). This person's choice, so it goes in the panel's user/ui.json
+	// A panel's name and its icon on the rail: "title", "icon" / "color" (icon: a glyph or line icon key, "sprite:<key>",
+	// "text:<1–3 characters>" or a small picture as a data URL, server/icon.go; color: a palette key or #rrggbb). This person's choice, so it goes in the panel's user/ui.json
 	// over its ui/ui.json (work/uiprefs.go): an installed panel's own files stay as published and updates never touch
 	// it. A panel's author names it for everyone in ui/ui.json. The panel's directory keeps its name.
 	setUIConfig := func(w http.ResponseWriter, key string, vals map[string]string) {
@@ -274,6 +276,10 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			httpError(w, 400, err.Error())
 			return
 		}
+		if err := IconError(b.Icon, b.Color); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
 		setUIConfig(w, b.Key, map[string]string{"icon": b.Icon, "color": b.Color})
 	})
 	mux.HandleFunc("POST /api/work/panels/title", func(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +296,23 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 			return
 		}
 		setUIConfig(w, b.Key, map[string]string{"title": b.Title})
+	})
+	// Rename a panel's directory, and so its key (`gerdr panel rename --dir`): panelrename.go
+	mux.HandleFunc("POST /api/work/panels/rename-dir", func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Key  string `json:"key"`
+			Name string `json:"name"`
+		}
+		if err := decode(r, &b); err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		out, err := s.renamePanelDir(b.Key, b.Name)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, out)
 	})
 	mux.HandleFunc("POST /api/work/panels/remove", func(w http.ResponseWriter, r *http.Request) {
 		var b struct {

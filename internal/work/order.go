@@ -82,6 +82,7 @@ func (r *Runner) RailOrder(project string) []string {
 // MovePanel puts a panel (or Code: key "<project>/.") at position `to` (0-based, clamped) among its project's rail
 // group, Code included.
 func (r *Runner) MovePanel(key string, to int) error {
+	key = r.Canon(key) // an old name of a renamed panel (rename.go)
 	project, panel := SplitKey(key)
 	names := r.RailOrder(project)
 	i := slices.Index(names, panel)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bot, Copy, Download, Ellipsis, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
+import { Blocks, Bot, Copy, Download, Ellipsis, Palette, Pencil, RefreshCw, RotateCcw, SquarePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,17 +14,27 @@ import { showCode } from "@/lib/actions/views";
 import { copyText } from "@/lib/clipboard";
 import { t } from "@/lib/i18n";
 import { removePanel, updatePanel } from "@/lib/panelActions";
-import { PanelIcon } from "./PanelIcon";
+import { PanelIcon, ProjectIcon } from "./PanelIcon";
+import { projectExtDialog, projectIconDialog, renameSpaceDialog } from "./SpaceSwitcher";
+import { spaceInitials, type Space } from "@/lib/layout";
 
 /**
- * Settings → Panels: a project's panels in one place. Add one (install from a repository, a blank one), and for each:
+ * Settings → Projects & panels: the project itself (its icon on the rail, its name, its skills) and its panels in one
+ * place. Add one (install from a repository, a blank one), and for each:
  * its icon, update it from where it came from, remove it (to the trash). The project's own Work can be removed too,
  * and restored (blank) here.
  */
+/** The project this page showed when it opened an icon dialog, which reopens the page when it closes: shown again then. */
+let returnTo = "";
+
 export function PanelSettings() {
   const layout = useStore((s) => s.layout);
   const spaces = spaceList(layout);
-  const [project, setProject] = useState(() => currentSpace(layout));
+  const [project, setProject] = useState(() => {
+    const back = returnTo;
+    returnTo = "";
+    return back && spaces.some((s) => s.id === back) ? back : currentSpace(layout);
+  });
   const { panels, ownRemoved, loaded } = usePanels(project);
   // Opening the page (or another project's tab) checks its panels' repositories now: the periodic check is hours apart
   useEffect(() => {
@@ -37,7 +47,8 @@ export function PanelSettings() {
       live = false;
     };
   }, [project]);
-  const name = spaces.find((s) => s.id === project)?.name ?? project;
+  const sp = spaces.find((s) => s.id === project);
+  const name = sp?.name ?? project;
   return (
     <div className="space-y-4">
       <p className="text-[12px] text-muted-foreground">{t("panelSettings.intro")}</p>
@@ -52,6 +63,8 @@ export function PanelSettings() {
           ))}
         </TabsList>
       </Tabs>
+      {sp && <ProjectRow sp={sp} />}
+      <div className="pt-2 text-[12px] font-medium text-muted-foreground">{t("panelSettings.panels")}</div>
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="outline" onClick={() => set({ dialog: { kind: "workSource", project, action: "new" } })}>
           <SquarePlus /> {t("workSource.newTitle")}
@@ -62,7 +75,7 @@ export function PanelSettings() {
       </div>
       <div className="divide-y rounded-lg border">
         {panels.map((p) => (
-          <PanelRow key={p.key} p={p} />
+          <PanelRow key={p.key} p={p} project={project} />
         ))}
         {ownRemoved && (
           // The button goes under the text on a phone (it left the text a column four characters wide)
@@ -97,7 +110,52 @@ export function PanelSettings() {
   );
 }
 
-function PanelRow({ p }: { p: Panel }) {
+/** The project picked above: its face on the rail (click to change: an icon, text, a picture, a colour), name, skills. */
+function ProjectRow({ sp }: { sp: Space }) {
+  const phone = usePhone();
+  return (
+    <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+      <button
+        title={t("projectIcon.menu")}
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg border text-[12px] font-semibold hover:bg-accent"
+        onClick={() => {
+          returnTo = sp.id;
+          projectIconDialog(sp, "settings");
+        }}
+      >
+        {sp.icon || sp.color ? <ProjectIcon name={sp.name} icon={sp.icon} color={sp.color} className="size-7" /> : spaceInitials(sp.name)}
+      </button>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px]">{sp.name}</div>
+        <div className="truncate text-[12px] text-muted-foreground">
+          {t("panelSettings.project")}
+          {sp.id !== sp.name && ` · ${sp.id}`}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <Button
+          size={phone ? "icon-sm" : "sm"}
+          variant="ghost"
+          title={t("projectIcon.menu")}
+          onClick={() => {
+            returnTo = sp.id;
+            projectIconDialog(sp, "settings");
+          }}
+        >
+          <Palette /> {!phone && t("projectIcon.menu")}
+        </Button>
+        <Button size="icon-sm" variant="ghost" title={t("spaceSwitcher.renameEllipsis")} onClick={() => renameSpaceDialog(sp)}>
+          <Pencil />
+        </Button>
+        <Button size="icon-sm" variant="ghost" title={t("spaceSwitcher.extEllipsis")} onClick={() => projectExtDialog(sp)}>
+          <Blocks />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PanelRow({ p, project }: { p: Panel; project: string }) {
   const phone = usePhone();
   const [busy, setBusy] = useState("");
   // A clone of a repository on this computer (file://…, a panel being made here and installed from it) read as a file,
@@ -128,7 +186,10 @@ function PanelRow({ p }: { p: Panel }) {
       <button
         title={t("panelIcon.menu")}
         className="flex size-8 shrink-0 items-center justify-center rounded-md border hover:bg-accent"
-        onClick={() => set({ dialog: { kind: "panelIcon", key: p.key, title: p.title, icon: p.icon, color: p.color } })}
+        onClick={() => {
+          returnTo = project;
+          set({ dialog: { kind: "panelIcon", key: p.key, title: p.title, icon: p.icon, color: p.color, back: "settings" } });
+        }}
       >
         <PanelIcon icon={p.icon} color={p.color} title={p.title} />
       </button>

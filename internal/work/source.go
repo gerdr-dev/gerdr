@@ -33,6 +33,7 @@ type Source struct {
 }
 
 func (r *Runner) Source(project string) (Source, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	dir, err := r.Dir(project)
 	if err != nil {
 		return Source{}, err
@@ -56,6 +57,7 @@ func (r *Runner) Source(project string) (Source, error) {
 // FetchUpdates fetches the panel's remote (nothing else: the checkout stays as it is), so Source.Behind tells whether
 // an update waits. A panel with no remote is left alone.
 func (r *Runner) FetchUpdates(ctx context.Context, key string) error {
+	key = r.Canon(key) // an old name of a renamed panel (rename.go)
 	dir, err := r.Dir(key)
 	if err != nil {
 		return err
@@ -186,6 +188,7 @@ func (r *Runner) RestoreWork(project string) error {
 // RemovePanel moves a panel to trash/panels/<project>-<name>-<time>. A project's own Work can go too: it then stays
 // away (removedMark) until RestoreWork.
 func (r *Runner) RemovePanel(key string) (string, error) {
+	key = r.Canon(key) // an old name of a renamed panel (rename.go)
 	project, panel := SplitKey(key)
 	label := panel
 	if panel == "" {
@@ -312,6 +315,7 @@ func (r *Runner) addPanel(project, name string, fill func(dir string) error) (st
 // It returns git's output and how many commits came in: the UI says the count, as git's output is a wall of text
 // nobody reads in a toast.
 func (r *Runner) Update(ctx context.Context, project string) (string, int, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	dir, err := r.Dir(project)
 	if err != nil {
 		return "", 0, err

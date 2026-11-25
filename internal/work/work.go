@@ -133,6 +133,7 @@ func (r *Runner) panelsDir(project string) (string, error) {
 
 // Dir is the Work directory of a key: a project ("" = the default one) or one of its panels.
 func (r *Runner) Dir(key string) (string, error) {
+	key = r.Canon(key) // an old name of a renamed panel (rename.go)
 	project, panel := SplitKey(key)
 	if panel != "" {
 		if !validProject(panel) {
@@ -212,8 +213,17 @@ func (r *Runner) WorkProject(dir string) (string, bool) {
 	return p, true
 }
 
-// WorkKey is the Work (a project's, or a panel's) whose directory holds dir.
+// WorkKey is the Work (a project's, or a panel's) whose directory holds dir. A path under a renamed panel's old
+// name (its symlink: rename.go) gives the panel's current key.
 func (r *Runner) WorkKey(dir string) (string, bool) {
+	k, ok := r.workKey(dir)
+	if ok {
+		k = r.Canon(k)
+	}
+	return k, ok
+}
+
+func (r *Runner) workKey(dir string) (string, bool) {
 	if dir == "" {
 		return "", false
 	}
@@ -274,6 +284,7 @@ func (r *Runner) ProjectOf(dir string) string {
 // Ensure returns the project's Work directory, installing the bundled files the first time this
 // process touches it.
 func (r *Runner) Ensure(project string) (string, error) {
+	project = r.Canon(project) // an old name of a renamed panel (rename.go)
 	dir, err := r.Dir(project)
 	if err != nil {
 		return "", err

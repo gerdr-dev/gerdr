@@ -49,7 +49,7 @@ func moveFlags(cmd *cobra.Command, p *server.LayoutParams, what string) {
 func projectCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "project",
-		Short: "List / create Gerdr projects (the sidebar's projects: each has its own workspaces, panels, skills and memory)",
+		Short: "List / create Gerdr projects, set their icons (the sidebar's projects: each has its own workspaces, panels, skills and memory)",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
@@ -79,7 +79,60 @@ starts with one empty workspace (in --cwd). No window switches to it: the person
 	}
 	create.Flags().StringVar(&np.Cwd, "cwd", "", "folder its first workspace starts in")
 	cmd.AddCommand(create)
+	var ip server.LayoutParams
+	var iconText, iconImage string
+	icon := &cobra.Command{
+		Use:   "icon <project> [icon]",
+		Short: "Set a project's icon on the rail (as Settings → Projects & panels does): a glyph / line icon key, --text, --image, with --color; none = its initials",
+		Long: `Set the icon a project shows on the strip at the left (Settings → Projects & panels → the project's icon):
+
+  gerdr project icon lb rocket --color teal          a built-in glyph / line icon (the keys gerdr panel icon takes)
+  gerdr project icon lb --text LB --color "#2563eb"  up to 3 characters on a tile of the colour
+  gerdr project icon lb --color violet               its initials on a tile of the colour
+  gerdr project icon lb --image ~/logo.png           a picture (cut to a square and shrunk to 112px)
+  gerdr project icon lb                              back to its plain initials
+
+<project> is its id or name (gerdr project list). --color: a palette name (red rose orange amber green teal cyan
+sky indigo violet pink slate) or #rrggbb.`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(_ *cobra.Command, a []string) error {
+			ip.ID = a[0]
+			ic := ""
+			if len(a) == 2 {
+				ic = a[1]
+			}
+			var err error
+			if ip.Icon, err = iconFlags(ic, iconText, iconImage); err != nil {
+				return err
+			}
+			return layoutCall("project.icon", ip)
+		},
+	}
+	icon.Flags().StringVar(&ip.Color, "color", "", "a palette colour (red, teal…) or #rrggbb")
+	icon.Flags().StringVar(&iconText, "text", "", "a text icon: up to 3 characters")
+	icon.Flags().StringVar(&iconImage, "image", "", "a picture file (PNG, JPEG, GIF, WebP) as the icon")
+	cmd.AddCommand(icon)
 	return cmd
+}
+
+// iconFlags turns an icon command's [icon] / --text / --image into the one icon value (server/icon.go); at most one.
+func iconFlags(icon, text, image string) (string, error) {
+	n := 0
+	for _, v := range []string{icon, text, image} {
+		if v != "" {
+			n++
+		}
+	}
+	if n > 1 {
+		return "", fmt.Errorf("give one of [icon], --text and --image")
+	}
+	switch {
+	case text != "":
+		return server.TextIcon + text, nil
+	case image != "":
+		return server.IconFromImage(expandHome(image))
+	}
+	return icon, nil
 }
 
 func workspaceCmd() *cobra.Command {
