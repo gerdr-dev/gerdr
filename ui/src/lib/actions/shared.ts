@@ -1,7 +1,7 @@
 // Helpers the action files share. lib/actions.ts does not re-export them (apart from basename).
 import { api } from "../api";
 import { activeTab, activeWs, DEFAULT_SPACE, findLeaf, locateSession, newTab, updateWs, type Layout, type PaneLeaf, type Workspace } from "../layout";
-import { get } from "../store";
+import { get, hostClosed } from "../store";
 
 export const basename = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
 
@@ -33,7 +33,13 @@ export function killTerms(panes: PaneLeaf[]) {
  */
 export function shutdownGone(panes: PaneLeaf[]) {
   const l = get().layout;
-  for (const p of panes) if (p.sessionId && get().sessions[p.sessionId] && !locateSession(l, p.sessionId)) api.shutdown(p.sessionId).catch(() => {});
+  // A panel hosting Code hears of it too (core useCodeClosed): a task it opened that was never spoken to can go
+  const told = hostClosed();
+  for (const p of panes)
+    if (p.sessionId && get().sessions[p.sessionId] && !locateSession(l, p.sessionId)) {
+      api.shutdown(p.sessionId).catch(() => {});
+      told?.(p.sessionId);
+    }
 }
 
 export function removeTab(l: Layout, ws: Workspace, tabId: string): Layout {
