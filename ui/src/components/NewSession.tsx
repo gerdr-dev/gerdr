@@ -489,7 +489,12 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
           {!host && wsDirs.length > (panelDirs ? 0 : 1) && (
             // One row that scrolls sideways: wrapped, a dozen workspaces ate half a phone screen. Both scrollbar hiders, as
             // Android's WebView ignores scrollbar-width (OverviewPhone).
-            <div ref={wsRow} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              ref={wsRow}
+              // Wider than a phone there is room: the chips wrap, up to three rows (then that box scrolls), instead of
+              // hiding most of them past the right edge of one row
+              className="-mx-1 flex gap-1.5 px-1 [scrollbar-width:none] max-md:overflow-x-auto md:max-h-[6.25rem] md:flex-wrap md:overflow-y-auto md:py-px [&::-webkit-scrollbar]:hidden"
+            >
               {wsDirs.map((w) => (
                 <button
                   key={w.id}
