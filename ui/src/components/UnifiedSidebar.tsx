@@ -929,8 +929,9 @@ const Row = memo(function Row({
   const label = paneLabel(pane, s);
   const { title } = label;
   const sub = label.sub === groupDir ? "" : label.sub;
-  // An unnamed tab is named after its first agent: only a renamed tab adds something worth showing
-  const tabLabel = !inSplit && tab.name && tab.name !== title ? tab.name : undefined;
+  // A row is named by what is in its pane, the conversation's title. Tabs had names of their own too, shown before
+  // the title and renamed from this row (double click, 重命名 Tab right above 重命名会话): two names for one row, and
+  // nobody could say what the tab's was for (the person, 2026-11-25). The row no longer shows or edits it.
   const close = () => (inSplit ? closePaneById(pane.id) : closeTab(tab.id));
   const onActive = (on: boolean) => s && (on ? addActive([s.id]) : removeActive(s.id));
   const dismiss = top && s ? () => onActive(false) : close;
@@ -990,7 +991,7 @@ const Row = memo(function Row({
             eatNextClick();
           }}
           onClick={(e) => e.timeStamp - took.current > 800 && pick()}
-          onDoubleClick={() => !inSplit && set({ dialog: { kind: "rename", target: "tab", id: tab.id, value: tab.name ?? tabName(tab) } })}
+          onDoubleClick={() => s && set({ dialog: { kind: "rename", target: "session", id: s.id, value: s.title ?? "" } })}
           onMouseDown={(e) => e.button === 1 && e.preventDefault()}
           onAuxClick={(e) => e.button === 1 && (e.preventDefault(), dismiss())}
           className={cn(
@@ -1025,13 +1026,7 @@ const Row = memo(function Row({
                     !s && !pane.term && "text-muted-foreground",
                   )}
                 >
-                  {tabLabel ? (
-                    <>
-                      {tabLabel} <span className="text-muted-foreground">· {title}</span>
-                    </>
-                  ) : (
-                    title
-                  )}
+                  {title}
                 </span>
                 {oneLine ? (
                   time
@@ -1046,13 +1041,7 @@ const Row = memo(function Row({
             ) : (
               <>
                 <span className={cn("min-w-0 flex-1 truncate", pane.term && "font-mono text-[11.5px]", !s && !pane.term && "text-muted-foreground")}>
-                  {tabLabel ? (
-                    <>
-                      {tabLabel} <span className="text-muted-foreground">· {title}</span>
-                    </>
-                  ) : (
-                    title
-                  )}
+                  {title}
                 </span>
                 <HostTag session={s} className="py-0.5 group-hover:hidden" iconOnly />
                 <span className="flex max-w-[40%] shrink-0 items-center text-[11px] text-muted-foreground group-hover:hidden">
@@ -1103,11 +1092,6 @@ const Row = memo(function Row({
         {inSplit && (
           <ContextMenuItem onClick={() => (toggleOverview(false), paneToTab(pane.id))}>
             <Columns2 /> {t("unifiedSidebar.splitToTab")}
-          </ContextMenuItem>
-        )}
-        {!inSplit && (
-          <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "tab", id: tab.id, value: tab.name ?? tabName(tab) } })}>
-            <Pencil /> {t("unifiedSidebar.renameTab")}
           </ContextMenuItem>
         )}
         {s && (

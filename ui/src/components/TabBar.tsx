@@ -7,7 +7,7 @@ import { addTab, closeTab, duplicateTab, tabName } from "@/lib/actions";
 import { formatCombo } from "@/lib/keys";
 import { activeWs, leaves, type Tab } from "@/lib/layout";
 import { applyTabLabel } from "@/lib/addons";
-import { get, keyFor, set, setLayout, toggleSidebar, useStore } from "@/lib/store";
+import { get, keyFor, setLayout, toggleSidebar, useStore } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AgentIcon, StatusDot, dotStatus, dotRank } from "./AgentIcon";
@@ -135,7 +135,6 @@ export function TabBar() {
                       ),
                     }))
                   }
-                  onDoubleClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}
                   // 中键关（照浏览器）。mousedown 里先拦掉，不然 mac 上中键按下会进「自动滚动」
                   onMouseDown={(e) => e.button === 1 && e.preventDefault()}
                   onAuxClick={(e) => {
@@ -198,9 +197,6 @@ export function TabBar() {
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <ContextMenuItem onClick={() => set({ dialog: { kind: "rename", target: "tab", id: t.id, value: t.name ?? tabName(t) } })}>
-                  {tr("common.rename")}
-                </ContextMenuItem>
                 <ContextMenuItem onClick={() => duplicateTab(t.id, "after")}>{tr("tabBar.duplicateAfter")}</ContextMenuItem>
                 <ContextMenuItem onClick={() => duplicateTab(t.id, "before")}>{tr("tabBar.duplicateBefore")}</ContextMenuItem>
                 <ContextMenuSeparator />
