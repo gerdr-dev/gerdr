@@ -4,17 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import {
-  browserHere,
-  closeFocusedPane,
-  continueInPane,
-  createInPane,
-  focusPane,
-  focusSession,
-  movePaneToWorkspace,
-  openTerminal,
-  resumeInPane,
-} from "@/lib/actions";
+import { browserHere, continueInPane, createInPane, focusPane, focusSession, movePaneToWorkspace, openTerminal, resumeInPane, runAction } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
 import { get, hostDirs, hostStart, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
@@ -425,7 +415,9 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
       if (get().dialog || dialogOver(startRef.current)) return;
       e.preventDefault();
       focusPane(pane.id);
-      closeFocusedPane();
+      // Same as ⌘W, so a panel hosting Code closes it its own way (actions/hosted.ts: the page goes and the task seen
+      // before comes back). Calling closeFocusedPane here only removed the tab, and the panel put an empty page back
+      runAction("closePane");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
