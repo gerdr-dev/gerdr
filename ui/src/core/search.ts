@@ -32,14 +32,23 @@ export type SearchItem = {
 type Entry = { heading?: string; items: SearchItem[] };
 
 const lists = new Map<string, Entry>();
+// Every panel's list, by key, as one snapshot: replaced on each change so useSyncExternalStore sees a new value
+let all: [string, Entry][] = [];
 const listeners = new Set<() => void>();
-const emit = () => listeners.forEach((f) => f());
+const emit = () => {
+  all = [...lists];
+  listeners.forEach((f) => f());
+};
 const subscribe = (f: () => void) => (listeners.add(f), () => void listeners.delete(f));
 
-/** The rows the panel `key` gives (Palette reads it). */
-export function usePanelSearch(key: string | null | undefined): Entry | undefined {
-  return useSyncExternalStore(subscribe, () => (key ? lists.get(key) : undefined));
+/**
+ * The rows every panel gives, by panel key (Palette reads it, keeping the current project's). Only panels that are
+ * mounted have any: a panel stays mounted once opened, so one not opened since Gerdr started isn't found.
+ */
+export function usePanelSearches(on: boolean): [string, Entry][] {
+  return useSyncExternalStore(subscribe, () => (on ? all : NONE));
 }
+const NONE: [string, Entry][] = [];
 
 /**
  * Give this panel's rows to the command palette: call it in the panel's page with the current list. Republished only

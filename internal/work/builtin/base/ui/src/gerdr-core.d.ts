@@ -291,7 +291,9 @@ declare module "@gerdr/core" {
 
   /**
    * This panel's rows in Gerdr's command palette (⌘K). While this panel is shown, ⌘K lists them first, under the
-   * panel's name (or heading), above commands and conversations, and filters them by what's typed. Give what someone
+   * panel's name (or heading), above conversations and commands, and filters them by what's typed. Anywhere else in
+   * the project (Code, another panel) they follow the conversations, under "<panel> · <heading>"; a pick there shows
+   * this panel first, then runs onSelect. Only once the panel has been opened since Gerdr started (it stays mounted). Give what someone
    * would look for in the panel (a board's tasks, a site's pages). Call it once in the page with the current list;
    * the list can be long (hundreds of rows), only the matching ones are drawn.
    */

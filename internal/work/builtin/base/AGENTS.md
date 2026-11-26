@@ -59,7 +59,8 @@ and their choices are what they set or wrote down, not what the code says.
     the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`, `usePhoneMenu` (on a phone, the panel's top-left button
     opens Gerdr's drawer: the rows this gives are the panel's part of it — what its header can't fit there), `<PhoneBar>` (on a phone,
     its children go into Gerdr's top bar right of ☰ instead of a second strip under it: wrap the page's header in it). `useSearchItems` (the panel's
-    rows in Gerdr's ⌘K palette, listed first while the panel is shown: give what someone would search for in it). Prefer them to the frame-era
+    rows in Gerdr's ⌘K palette, listed first while the panel is shown and after the conversations anywhere else in its
+    project, a pick switching to the panel: give what someone would search for in it). Prefer them to the frame-era
     bridge calls below for anything new.
     Keeping a page current: don't poll a function on a timer. Reload what a function returned when
     `usePanelChange(path)` moves (its files changed through a function: its buttons, agents' tool calls, triggers,
