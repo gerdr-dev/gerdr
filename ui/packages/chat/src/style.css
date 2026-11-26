@@ -88,6 +88,19 @@
   background: var(--muted);
   overflow-wrap: anywhere;
 }
+/* In the user's bubble (brand background, white text) the muted grey read as heavy black pills: a tint of the text's
+   own colour instead, and code at the text's size so a long pasted snippet doesn't shout. */
+.is-user .gerdr-md [data-streamdown="inline-code"] {
+  background: color-mix(in oklch, currentColor 16%, transparent);
+  font-size: 0.9em;
+}
+.is-user .gerdr-md [data-streamdown="code-block"] {
+  background: color-mix(in oklch, currentColor 10%, transparent);
+  border-color: color-mix(in oklch, currentColor 20%, transparent);
+}
+.is-user .gerdr-md [data-streamdown="list-item"]::marker {
+  color: color-mix(in oklch, currentColor 70%, transparent);
+}
 /* 代码块：同样是两层框（外层 bg-sidebar 卡片 + 里面再一个带边框的代码区）。只留一层：外框 + 淡底，
    代码区透明无边框；没写语言时顶上那条标题栏是空的，整条去掉；复制 / 下载按钮悬停才出来。 */
 .gerdr-md [data-streamdown="code-block"] {
