@@ -302,12 +302,14 @@ declare module "@gerdr/core" {
   export function registerCard(type: string, component: ComponentType<CardProps>): () => void;
 
   /**
-   * Code in this panel's place: while the panel is shown, Gerdr shows Code's own layout (tabs, split panes,
-   * terminals, the list beside them: the same one Code mode shows, not a copy). Code isn't a special view, it is
-   * this with Code's default list; a panel makes its own Code from the same parts:
-   * - `list="add"` (default): `sidebar` is drawn above Code's own list (its workspaces);
-   * - `list="replace"`: `sidebar` is the whole list. Group the same panes your own way (by a task's status, by
-   *   person…) from useCodeRows and draw each with CodeRow, so rows look and behave as in Code.
+   * Code in this panel's place: while the panel is shown, Gerdr shows Code's panes (tabs, split panes, terminals, the
+   * list beside them). Code isn't a special view, it is this with Code's default list; a panel makes its own Code
+   * from the same parts:
+   * - `list="add"` (default): `sidebar` is drawn above Code's own list; the panes are Code mode's;
+   * - `list="replace"`: `sidebar` is the whole list, and the panel has panes of its own: its conversations (tagged
+   *   `panel`) open there, Code's stay in Code mode, and each keeps what it had in front. Group them your own way (by
+   *   a task's status, by person…) from useCodeRows and draw each with CodeRow, so rows look and behave as in Code.
+   *   Code mode's panes (what the person has open there): useCodeRows("code").
    * The rest of the page isn't drawn while this is mounted. Experimental (2026-11).
    */
   export function CodeView(props: { sidebar?: ReactNode; list?: "add" | "replace" }): ReactNode;
@@ -324,8 +326,12 @@ declare module "@gerdr/core" {
     /** The pane in front. */
     current: boolean;
   };
-  /** With CodeView: the current project's panes as Code lists them. Follow the conversations' state with useSessions. */
-  export function useCodeRows(): CodeRowInfo[];
+  /**
+   * With CodeView: the current project's panes as Code lists them. Follow the conversations' state with useSessions.
+   * A panel hosting Code has a layout of its own: by default its panes; "code" gives Code mode's (what the person has
+   * open there, e.g. to offer importing it). A conversation the panel started (tags.panel) opens in the panel's.
+   */
+  export function useCodeRows(of?: "here" | "code"): CodeRowInfo[];
   /** With CodeView: Code's own row for a pane (icon, status, unread, its menu, dragging). `where`: shown at its end instead of the folder. */
   /** `below`: a line of yours under it, part of the row (hovered, clicked, right-clicked and dragged with it). */
   export function CodeRow(props: { pane: string; where?: ReactNode; below?: ReactNode }): ReactNode;

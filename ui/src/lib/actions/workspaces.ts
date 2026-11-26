@@ -1,4 +1,4 @@
-import { currentSpace, DEFAULT_SPACE, leaves, newWorkspace, spaceOf, spaceWorkspaces, updateWs, type Layout } from "../layout";
+import { currentHost, currentSpace, DEFAULT_SPACE, leaves, newWorkspace, spaceOf, updateWs, viewWorkspaces, type Layout, type Workspace } from "../layout";
 import { get, setLayout } from "../store";
 import { inSpace, killTerms, shutdownGone } from "./shared";
 import { landIn } from "./spaces";
@@ -8,7 +8,8 @@ import { landIn } from "./spaces";
 export function addWorkspace(name: string, cwd?: string) {
   setLayout((l) => {
     const space = currentSpace(l);
-    const w = { ...newWorkspace(name || `workspace ${spaceWorkspaces(l, space).length + 1}`, cwd), space: inSpace(space) };
+    const host = currentHost(l);
+    const w = { ...newWorkspace(name || `workspace ${viewWorkspaces(l).length + 1}`, cwd), space: inSpace(space), ...(host ? { host } : {}) };
     return { ...l, workspaces: [...l.workspaces, w], active: w.id, lastActive: l.active };
   });
 }
@@ -19,14 +20,14 @@ export function selectWorkspace(id: string) {
 
 /** The n-th workspace of the current session (0-based), as numbered in the sidebar (⌃⌘1–9, Alt+1–9 off the mac). */
 export function selectWorkspaceN(n: number) {
-  const w = spaceWorkspaces(get().layout)[n];
+  const w = viewWorkspaces(get().layout)[n];
   if (w) selectWorkspace(w.id);
 }
 
 /** Next / previous workspace, cycling within the current session only. */
 export function stepWorkspace(delta: number) {
   setLayout((l) => {
-    const list = spaceWorkspaces(l);
+    const list = viewWorkspaces(l);
     const i = list.findIndex((w) => w.id === l.active);
     const w = list[(i + delta + list.length) % list.length];
     return w.id === l.active ? l : { ...l, active: w.id, lastActive: l.active };
@@ -48,11 +49,11 @@ export function editWorkspace(id: string, name: string, cwd?: string) {
 }
 
 /**
- * Where to go once workspace `gone` disappears from `l`: the last one you were on if it's in the same session, else the first one left
- * in that session. Returns undefined when the session has none left.
+ * Where to go once workspace `gone` disappears from `l`: the last one you were on if it's in the same view (project, and
+ * Code's or the same panel's: Workspace.host), else the first one left there. Returns undefined when it has none left.
  */
-function fallbackIn(l: Layout, space: string, gone: string): string | undefined {
-  const left = l.workspaces.filter((w) => w.id !== gone && spaceOf(w) === space);
+function fallbackIn(l: Layout, gone: Workspace): string | undefined {
+  const left = viewWorkspaces(l, gone).filter((w) => w.id !== gone.id);
   return left.find((w) => w.id === l.lastActive)?.id ?? left[0]?.id;
 }
 
@@ -71,8 +72,14 @@ export function closeWorkspace(id?: string) {
       return { ...l, workspaces: [w], active: w.id };
     }
     if (l.active !== wid) return { ...l, workspaces };
-    const same = fallbackIn(l, space, wid);
+    const same = fallbackIn(l, gone);
     if (same) return { ...l, workspaces, active: same };
+    // The view's last one while the project has others (Code's while a panel has its own, or the other way round): the
+    // project stays, and this view starts over with an empty workspace, as a project with nothing open does
+    if (workspaces.some((w) => spaceOf(w) === space)) {
+      const w = { ...newWorkspace("default"), space: gone.space, ...(gone.host ? { host: gone.host } : {}) };
+      return { ...l, workspaces: [...workspaces, w], active: w.id };
+    }
     // That was the session's last workspace: the session goes with it (the default one just stays, empty), and we land in another session.
     const spaces = (l.spaces ?? []).filter((s) => s.id !== space || space === DEFAULT_SPACE);
     const next = { ...l, workspaces, spaces };

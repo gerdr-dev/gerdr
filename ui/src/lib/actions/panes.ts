@@ -16,6 +16,7 @@ import {
   rid,
   spaceList,
   spaceWorkspaces,
+  viewWorkspaces,
   split,
   swap,
   toggleFloat,
@@ -33,6 +34,7 @@ import type { SessionSummary } from "../types";
 import { addActive, focusTile, joinActiveOnStart, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter, toggleOverview } from "../overview";
 import { spaceOfKey, workProjectOf } from "../work";
 import { ownerOf } from "../panelRoute";
+import { ownerHost } from "../hostView";
 import { rememberPane } from "./reopen";
 import { createInPane, focusSession, openInWork } from "./sessions";
 import { basename, focusedLeaf, inSpace, inheritDraft, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
@@ -185,16 +187,18 @@ export function openSessionNear(sessionId: string, near?: string, focus = false)
     const project = key && spaceOfKey(key);
     const t = newTab(undefined, sessionId);
     const cwd = key ? get().sessions[sessionId]?.cwd?.replace(/\/+$/, "") : undefined;
+    // In its owner's view (lib/hostView.ts): a hosting panel's conversation in that panel's own Code
+    const host = ownerHost(sessionId) ?? "";
     if (cwd) {
       const space = project || currentSpace(l);
-      const mine = spaceWorkspaces(l, space).filter((w) => w.cwd?.replace(/\/+$/, "") === cwd);
+      const mine = viewWorkspaces(l, { space, host }).filter((w) => w.cwd?.replace(/\/+$/, "") === cwd);
       const hit = mine.find((w) => w.id === spaceList(l).find((s) => s.id === space)?.active) ?? mine[0];
       if (hit) return updateWs(l, hit.id, (w) => ({ ...w, tabs: [...w.tabs, t], activeTab: focus ? t.id : w.activeTab }));
       // Not made the active workspace: the person is in the panel, and Code shouldn't switch under them
-      const ws: Workspace = { id: rid("w"), name: basename(cwd), cwd, tabs: [t], activeTab: t.id, space: inSpace(space) };
+      const ws: Workspace = { id: rid("w"), name: basename(cwd), cwd, tabs: [t], activeTab: t.id, space: inSpace(space), ...(host ? { host } : {}) };
       return { ...l, workspaces: [...l.workspaces, ws] };
     }
-    const home = project && project !== currentSpace(l) ? spaceWorkspaces(l, project) : [];
+    const home = project && project !== currentSpace(l) ? viewWorkspaces(l, { space: project, host }) : [];
     const ws = home.find((w) => w.id === spaceList(l).find((s) => s.id === project)?.active) ?? home[0] ?? activeWs(l);
     return updateWs(l, ws.id, (w) => ({ ...w, tabs: [...w.tabs, t], activeTab: focus ? t.id : w.activeTab }));
   });

@@ -32,6 +32,8 @@ shells before it are in git history, why Chromium at all in docs/dev/WHY-ELECTRO
   chromeext's tab list, shown through the remote screen's tile stream (`chromeext.View`, `server/screenstream.go`,
   `ui/src/components/browser/`); `gerdr browser open` uses it by default, `--chrome` the extension: docs/dev/BROWSER-PANE.md.
   Read it before changing the screencast, the window sizing or the launch flags — each was a silent freeze once.
+- A panel showing Code with its own list (CodeView list="replace", the Superagent panel) has its own panes, apart from
+  Code mode's (`Workspace.host`, `ui/src/lib/hostView.ts`); a conversation belongs to one side: docs/dev/HOSTED-CODE.md.
 - 后台常驻（launchd，`internal/service`、`cmd/gerdr/attach.go`）和 App 怎么分工、怎么跟着 App 升级：docs/dev/SERVICE.md。
 - iOS Safari / the iOS App / anything WebKit stutters where Android doesn't (the pager's WebKit branch, style recalc
   costs, measuring on an iPhone through a paired computer): docs/dev/WEBKIT.md.

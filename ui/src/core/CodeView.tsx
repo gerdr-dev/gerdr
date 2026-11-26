@@ -33,8 +33,11 @@ import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
  * - `sidebar` with `list="replace"`: the panel draws the whole list, grouping the same panes its own way (by a task's
  *   status, by person…) from useCodeRows, each row drawn with CodeRow so it looks and behaves as in Code.
  *
- * It is the same layout Code mode shows, not a second one: a second copy of the panes would mean two terminals on one
- * PTY and two composers per conversation. The rest of the panel's page isn't drawn while this is mounted.
+ * The panes are Code's own (Panes.tsx, the same tabs / splits / terminals), but with list="replace" the panel has a
+ * set of workspaces of its own in the one stored layout (Workspace.host, lib/hostView.ts): its conversations open there
+ * and Code's stay in Code mode, each view keeping what it had in front. A conversation is never in both: a panel imports
+ * one by starting a new conversation that carries it on. list="add" shows Code's own workspaces, so Code's layout.
+ * docs/dev/HOSTED-CODE.md. The rest of the panel's page isn't drawn while this is mounted.
  */
 export function CodeView({ sidebar, list = "add" }: { sidebar?: ReactNode; list?: "add" | "replace" }) {
   const key = useContext(PanelKeyContext);
@@ -72,14 +75,16 @@ export type CodeRowInfo = {
 /**
  * The panes of the current project, as Code lists them (each workspace's rows, pinned first, then latest activity):
  * what a panel groups its own way under CodeView list="replace". Follow the conversations' state with useSessions.
+ * A hosting panel has a layout of its own (lib/hostView.ts): by default these are its panes; `"code"` gives Code
+ * mode's instead (what the person has open there: what a panel offers to import).
  */
-export function useCodeRows(): CodeRowInfo[] {
+export function useCodeRows(of: "here" | "code" = "here"): CodeRowInfo[] {
   const layout = useStore((s) => s.layout);
   const sessions = useStore((s) => s.sessions);
   return useMemo(() => {
     const cur = activeTab(layout);
     const out: CodeRowInfo[] = [];
-    for (const rows of sideRows(layout, undefined, sessions).values())
+    for (const rows of sideRows(layout, of === "code" ? { space: currentSpace(layout), host: "" } : undefined, sessions).values())
       for (const { ws, tab, pane } of rows) {
         const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
         out.push({
@@ -92,7 +97,7 @@ export function useCodeRows(): CodeRowInfo[] {
         });
       }
     return out;
-  }, [layout, sessions]);
+  }, [layout, sessions, of]);
 }
 
 /** Code's own row for a pane (icon, status, unread, its menu, dragging it onto a pane): `where` replaces the folder shown at its end. */

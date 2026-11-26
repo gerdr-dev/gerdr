@@ -99,6 +99,12 @@ export type Workspace = {
   rows?: string[];
   pins?: string[];
   muted?: true;
+  /**
+   * Whose layout it is: unset = Code mode's; a panel key ("<project>/<panel>", or the project for its own Work) = that
+   * panel's own Code (core CodeView). Each shows only its own workspaces, so a conversation opened in one doesn't
+   * follow onto the other's screen; which conversation goes where is lib/hostView.ts. docs/dev/HOSTED-CODE.md
+   */
+  host?: string;
 };
 /**
  * Space = herdr's "session": an isolated set of workspaces. The UI shows one at a time (the one the active workspace is in),
@@ -222,7 +228,25 @@ export function spaceInitials(name: string) {
 /** The space being shown: the one the active workspace is in. */
 export const currentSpace = (l: Layout) => spaceOf(activeWs(l));
 
+/** All of a project's workspaces, Code's and its panels' alike: for what concerns the project as a whole (closing it, its dot). */
 export const spaceWorkspaces = (l: Layout, space = currentSpace(l)) => l.workspaces.filter((w) => spaceOf(w) === space);
+
+/** Whose layout a workspace is part of: "" = Code mode's, else the panel's key (Workspace.host). */
+export const hostOf = (w: Workspace) => w.host || "";
+
+/** Whose layout is on screen: the active workspace's. */
+export const currentHost = (l: Layout) => hostOf(activeWs(l));
+
+/**
+ * The workspaces of one view: one project's, in Code's layout or one panel's (Workspace.host). By default the one on
+ * screen (the active workspace's); `at` for the view a given workspace is in, or `{ space, host }`. What lists, numbers
+ * and cycles workspaces goes by this, not by spaceWorkspaces.
+ */
+export function viewWorkspaces(l: Layout, at: Workspace | { space: string; host: string } = activeWs(l)): Workspace[] {
+  const space = "tabs" in at ? spaceOf(at) : at.space;
+  const host = "tabs" in at ? hostOf(at) : at.host;
+  return l.workspaces.filter((w) => spaceOf(w) === space && hostOf(w) === host);
+}
 
 // ---- 查找 ----
 
@@ -406,8 +430,12 @@ function rowTime(tab: Tab, pane: PaneLeaf, sessions: Record<string, Activity | u
  * shows its pins first, in their order, then the rest, last moved first (rowTime; without `sessions`, in tab order).
  * Decoupled from the screen (asked for): the panes of one split can sit in different groups.
  */
-export function sideRows(l: Layout, space = currentSpace(l), sessions?: Record<string, Activity | undefined>): Map<string, SideRow[]> {
-  const wss = spaceWorkspaces(l, space);
+export function sideRows(
+  l: Layout,
+  at: Workspace | { space: string; host: string } = activeWs(l),
+  sessions?: Record<string, Activity | undefined>,
+): Map<string, SideRow[]> {
+  const wss = viewWorkspaces(l, at);
   const byPane = new Map<string, SideRow>();
   for (const ws of wss) for (const tab of ws.tabs) for (const pane of leaves(tab.root)) byPane.set(pane.id, { ws, tab, pane });
   const pinned = new Map<string, SideRow[]>();
@@ -457,8 +485,73 @@ export function paneSpace(l: Layout, paneId: string): string {
   return hit ? spaceOf(hit.ws) : currentSpace(l);
 }
 
+/** The workspaces of the view a pane is in (viewWorkspaces); the one on screen when the pane isn't found. */
+export function paneView(l: Layout, paneId: string): Workspace[] {
+  const hit = allLeaves(l).find((x) => x.pane.id === paneId);
+  return viewWorkspaces(l, hit?.ws);
+}
+
 export function locateSession(l: Layout, sessionId: string) {
   return allLeaves(l).find((x) => x.pane.sessionId === sessionId);
+}
+
+/**
+ * Put every conversation's pane in the view it belongs to (Workspace.host): `owner` says whose a conversation is ("" =
+ * Code's, a panel key = that panel's, undefined = unknown or either, left where it is) and its directory. A pane in the
+ * wrong view moves, as a tab of its own, into the right view's workspace for its directory (the closest one above it,
+ * else a new one); a workspace left with nothing in it goes, unless it is the one on screen. What is in front doesn't
+ * change. Returns `l` itself when nothing moves.
+ */
+export function placeOwned(l: Layout, owner: (session: string) => { host: string; cwd?: string } | undefined): Layout {
+  const wrong = allLeaves(l).flatMap(({ ws, pane }) => {
+    const id = pane.sessionId ?? pane.sub?.sessionId;
+    const o = id ? owner(id) : undefined;
+    return o && o.host !== hostOf(ws) ? [{ pane, ...o, space: spaceOf(ws) }] : [];
+  });
+  if (!wrong.length) return l;
+  const gone = new Set(wrong.map((x) => x.pane.id));
+  const off = (xs?: string[]) => (xs?.some((id) => gone.has(id)) ? xs.filter((id) => !gone.has(id)) : xs);
+  // Out of where they are
+  let workspaces = l.workspaces.flatMap((w) => {
+    let tabs = w.tabs;
+    for (const t of w.tabs) {
+      const mine = leaves(t.root).filter((p) => gone.has(p.id));
+      if (!mine.length) continue;
+      let next: Tab | null = t;
+      for (const p of mine) next = next && closePane(next, p.id);
+      const kept = next;
+      tabs = kept ? tabs.map((x) => (x.id === t.id ? kept : x)) : tabs.filter((x) => x.id !== t.id);
+    }
+    if (tabs === w.tabs) return [w];
+    if (!tabs.length && w.id !== l.active) return [];
+    if (!tabs.length) tabs = [newTab(w.cwd ? { cwd: w.cwd } : undefined)];
+    const activeTab = tabs.some((t) => t.id === w.activeTab) ? w.activeTab : tabs[0].id;
+    return [{ ...w, tabs, activeTab, rows: off(w.rows), pins: off(w.pins) }];
+  });
+  // Into the view they belong to
+  for (const x of wrong) {
+    const cwd = (x.cwd ?? "").replace(/\/+$/, "");
+    let best: Workspace | undefined;
+    for (const w of workspaces) {
+      if (spaceOf(w) !== x.space || hostOf(w) !== x.host) continue;
+      const wc = (w.cwd ?? "").replace(/\/+$/, "");
+      if (!best && !cwd) best = w;
+      if (cwd && wc && (cwd === wc || cwd.startsWith(wc + "/")) && wc.length > (best?.cwd?.length ?? -1)) best = w;
+    }
+    const tab: Tab = { id: rid("t"), root: x.pane, focus: x.pane.id };
+    if (best) {
+      const id = best.id;
+      workspaces = workspaces.map((w) => (w.id === id ? { ...w, tabs: [...w.tabs, tab] } : w));
+    } else {
+      const w: Workspace = { id: rid("w"), name: cwd.split("/").pop() || "default", tabs: [tab], activeTab: tab.id };
+      if (cwd) w.cwd = cwd;
+      if (x.space !== DEFAULT_SPACE) w.space = x.space;
+      if (x.host) w.host = x.host;
+      workspaces = [...workspaces, w];
+    }
+  }
+  const has = (id?: string) => !!id && workspaces.some((w) => w.id === id);
+  return { ...l, workspaces, active: has(l.active) ? l.active : workspaces[0].id, lastActive: has(l.lastActive) ? l.lastActive : undefined };
 }
 
 /** The session sits in a muted (do-not-disturb) group: its state doesn't go up anywhere (Workspace.muted). */

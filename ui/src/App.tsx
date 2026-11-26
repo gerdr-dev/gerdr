@@ -35,6 +35,7 @@ import { reloadAddons, setTabNameFn } from "./lib/addons";
 import { AddonSlot as AddonSlotView } from "./components/AddonSlot";
 import { focusedSession, fontSizeOf, get, hostsCode, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
+import { startHostViews } from "./lib/hostView";
 import { BrowserWindow, browserOnly } from "./core/SessionBrowser";
 import type { SessionSummary } from "./lib/types";
 import { t } from "./lib/i18n";
@@ -138,6 +139,8 @@ export default function App() {
 
   useEffect(() => {
     boot().then(() => {
+      // Code's and the panels' layouts kept apart (lib/hostView.ts): only once the real layout is in, as it may change it
+      if (!browserOnly) startHostViews();
       reloadAddons();
       initAndroid();
       // ?settings=remote: a handoff from the phone App landed here to add a passkey (server enterHandoff)

@@ -66,7 +66,7 @@ import {
   sideRows,
   spaceList,
   spaceOf,
-  spaceWorkspaces,
+  viewWorkspaces,
   type Layout,
   type PaneLeaf,
   type SideRow,
@@ -327,7 +327,7 @@ export function PaneRow({ pane: id, where, below }: { pane: string; where?: Reac
 /** A workspace's name as a row says it out of its group: with its project's when that isn't the one on screen. */
 function wsLabelOf(layout: Layout, ws: Workspace) {
   const here = currentSpace(layout);
-  const i = spaceWorkspaces(layout).indexOf(ws);
+  const i = viewWorkspaces(layout, ws).indexOf(ws);
   const label = i >= 0 ? applyWorkspaceLabel(ws, i, ws.name) : ws.name;
   return spaceOf(ws) === here ? label : `${spaceList(layout).find((sp) => sp.id === spaceOf(ws))?.name ?? spaceOf(ws)} · ${label}`;
 }
@@ -512,7 +512,7 @@ export function CodeList() {
   const roomy = !!useContext(Roomy);
   const workKey = useWorkProject();
   const hosted = useStore((s) => !!codeHost(s));
-  const list = spaceWorkspaces(layout);
+  const list = viewWorkspaces(layout);
   // A hosting panel lists its own conversations in its part above (the secretary's workers): not again in the
   // workspace their pane sits in, nor under "active". The workspace's title says how many of them work in its folder.
   // In Code mode too, any panel's (overviewState.panelOwned): Code and the panels are kept apart both ways.
