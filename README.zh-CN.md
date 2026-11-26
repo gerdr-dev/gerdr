@@ -30,6 +30,22 @@ agent 之间还能互相对话：开新会话、派活、等回复、读回复�
 不习惯终端？Gerdr 是另一个同样好的选择，而且是图形界面：agent 给的图片、视频、PDF 直接在对话里看，点一下路径就打开文件；
 出门了用手机远程接着看、接着管。
 
+## Superagent：替你派活的秘书
+
+开了好几个 agent 之后，派活和盯进度就成了全职工作。[Superagent 面板](https://github.com/gerdr-dev/gerdr-panel-superagent)把这件事交给一个秘书：
+
+- **只跟秘书说话**：交代一件事，它判断该去哪个仓库，派给 Claude Code 或 Codex 的 worker 去做。
+- **它替你盯着**：MR 上的 review 意见、挂掉的流水线，交给对应的 worker 处理；只有要你拍板的事才来问你，到点写简报。
+- **任务一目了然**：同一批任务按「待办 / 进行中 / 待验收 / 已完成」排在列表上，点开一个就是它 worker 的对话，直接跟它说。
+- **外面来的活**：Slack / 飞书的私信和 @、告警，也可以交给它判断接不接、派给谁。
+- **Let it go**：按时间设几套规矩，决定哪些事它可以不问你自己定（比如下班后外面来的活先进待办）。
+
+<p align="center"><img src="docs/images/superagent.gif" alt="Superagent：左边是秘书和按状态分组的任务，右边是 worker 的对话" width="100%" /></p>
+
+安装：设置 → 面板 → 从 GitHub 安装面板，填 `https://github.com/gerdr-dev/gerdr-panel-superagent`。
+
+## 其他功能
+
 **对话**
 
 - **中途插话**：agent 干活时直接说，消息插进正在跑的那一轮。
@@ -49,9 +65,13 @@ agent 之间还能互相对话：开新会话、派活、等回复、读回复�
 
 **DIY 自己的 Gerdr**
 
+- **自己的工作台**：每个项目都能有自己的面板，一个面板就是一个小应用：左边是页面，右边是它自己的助手。说一句「做一个本周数据总览」，页面就写出来了。
+  Superagent 也只是这样一个面板，可以改成你自己的流程；GitHub 上带 [`gerdr-panel`](https://github.com/topics/gerdr-panel) 标签的仓库都能一键装。
 - **界面让 agent 改**：整个界面都可以让 agent 改，添加按钮、快捷键、显示内容，直接跟 AI 说就行。无需发版、无需部署，即刻生效；改坏了有改不坏的急救面板。
 - **TS 扩展**：改 tab 名、pane 标题，加命令和快捷键；商店里一键装。
 - **skill / MCP**：用 agent 自己的、Gerdr 的，或两者都用。
+
+<p align="center"><img src="docs/images/panel.gif" alt="让面板助手写一个新页面" width="100%" /></p>
 
 **在哪用**
 

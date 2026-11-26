@@ -32,6 +32,24 @@ start sessions, hand out work, wait for the replies and read them.
 Not at home in a terminal? Gerdr is an equally good choice, as an app: images, videos and PDFs from the agent show right in the chat, and clicking a path
 opens the file; away from your desk, keep watching and steering from your phone.
 
+## Superagent: a secretary that hands out the work
+
+With several agents going at once, dispatching and following them becomes the job. The
+[Superagent panel](https://github.com/gerdr-dev/gerdr-panel-superagent) gives that job to a secretary:
+
+- **talk to one chat** — tell it what needs doing; it picks the repository and hands the task to a Claude Code or Codex worker.
+- **it follows up** — new MR review comments and failed pipelines go back to the worker; it only asks you when a
+  decision is yours, and sends a briefing on a schedule.
+- **every task in view** — grouped by to do / in progress / to review / done; open one and you are in its worker's chat, talking to it directly.
+- **work from outside** — Slack / Feishu messages and mentions, alerts: it decides whether to take them and who gets them.
+- **let it go** — sets of rules by the clock for what it may decide without asking you (say, after hours new work waits in to do).
+
+<p align="center"><img src="docs/images/superagent.gif" alt="Superagent: the secretary and tasks grouped by status on the left, a worker's chat on the right" width="100%" /></p>
+
+Its UI is in Chinese for now. Install: Settings → Panels → install from GitHub, `https://github.com/gerdr-dev/gerdr-panel-superagent`.
+
+## everything else
+
 **chat**
 
 - **talk while it works** — your message joins the turn that's already running.
@@ -51,10 +69,15 @@ opens the file; away from your desk, keep watching and steering from your phone.
 
 **DIY your own Gerdr**
 
+- **your own workbench** — every project can have its own panels, each a small app: a page on the left, its own
+  assistant on the right. Say "make a weekly metrics overview" and the page gets written. Superagent is just such a
+  panel, yours to bend to how you work; repositories tagged [`gerdr-panel`](https://github.com/topics/gerdr-panel) install in one step.
 - **a UI your agent can change** — the whole interface: add buttons, shortcuts, what gets shown. Just tell the AI;
   no release, no deploy, live at once. Break it and an unbreakable rescue panel gets you back.
 - **TypeScript add-ons** — rename tabs, title panes, add commands and keys; install more from a store.
 - **skills and MCP** — the agent's own, Gerdr's, or both.
+
+<p align="center"><img src="docs/images/panel-en.gif" alt="A panel's assistant writing a new page" width="100%" /></p>
 
 **anywhere**
 
