@@ -1,4 +1,4 @@
-import { ArrowDownRight, MessageSquare, Check, ChevronDown, Code2, History, MessageSquarePlus, Settings, X } from "lucide-react";
+import { ArrowDownRight, MessageSquare, Check, ChevronDown, Code2, History, MessageSquarePlus, RotateCw, Settings, X } from "lucide-react";
 import { DrawerButton } from "./DrawerButton";
 import { nativeTitleBar } from "@/lib/native";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -179,15 +179,22 @@ function MountRoot({ project }: { project: string }) {
   // The loader stays until the page has drawn something: the module's import (seconds on a phone through the relay)
   // used to be an empty area under the bar, which looked broken (asked for)
   const [drawn, setDrawn] = useState(false);
+  // The module didn't download (a phone on a bad network): tried again by itself a couple of times, then by the
+  // person's button. Each try asks for the entry under a new address, so a failure the browser kept isn't reused.
+  const [tries, setTries] = useState(0);
+  const [netFail, setNetFail] = useState(false);
+  const autoTries = useRef(0);
   const ok = !!info?.entry;
   useEffect(() => {
     const el = ref.current;
-    const url = entry.current;
-    if (!el || !url) return;
+    const base = entry.current;
+    if (!el || !base) return;
+    const url = tries ? `${base}${base.includes("?") ? "&" : "?"}try=${tries}` : base;
     let root: Root | null = null;
     let dead = false;
     let guess = 0;
     setFailed("");
+    setNetFail(false);
     setDrawn(el.childElementCount > 0);
     const seen = new MutationObserver(() => el.childElementCount > 0 && setDrawn(true));
     seen.observe(el, { childList: true });
@@ -224,6 +231,13 @@ function MountRoot({ project }: { project: string }) {
       );
     })().catch((e) => {
       if (dead) return;
+      const net = isNetFail(e);
+      if (net && autoTries.current < 2) {
+        autoTries.current++;
+        guess = window.setTimeout(() => setTries((n) => n + 1), 1500 * autoTries.current);
+        return;
+      }
+      setNetFail(net);
       setFailed(String(e?.stack ?? e));
       dropGuessedHost(project);
     });
@@ -236,11 +250,26 @@ function MountRoot({ project }: { project: string }) {
       // Not during React's own render of this tree: unmounting another root synchronously from a cleanup warns
       if (r) setTimeout(() => r.unmount());
     };
-  }, [project, seq, ok]);
+  }, [project, seq, ok, tries]);
   const error = info?.error || failed;
   useEffect(() => {
     if (error) dropGuessedHost(project);
   }, [error, project]);
+  const manual = useRef(0);
+  const retry = useCallback(() => {
+    // A second failed try by hand: the failure may be a module the entry imports, which the browser can keep for this
+    // document; reloading the whole page is what surely fetches everything again
+    if (manual.current++ > 0) return location.reload();
+    autoTries.current = 2;
+    setTries((n) => n + 1);
+  }, []);
+  // Back online: try again without being asked
+  useEffect(() => {
+    if (!netFail) return;
+    const f = () => setTries((n) => n + 1);
+    window.addEventListener("online", f);
+    return () => window.removeEventListener("online", f);
+  }, [netFail]);
   return (
     // transform: the containing block of the panel's fixed overlays (its drawers, dialogs), so they cover the panel's
     // own area and not the agent / browser columns beside it (asked for: a task's drawer hid the browser column, and
@@ -251,7 +280,7 @@ function MountRoot({ project }: { project: string }) {
     <div className="relative size-full overflow-clip bg-background" style={{ transform: "translateZ(0)" }} {...{ [MOUNT_ATTR]: mountName(project) }}>
       <div ref={ref} className={cn("size-full", error && "hidden")} />
       <div ref={portal} data-gerdr-portal="" />
-      {error && <MountError project={project} error={error} />}
+      {error && <MountError project={project} error={error} net={netFail && !info?.error} onRetry={retry} />}
       {!error && !drawn && (
         <div className="absolute inset-0 flex items-center justify-center">
           <PixelLoader className="size-4" />
@@ -263,25 +292,41 @@ function MountRoot({ project }: { project: string }) {
 
 const MOUNT_ATTR = "data-gerdr-mount"; // uisite.MountAttr: the page's scoped CSS matches it
 
-/** The page doesn't build (or threw while starting): the error in its own area, with the agent a click away. */
-function MountError({ project, error }: { project: string; error: string }) {
+/** A dynamic import that failed to download, as Chrome / Firefox / Safari word it: the network, not the page's code. */
+const isNetFail = (e: unknown) =>
+  /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Load failed/i.test(
+    String((e as Error)?.message ?? e),
+  );
+
+/**
+ * The page doesn't build (or threw while starting): the error in its own area, with the agent a click away. Didn't
+ * download (net): no agent to ask, the way out is loading it again.
+ */
+function MountError({ project, error, net, onRetry }: { project: string; error: string; net: boolean; onRetry: () => void }) {
   return (
     <div className="size-full overflow-auto p-6">
-      <div className="mb-3 text-[13px] text-muted-foreground">{t("workView.pageBroken")}</div>
-      <pre className="font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-bad">{error}</pre>
-      <Button
-        size="sm"
-        variant="outline"
-        className="mt-4"
-        onClick={() =>
-          askWorkAgent(t("workView.fixPagePrompt", { error: error.slice(0, 4000) }), project).then(
-            () => toast.success(t("workView.handedOff")),
-            (e) => toast.error(e.message),
-          )
-        }
-      >
-        {t("workView.askFix")}
-      </Button>
+      <div className="mb-3 text-[13px] text-muted-foreground">{t(net ? "workView.pageNetFail" : "workView.pageBroken")}</div>
+      <pre className="font-mono text-[12px] leading-relaxed break-all whitespace-pre-wrap text-bad">{error}</pre>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button size="sm" variant={net ? "default" : "outline"} onClick={onRetry}>
+          <RotateCw className="size-3.5" />
+          {t("workView.reload")}
+        </Button>
+        {!net && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              askWorkAgent(t("workView.fixPagePrompt", { error: error.slice(0, 4000) }), project).then(
+                () => toast.success(t("workView.handedOff")),
+                (e) => toast.error(e.message),
+              )
+            }
+          >
+            {t("workView.askFix")}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
