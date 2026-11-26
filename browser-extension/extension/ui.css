@@ -8,7 +8,7 @@ button.primary { background: var(--brand); border-color: var(--brand); color: #f
 .grant h1 { font-size: 18px; margin: 14px 0 6px; }
 .grant .site { font: 600 16px ui-monospace, Menlo, monospace; margin: 0 0 10px; }
 .grant .buttons { display: flex; gap: 8px; margin-top: 20px; }
-.popup { width: 300px; padding: 14px 16px; }
+.popup { width: 300px; padding: 14px 16px; font-size: 13px; }
 .popup .head { display: flex; align-items: center; gap: 8px; }
 .popup .badge { margin-left: auto; font-size: 12px; padding: 1px 8px; border-radius: 99px; }
 .popup .badge.on { background: #d8ebe8; color: #1f5e65; }
@@ -20,6 +20,6 @@ button.primary { background: var(--brand); border-color: var(--brand); color: #f
 .grant .callout { padding: 10px 12px; border-radius: 8px; background: #e3ecfb; color: #1f4f9e; }
 @media (prefers-color-scheme: dark) { .grant .callout { background: #1f2a3d; color: #b9cff5; } }
 .grant .who { margin: 0 0 10px; }
-.popup input { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; outline: none; }
+.popup input { box-sizing: border-box; width: 100%; font: inherit; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; outline: none; }
 .popup input:focus { border-color: var(--brand); }
 .popup .small { font-size: 12px; margin: 4px 0 0; }

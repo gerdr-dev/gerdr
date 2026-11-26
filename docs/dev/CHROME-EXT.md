@@ -38,6 +38,24 @@ gerdr browser … (CLI) → /api/browser/* (internal/server/browserapi.go)
   window, can take minutes), `cancel_grant`, `open`, `cdp` (`{tab, method, params}`), `close`, `release`, `focus`,
   `revoke`; events `hello`, `name`, `sites`, `active`, `cdp`, `closed`, `detached`, `blocked`.
 
+## When a profile shows "Not connected"
+
+Two places say why, both added after a profile dropped at 17:34 one day and never came back on its own while another
+profile in the same Chrome reconnected fine (2026-11-25; the cause is still unknown, Chrome's own console was gone):
+
+- The popup: under "Not connected" it shows what Chrome said when the last connection ended (`lastDrop` in the
+  profile's `chrome.storage.local`: "Native host has exited.", "Specified native messaging host not found."…) and when.
+  Opening the popup also reconnects there and then (the `status` message), instead of waiting for the 30 s alarm.
+  "Connected" means Gerdr has spoken on the port (`linked`), not just that Chrome started a host.
+- `<data dir>/logs/browser-host.log`: every host Chrome starts writes when it started (pid, extension id), each failed
+  dial to Gerdr, connected, lost and why, and why it exited (Chrome closed the port, or Gerdr unreachable 5 times). No
+  line at all after a drop means the extension never started a host again.
+
+Testing the extension without touching the user's Chrome: Chrome 137+ ignores `--load-extension`; start a throwaway
+Chrome with `--user-data-dir=/tmp/x --enable-unsafe-extension-debugging --remote-debugging-port=…` and call
+`Extensions.loadUnpacked` over CDP. Copy `NativeMessagingHosts/com.gerdr.browser.json` into that user-data-dir or it
+can't find the host (a custom user-data-dir looks there, not in Chrome's usual folder).
+
 ## Limits (in the extension, nothing on our side can widen them)
 
 Only windows it opened; each site needs the user's Allow once per Chrome profile (`open` waits up to 10 minutes);

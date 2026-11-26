@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -29,11 +30,21 @@ func IsHostInvocation(args []string) bool {
 // the extension starts a host again within 30 s from whatever manifest is current then — a host that kept retrying
 // would keep a dev instance's launcher, or an old App's path, alive for as long as Chrome runs. Chrome closing stdin
 // ends it too.
-func RunHost(origin string, dial func() (url string, header http.Header, err error)) error {
+//
+// log records each step (started, connected, the connection lost and why, dial failures, exit): Chrome drops a native
+// host's stderr, and a profile that stopped reconnecting left no trace anywhere (2026-11-25, its host gone at 17:34 and
+// nothing until the user reloaded the extension the next day). nil logs nothing.
+func RunHost(origin string, dial func() (url string, header http.Header, err error), log *slog.Logger) error {
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
 	id := strings.TrimSuffix(strings.TrimPrefix(origin, "chrome-extension://"), "/")
 	if !slices.Contains(ExtensionIDs, id) {
+		log.Warn("browser host: unknown extension", "origin", origin)
 		return fmt.Errorf("unknown extension %q", origin)
 	}
+	log = log.With("pid", os.Getpid())
+	log.Info("browser host: started by Chrome", "extension", id)
 	in := bufio.NewReader(os.Stdin)
 	var outMu sync.Mutex
 	writeOut := func(b []byte) error {
@@ -88,8 +99,11 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 	}()
 	done := func(err error) error {
 		if err == io.EOF {
+			// the extension let go of its port (reloaded, its profile closed, Chrome quit)
+			log.Info("browser host: Chrome closed the port, exiting")
 			return nil
 		}
+		log.Warn("browser host: reading from Chrome failed, exiting", "err", err)
 		return err
 	}
 
@@ -101,6 +115,7 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 		default:
 		}
 		if failures >= 5 {
+			log.Warn("browser host: Gerdr not reachable after 5 tries, exiting (the extension starts a new host within 30 s)")
 			return errors.New("gerdr is not reachable")
 		}
 		var c *websocket.Conn
@@ -111,6 +126,7 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 		}
 		if err != nil {
 			failures++
+			log.Info("browser host: can't reach Gerdr", "try", failures, "err", err)
 			select {
 			case err := <-stdinDone:
 				return done(err)
@@ -119,20 +135,22 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 			continue
 		}
 		failures = 0
+		log.Info("browser host: connected to Gerdr")
 		c.SetReadLimit(1 << 20)
 		mu.Lock()
 		ws = c
 		mu.Unlock()
 		// from Gerdr: requests, to the extension
-		readDone := make(chan struct{})
+		readDone := make(chan error, 1)
 		go func() {
-			defer close(readDone)
 			for {
 				_, b, err := c.ReadMessage()
 				if err != nil {
+					readDone <- err
 					return
 				}
 				if err := writeOut(b); err != nil {
+					readDone <- fmt.Errorf("writing to Chrome: %w", err)
 					return
 				}
 			}
@@ -141,7 +159,8 @@ func RunHost(origin string, dial func() (url string, header http.Header, err err
 		case err := <-stdinDone:
 			c.Close()
 			return done(err)
-		case <-readDone:
+		case err := <-readDone:
+			log.Info("browser host: lost Gerdr, dialing again", "err", err)
 		}
 		mu.Lock()
 		ws = nil

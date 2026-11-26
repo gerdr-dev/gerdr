@@ -18,6 +18,11 @@ const HOST = 'com.gerdr.browser'
 const VERSION = chrome.runtime.getManifest().version
 
 let port = null
+// Gerdr has spoken on this port (its hello came through the host): the port alone only says Chrome started a host,
+// which may still be looking for Gerdr
+let linked = false
+// resolved when this connection attempt is settled either way: Gerdr said hello, or the port dropped
+let settled = null
 let lastActive = 0
 // tabId -> { window, blocked: url | null }, mirrored to storage.session so a worker restart keeps it
 const owned = new Map()
@@ -138,20 +143,41 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.name) send({ event: 'name', name: changes.name.newValue || '' })
 })
 
+// Why the last connection ended, kept across worker restarts and shown in the popup: a profile that stopped
+// reconnecting (2026-11-25) left nothing to go on but "Not connected". The host's own side is in Gerdr's data dir,
+// logs/browser-host.log.
+function dropped(why) {
+  chrome.storage.local.set({ lastDrop: { at: Date.now(), why: why || '' } })
+}
+
 function connect() {
   if (port) return
+  let done
+  settled = new Promise((r) => (done = r))
   try {
     port = chrome.runtime.connectNative(HOST)
   } catch (e) {
     console.warn('gerdr: connectNative', e)
+    dropped(String(e?.message || e))
+    done()
     return
   }
-  port.onMessage.addListener(onRequest)
+  port.onMessage.addListener((msg) => {
+    if (!linked) {
+      linked = true
+      done()
+    }
+    onRequest(msg)
+  })
   port.onDisconnect.addListener(() => {
     // Gerdr isn't running (or isn't installed): try again from the alarm
-    console.info('gerdr: disconnected', chrome.runtime.lastError?.message)
+    const why = chrome.runtime.lastError?.message
+    console.info('gerdr: disconnected', why)
+    dropped(why || (linked ? 'host exited' : 'host exited before reaching Gerdr'))
     port = null
+    linked = false
     chrome.storage.session.set({ connected: false })
+    done()
   })
   chrome.storage.session.set({ connected: true })
   hello().then((h) => send({ event: 'hello', ...h }))
@@ -222,7 +248,17 @@ chrome.permissions.onRemoved.addListener(async () => send({ event: 'sites', site
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id) return
   if (msg?.type === 'grant') finishGrant(msg.req, !!msg.granted)
-  if (msg?.type === 'status') reply({ connected: !!port })
+  if (msg?.type === 'status') {
+    // opening the popup is a reconnect, not only a look: waiting for the next alarm is what left a profile showing
+    // "Not connected" with nothing happening
+    if (!port) connect()
+    const wait = linked ? Promise.resolve() : Promise.race([settled, new Promise((r) => setTimeout(r, 2000))])
+    wait.then(async () => {
+      const { lastDrop } = await chrome.storage.local.get('lastDrop')
+      reply({ connected: !!port && linked, lastDrop })
+    })
+    return true
+  }
 })
 
 function finishGrant(key, granted) {
