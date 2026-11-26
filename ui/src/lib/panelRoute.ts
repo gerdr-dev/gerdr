@@ -1,6 +1,6 @@
 import { switchSpace } from "@/lib/actions/spaces";
 import { currentSpace, spaceList } from "@/lib/layout";
-import { get, set, setMode, setWorkPanel } from "@/lib/store";
+import { codeLayout, get, set, setMode, setWorkPanel } from "@/lib/store";
 import { panelOfKey, spaceOfKey } from "@/lib/work";
 
 /**
@@ -40,7 +40,7 @@ export function onShowSession(key: string, fn: Handler): () => void {
 /** Switch to the panel that owns the conversation and have it shown there. */
 export function showInPanel(key: string, session: string) {
   const space = spaceOfKey(key);
-  const l = get().layout;
+  const l = codeLayout();
   if (currentSpace(l) !== space && spaceList(l).some((s) => s.id === space)) switchSpace(space);
   setWorkPanel(space, panelOfKey(key));
   setMode("work");

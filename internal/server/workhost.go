@@ -754,9 +754,17 @@ func (s *Server) placeSessionWith(project, id string, pick func(c *layoutCall, s
 	layoutMu.Lock()
 	defer layoutMu.Unlock()
 	raw := s.Layout.Get()
+	// A conversation of a panel with panes of its own goes in the panel's layout, not Code's (panellayout.go)
+	panel := s.ownerPanel(id)
+	if panel != "" {
+		raw = s.PanelLayouts()[panel]
+	}
 	var l node
-	if json.Unmarshal(raw, &l) != nil || len(arr(l, "workspaces")) == 0 {
-		return errors.New("no layout yet: open Gerdr's window once")
+	if json.Unmarshal(raw, &l) != nil || l == nil || (panel == "" && len(arr(l, "workspaces")) == 0) {
+		if panel == "" {
+			return errors.New("no layout yet: open Gerdr's window once")
+		}
+		l = node{"version": 1, "workspaces": []any{}}
 	}
 	space := spaceOr(project)
 	c := &layoutCall{l: l, space: space}
@@ -773,6 +781,9 @@ func (s *Server) placeSessionWith(project, id string, pick func(c *layoutCall, s
 		return err
 	}
 	out := json.RawMessage(b) // not []byte: that would go out to the windows as a base64 string, which they drop
+	if panel != "" {
+		return s.putPanelLayout(panel, out, "gerdr-work")
+	}
 	if err := s.Layout.Set(out); err != nil {
 		return err
 	}

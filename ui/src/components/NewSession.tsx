@@ -18,7 +18,7 @@ import {
 import { api, ApiError } from "@/lib/api";
 import { get, hostDirs, hostStart, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
-import { allLeaves, locateSession, paneView, type PaneLeaf } from "@/lib/layout";
+import { allLeaves, locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import { dialogOver } from "@/lib/phone";
 import { workProjectOf } from "@/lib/work";
@@ -323,7 +323,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
         return { id: d.path, cwd, name: d.name || cwd.split("/").pop() || d.path, color: d.color };
       });
     const seen = new Set<string>();
-    return paneView(layout, pane.id)
+    return spaceWorkspaces(layout, paneSpace(layout, pane.id))
       .filter((w) => w.cwd && !seen.has(w.cwd) && (seen.add(w.cwd), true))
       .map((w) => ({ id: w.id, cwd: w.cwd!, name: w.name, color: undefined as string | undefined }));
   }, [layout, pane.id, panelDirs, home]);
@@ -336,7 +336,7 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
     const l = get().layout;
     const own = allLeaves(l).find((x) => x.pane.id === pane.id)?.ws;
     if (!own || own.cwd === d) return;
-    const to = paneView(l, pane.id).find((w) => w.cwd === d);
+    const to = spaceWorkspaces(l, paneSpace(l, pane.id)).find((w) => w.cwd === d);
     if (to) movePaneToWorkspace(pane.id, to.id);
   };
   // The picked one may sit past the row's right edge: bring it into view (scrollLeft, not scrollIntoView, which would

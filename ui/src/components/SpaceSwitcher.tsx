@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { closeSpaceUndoable, deleteSpace, moveSpace, switchSpace } from "@/lib/actions";
 import { currentSpace, DEFAULT_SPACE, spaceList, spaceWorkspaces, type Layout, type Space } from "@/lib/layout";
-import { get, set, useStore } from "@/lib/store";
+import { codeLayout, set, useStore } from "@/lib/store";
 import { usePhone } from "@/lib/phone";
 import { ProjectViews } from "./DrawerButton";
 import type { SessionSummary } from "@/lib/types";
@@ -58,7 +58,7 @@ export function spaceStatus(l: Layout, sp: Space, sessions: Record<string, Sessi
  * another session has something for you — its agents are out of the lists below, so this is the only place that tells you.
  */
 export async function askCloseSpace(sp: Space) {
-  const n = spaceWorkspaces(get().layout, sp.id).length;
+  const n = spaceWorkspaces(codeLayout(), sp.id).length;
   const ok = await askConfirm({
     title: t("spaceSwitcher.closeTitle", { name: sp.name }),
     description: t("spaceSwitcher.closeDesc", { n, id: sp.id }),
@@ -84,7 +84,7 @@ export async function askCloseSpace(sp: Space) {
 }
 
 export async function askDeleteSpace(sp: Space) {
-  const n = spaceWorkspaces(get().layout, sp.id).length;
+  const n = spaceWorkspaces(codeLayout(), sp.id).length;
   const ok = await askConfirm({
     title: t("spaceSwitcher.deleteTitle", { name: sp.name }),
     description: t("spaceSwitcher.deleteDesc", { n }),
@@ -122,7 +122,7 @@ export const projectExtDialog = (sp: Space) => set({ dialog: { kind: "projectExt
  * touch screens, where a chip can't be dragged; `axis` names the directions after how the list runs.
  */
 export function SpaceMenuItems({ sp, axis }: { sp: Space; axis: "x" | "y" }) {
-  const spaces = spaceList(useStore((s) => s.layout)); // not inside the selector: a new array each call loops the store
+  const spaces = spaceList(useStore((s) => codeLayout(s))); // not inside the selector: a new array each call loops the store
   const i = spaces.findIndex((x) => x.id === sp.id);
   const [Back, Fwd] = axis === "y" ? [ArrowUp, ArrowDown] : [ArrowLeft, ArrowRight];
   return (
@@ -184,7 +184,7 @@ function WorkSourceItems({ project }: { project: string }) {
  * copy of the row, re-measured when the header resizes or a name changes.
  */
 export function SpaceSwitcher() {
-  const layout = useStore((s) => s.layout);
+  const layout = useStore((s) => codeLayout(s));
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const badges = useBadges((s) => s.byPanel);
@@ -287,7 +287,7 @@ function ProjectPicker({ sp, children, ...rest }: { sp: Space; children: React.R
 
 /** The folded form of the switcher: the current session's name, a dot when another one needs you, everything else in a menu. */
 function SpaceMenu() {
-  const layout = useStore((s) => s.layout);
+  const layout = useStore((s) => codeLayout(s));
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const badges = useBadges((s) => s.byPanel);

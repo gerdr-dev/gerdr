@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { panelsChanged, usePanels, type Panel } from "@/lib/panels";
 import { usePhone } from "@/lib/phone";
-import { closeDialog, set, useStore } from "@/lib/store";
+import { codeLayout, closeDialog, set, useStore } from "@/lib/store";
 import { addTab } from "@/lib/actions";
 import { showCode } from "@/lib/actions/views";
 import { copyText } from "@/lib/clipboard";
@@ -28,7 +28,7 @@ import { spaceInitials, type Space } from "@/lib/layout";
 let returnTo = "";
 
 export function PanelSettings() {
-  const layout = useStore((s) => s.layout);
+  const layout = useStore((s) => codeLayout(s));
   const spaces = spaceList(layout);
   const [project, setProject] = useState(() => {
     const back = returnTo;

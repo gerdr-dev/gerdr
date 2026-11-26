@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ModeSwitch } from "@/components/WorkView";
 import { currentSpace, spaceList } from "@/lib/layout";
-import { get, set, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
+import { codeLayout, get, set, setSidebarW, SIDEBAR_W, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { updateWaitsForClick } from "@/lib/native";
 import { PhoneAddonButtons } from "./RailAddons";
@@ -33,7 +33,7 @@ export function SidebarBottom({ sidebarToggle }: { sidebarToggle?: boolean }) {
  * button brings it back, as does the tab bar's). The project switcher and the mode switch are on the rail.
  */
 export function ListHeader() {
-  const name = useStore((s) => spaceList(s.layout).find((x) => x.id === currentSpace(s.layout))?.name);
+  const name = useStore((s) => spaceList(codeLayout(s)).find((x) => x.id === currentSpace(s.layout))?.name);
   return (
     <div data-titlebar-inset className="flex h-10 shrink-0 items-center gap-1 border-b pr-1.5 pl-3" style={{ WebkitAppRegion: "drag" } as any}>
       <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</span>

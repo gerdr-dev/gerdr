@@ -6,7 +6,7 @@ import { systemNotify } from "./notify";
 import { currentSpace, locateSession, mutedSession, spaceInitials, spaceList, spaceOf } from "./layout";
 import { nativeFocusSession } from "./native";
 import { isPhone } from "./phone";
-import { codeShown, get as getApp, useStore, visibleSessions, workViewSessions } from "./store";
+import { codeLayout, codeShown, get as getApp, useStore, visibleSessions, workViewSessions } from "./store";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
 import { cn } from "./utils";
@@ -159,7 +159,7 @@ function toastItem(it: InboxItem, title: string) {
   const sid = it.sessionId;
   const open = sid || it.panel ? () => openFromCard(it) : undefined;
   // Several projects (often one window each): the project's chip, as on the rail, says whose it is before reading it
-  const l = getApp().layout;
+  const l = codeLayout(getApp());
   const space = itemSpace(it);
   const sp = space && spaceList(l).length > 1 ? spaceList(l).find((x) => x.id === space) : undefined;
   toast(title, {

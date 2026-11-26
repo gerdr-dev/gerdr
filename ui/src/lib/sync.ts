@@ -3,17 +3,19 @@
 // 接不上（重启过、日志被改写过）整份重推 —— 对账在服务端（hub.eventsAfter），这边照单全收。
 import { api, ApiError, clientId, onAuthLost } from "./api";
 import { toast } from "sonner";
-import { currentSpace, validLayout, withView } from "./layout";
+import { currentSpace, validLayout } from "./layout";
 import { isNative, nativeNotify, runRelayedUpdateOp } from "./native";
 import { emitSessionChange } from "./addons";
 import { setPortDomain } from "./portlink";
 import {
   applyEvents,
   applyRemoteLayout,
+  applyRemotePanelLayout,
+  panelsApart,
+  loadedLayouts,
   enterSpaceMode,
   get,
   gotUnread,
-  loadView,
   mergeConfig,
   onLayoutChange,
   orderAgents,
@@ -110,7 +112,7 @@ async function start() {
     // 打开页面：服务端那份布局 + 这个端上次自己看的位置（不然一刷新就跳到别的端最后看的地方）
     // …and the mode that project was left in on this device, not the last mode of any window (they share localStorage)
     if (validLayout(h.layout)) {
-      const l = withView(h.layout, loadView());
+      const l = loadedLayouts(h.layout, h.panelLayouts);
       set({ layout: l, ...enterSpaceMode(currentSpace(l)) });
     } else setLayout((l) => l); // 第一次：把默认布局存下去
     pruneLayout();
@@ -406,6 +408,10 @@ async function refreshHello() {
     unreadSync.server = !!h.unread;
     gotUnread(h.unread);
     setPortDomain(h.portDomain);
+    // The backend now keeps panels' panes apart and this page didn't (it loaded before the backend restarted onto a
+    // new binary), or the other way round: start over with it rather than switch over mid-way (store/layoutSync.ts)
+    if (!!h.panelLayouts !== panelsApart()) return void location.reload();
+    for (const [k, v] of Object.entries(h.panelLayouts ?? {})) applyRemotePanelLayout(k, v);
     if (validLayout(h.layout)) applyRemoteLayout(h.layout);
   } catch {}
 }
@@ -449,6 +455,9 @@ function handle(m: any) {
       break;
     case "layout":
       if (m.data?.client !== clientId) applyRemoteLayout(m.data?.data);
+      break;
+    case "panel_layout":
+      if (m.data?.client !== clientId) applyRemotePanelLayout(m.data?.key, m.data?.data);
       break;
     case "config":
       if (m.data?.client !== clientId) {

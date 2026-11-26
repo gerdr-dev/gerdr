@@ -1383,7 +1383,8 @@ func (s *Server) layoutOp(w http.ResponseWriter, r *http.Request) {
 	for _, x := range s.Hub.List() {
 		sessions = append(sessions, LayoutSession{ID: x.ID, Title: x.Title, Agent: x.Agent, Cwd: x.Cwd, Status: x.Status})
 	}
-	raw := s.Layout.Get()
+	// Every pane, Code's and the panels' own (panellayout.go): a worker in a panel calls `gerdr browser open` too
+	raw := s.LayoutAll()
 	for _, x := range sessions {
 		if x.ID == b.Session {
 			b.SessionCwd = x.Cwd
@@ -1409,12 +1410,12 @@ func (s *Server) layoutOp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if out != nil {
-		if err := s.Layout.Set(out); err != nil {
+		// Each workspace back to its own layout; the same messages a PUT from a window sends, so every window takes
+		// the new structure and keeps its own view
+		if err := s.setLayoutAll(out); err != nil {
 			httpError(w, 500, err.Error())
 			return
 		}
-		// Same message a PUT from a window sends: every window takes the new structure and keeps its own view.
-		s.Hub.Broadcast("layout", map[string]any{"data": out, "client": "gerdr-cli"})
 	}
 	writeJSON(w, res)
 }

@@ -304,7 +304,7 @@ func (s *Server) browserProject(c Caller) string {
 			c.SessionCwd = self.Summary().Cwd
 		}
 	}
-	if p := ResolveSpace(s.Layout.Get(), c, s.workProject()); p != "" {
+	if p := ResolveSpace(s.LayoutAll(), c, s.workProject()); p != "" {
 		return p
 	}
 	if p, ok := s.panelSpace(c.Session); ok {

@@ -77,7 +77,7 @@ type permOption struct {
 }
 
 func (s *Server) pendingList() []svcPending {
-	muted := MutedSessions(s.Layout.Get())
+	muted := MutedSessions(s.LayoutAll())
 	out := []svcPending{}
 	for _, r := range s.Hub.Pending() {
 		out = append(out, toSvcPending(r, s.quietSession(r.SessionID, muted)))

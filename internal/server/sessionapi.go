@@ -309,7 +309,7 @@ func (s *Server) placeCreated(o *createOpen, id, reqCwd, cwd string) error {
 		if self, err := s.Hub.Session(c.Session); err == nil {
 			c.SessionCwd = self.Summary().Cwd
 		}
-		space := ResolveSpace(s.Layout.Get(), c, s.workProject())
+		space := ResolveSpace(s.LayoutAll(), c, s.workProject())
 		if err := s.placeSession(space, id, reqCwd, cwd, o.Workspace); err != nil {
 			// The conversation exists either way: say so instead of losing it
 			return fmt.Errorf(i18n.S("会话 %s 开好了，但放不进工作空间：%v", "session %s was started but couldn't go in the workspace: %v"), id, err)
@@ -375,7 +375,7 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		if self, err := s.Hub.Session(c.Session); err == nil {
 			c.SessionCwd = self.Summary().Cwd
 		}
-		o.Project = ResolveSpace(s.Layout.Get(), c, s.workProject())
+		o.Project = ResolveSpace(s.LayoutAll(), c, s.workProject())
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()

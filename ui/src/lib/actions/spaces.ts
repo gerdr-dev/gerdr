@@ -12,7 +12,9 @@ import {
   type Layout,
   type Workspace,
 } from "../layout";
-import { flushLayout, get, setConfig, setLayout } from "../store";
+// Projects are Code's (the project list, which one is on screen): these act on Code's layout even while a panel's
+// own panes are on screen (store/layoutSync.ts)
+import { codeLayout, flushLayout, get, setConfig, setLayoutOf } from "../store";
 import { spaceOfKey, workProjectOf } from "../work";
 import { inSpace, killTerms, shutdownGone } from "./shared";
 import { t } from "../i18n";
@@ -33,7 +35,7 @@ function rememberSpace(l: Layout): Layout {
 }
 
 export function switchSpace(id: string) {
-  setLayout((l) => {
+  setLayoutOf("", (l) => {
     if (currentSpace(l) === id || !spaceList(l).some((s) => s.id === id)) return l;
     let next = rememberSpace(l);
     let wid = landIn(next, id);
@@ -48,7 +50,7 @@ export function switchSpace(id: string) {
 }
 
 export function stepSpace(delta: number) {
-  const l = get().layout;
+  const l = codeLayout();
   const list = spaceList(l);
   const i = list.findIndex((s) => s.id === currentSpace(l));
   if (list.length > 1) switchSpace(list[(i + delta + list.length) % list.length].id);
@@ -60,11 +62,11 @@ export function stepSpace(delta: number) {
  * restores its Code — tabs, splits, the conversations in them — as well as its Work. Returns why it couldn't, "" when it could.
  */
 export async function addSpace(name: string): Promise<string> {
-  const err = projectNameError(get().layout, name);
+  const err = projectNameError(codeLayout(), name);
   if (err) return err;
   const id = name.trim();
   const saved = await api.projectLayout(id).catch(() => ({}) as { workspaces?: Workspace[]; active?: string });
-  setLayout((l) => {
+  setLayoutOf("", (l) => {
     const prev = rememberSpace(l);
     const sp = { id, name: id };
     const back = (saved.workspaces ?? [])
@@ -79,11 +81,11 @@ export async function addSpace(name: string): Promise<string> {
 
 /** Close a whole session: all its workspaces (their agents stop, records stay — same as closing the workspaces one by one). */
 export function closeSpace(id: string) {
-  const l0 = get().layout;
+  const l0 = codeLayout();
   const gone = spaceWorkspaces(l0, id);
   const panes = gone.flatMap((w) => w.tabs.flatMap((t) => leaves(t.root)));
   killTerms(panes);
-  setLayout((l) => {
+  setLayoutOf("", (l) => {
     const workspaces = l.workspaces.filter((w) => spaceOf(w) !== id);
     const spaces = spaceList(l).filter((s) => s.id !== id || id === DEFAULT_SPACE);
     if (workspaces.length === 0) {
@@ -102,7 +104,7 @@ export function closeSpace(id: string) {
  * they can only reach agents there (and the ones they were talking to can't reach them).
  */
 export function moveWorkspaceToSpace(wsId: string, space: string) {
-  setLayout((l) => {
+  setLayoutOf("", (l) => {
     const w = l.workspaces.find((x) => x.id === wsId);
     if (!w || spaceOf(w) === space) return l;
     const from = spaceOf(w);
@@ -117,21 +119,21 @@ export function moveWorkspaceToSpace(wsId: string, space: string) {
 
 /** Change the name a project shows. Its id (address, directory) stays: see projectNameError. Returns why it couldn't, "" when it could. */
 export function renameSpace(id: string, name: string): string {
-  const err = spaceNameError(get().layout, name, id);
+  const err = spaceNameError(codeLayout(), name, id);
   if (err) return err;
   const n = name.trim();
-  setLayout((l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, name: n, renamed: n !== s.id || undefined } : s)) }));
+  setLayoutOf("", (l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, name: n, renamed: n !== s.id || undefined } : s)) }));
   return "";
 }
 
 /** Set the icon a project shows on the rail ("" = back to its initials); the same values as a panel's (IconPicker). */
 export function setSpaceIcon(id: string, icon: string, color: string) {
-  setLayout((l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, icon: icon || undefined, color: color || undefined } : s)) }));
+  setLayoutOf("", (l) => ({ ...l, spaces: spaceList(l).map((s) => (s.id === id ? { ...s, icon: icon || undefined, color: color || undefined } : s)) }));
 }
 
 /** Put project `id` at position `to` of the list (counted without it). */
 export function moveSpace(id: string, to: number) {
-  setLayout((l) => {
+  setLayoutOf("", (l) => {
     const list = spaceList(l);
     const from = list.findIndex((s) => s.id === id);
     if (from < 0) return l;
@@ -150,7 +152,7 @@ export function moveSpace(id: string, to: number) {
  * go back into it.
  */
 export function snapshotSpace(id: string): () => void {
-  const l0 = get().layout;
+  const l0 = codeLayout();
   const index = spaceList(l0).findIndex((s) => s.id === id);
   const space = spaceList(l0)[index];
   const workspaces = spaceWorkspaces(l0, id);
@@ -159,10 +161,10 @@ export function snapshotSpace(id: string): () => void {
   const c = get().config;
   const kept = { session: c.workSessions?.[id], agent: c.workAgents?.[id], ext: c.projects?.[id] };
   return () => {
-    const l1 = get().layout;
+    const l1 = codeLayout();
     const listed = spaceList(l1).find((s) => s.id.toLowerCase() === id.toLowerCase());
     if (!space || (listed && (listed.id !== id || spaceWorkspaces(l1, id).length > 0))) throw new Error(t("actionsSpaces.nameTaken", { id }));
-    setLayout((l) => {
+    setLayoutOf("", (l) => {
       const ws = workspaces.filter((w) => !l.workspaces.some((x) => x.id === w.id));
       if (!ws.length) ws.push({ ...newWorkspace("default"), space: inSpace(id) });
       let spaces = spaceList(l);
@@ -213,7 +215,7 @@ export async function deleteSpace(id: string): Promise<{ trash: string; undo: ()
   const { trash } = await api.deleteProject(id);
 
   const undo = async () => {
-    if (spaceList(get().layout).some((s) => s.id.toLowerCase() === id.toLowerCase())) throw new Error(t("actionsSpaces.nameTaken", { id }));
+    if (spaceList(codeLayout()).some((s) => s.id.toLowerCase() === id.toLowerCase())) throw new Error(t("actionsSpaces.nameTaken", { id }));
     // The directory first: putting the workspaces back makes the server write the project's layout copy, which would
     // create the directory and leave the trash nowhere to go
     if (trash) await api.restoreProject(id, trash);

@@ -279,7 +279,7 @@ func (s *Server) desktopImportRoutes(mux *http.ServeMux) {
 				c.SessionCwd = self.Summary().Cwd
 			}
 		}
-		project := ResolveSpace(s.Layout.Get(), c, s.workProject())
+		project := ResolveSpace(s.LayoutAll(), c, s.workProject())
 
 		type result struct {
 			ID      string `json:"id"`                // the Claude Code session id asked for

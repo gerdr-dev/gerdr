@@ -16,7 +16,6 @@ import {
   rid,
   spaceList,
   spaceWorkspaces,
-  viewWorkspaces,
   split,
   swap,
   toggleFloat,
@@ -29,7 +28,7 @@ import {
   type Tab,
   type Workspace,
 } from "../layout";
-import { codeShown, get, hostStart, set, setLayout } from "../store";
+import { codeShown, get, hostStart, layoutOf, set, setLayout, setLayoutOf } from "../store";
 import type { SessionSummary } from "../types";
 import { addActive, focusTile, joinActiveOnStart, MAX_TILES, overviewFocus, overviewIds, placeTilesAfter, toggleOverview } from "../overview";
 import { spaceOfKey, workProjectOf } from "../work";
@@ -165,12 +164,15 @@ export function openSessionNear(sessionId: string, near?: string, focus = false)
     if (focus) openInWork(sessionId);
     return;
   }
-  if (locateSession(get().layout, sessionId)) {
+  // Its own side's layout (lib/hostView.ts), on screen or not: a panel's worker opening one leaves it in the panel
+  const owner = ownerHost(sessionId);
+  const mine = layoutOf(owner) ?? layoutOf("")!;
+  if (locateSession(mine, sessionId)) {
     if (focus) focusSession(sessionId); // 已经开着：要焦点就切过去
     return;
   }
-  const loc = near ? locateSession(get().layout, near) : undefined;
-  setLayout((l) => {
+  const loc = near ? locateSession(mine, near) : undefined;
+  setLayoutOf(layoutOf(owner) ? owner : "", (l) => {
     if (loc) {
       const fresh = newPane(undefined, sessionId);
       return updateTab(l, loc.tab.id, (tab) => {
@@ -187,18 +189,16 @@ export function openSessionNear(sessionId: string, near?: string, focus = false)
     const project = key && spaceOfKey(key);
     const t = newTab(undefined, sessionId);
     const cwd = key ? get().sessions[sessionId]?.cwd?.replace(/\/+$/, "") : undefined;
-    // In its owner's view (lib/hostView.ts): a hosting panel's conversation in that panel's own Code
-    const host = ownerHost(sessionId) ?? "";
     if (cwd) {
       const space = project || currentSpace(l);
-      const mine = viewWorkspaces(l, { space, host }).filter((w) => w.cwd?.replace(/\/+$/, "") === cwd);
+      const mine = spaceWorkspaces(l, space).filter((w) => w.cwd?.replace(/\/+$/, "") === cwd);
       const hit = mine.find((w) => w.id === spaceList(l).find((s) => s.id === space)?.active) ?? mine[0];
       if (hit) return updateWs(l, hit.id, (w) => ({ ...w, tabs: [...w.tabs, t], activeTab: focus ? t.id : w.activeTab }));
       // Not made the active workspace: the person is in the panel, and Code shouldn't switch under them
-      const ws: Workspace = { id: rid("w"), name: basename(cwd), cwd, tabs: [t], activeTab: t.id, space: inSpace(space), ...(host ? { host } : {}) };
+      const ws: Workspace = { id: rid("w"), name: basename(cwd), cwd, tabs: [t], activeTab: t.id, space: inSpace(space) };
       return { ...l, workspaces: [...l.workspaces, ws] };
     }
-    const home = project && project !== currentSpace(l) ? viewWorkspaces(l, { space: project, host }) : [];
+    const home = project && project !== currentSpace(l) ? spaceWorkspaces(l, project) : [];
     const ws = home.find((w) => w.id === spaceList(l).find((s) => s.id === project)?.active) ?? home[0] ?? activeWs(l);
     return updateWs(l, ws.id, (w) => ({ ...w, tabs: [...w.tabs, t], activeTab: focus ? t.id : w.activeTab }));
   });

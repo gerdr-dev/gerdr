@@ -321,6 +321,8 @@ export const api = {
   /** 409 with code "conflict": the folder isn't from a store, or was changed after installing; force overwrites. */
   installAddon: (source: string, id: string, force = false) => req("POST", "/api/addon-stores/install", { source, id, force }),
   putLayout: (data: unknown, client: string) => req("PUT", "/api/layout", { data, client }),
+  /** A panel's own panes (server/panellayout.go). */
+  putPanelLayout: (key: string, data: unknown, client: string) => req("PUT", "/api/panel-layout", { key, data, client }),
   putConfig: (data: unknown, client: string) => req("PUT", "/api/config", { data, client }),
   setUnread: (id: string, unread: boolean, client: string) => req("POST", "/api/unread", { id, unread, client }),
   // Gerdr Agent 的模型设置：拉服务商的模型列表、拿一个模型试说一句（服务商参数是页面上的草稿，不用先保存）

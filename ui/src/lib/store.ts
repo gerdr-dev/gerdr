@@ -96,7 +96,12 @@ type State = {
   catchingUp: Record<string, true>;
   /** 会话日志前面还有没拉的（打开时服务端只推最近一段）：more = 还有，loading = 正在拉。没有这一项 = 已经到头了。 */
   older: Record<string, "more" | "loading">;
+  /** The layout on screen: Code mode's, or a panel's own (layoutOwner). store/layoutSync.ts */
   layout: Layout;
+  /** Whose `layout` is: "" = Code mode's, else the key of the panel whose own panes they are. */
+  layoutOwner: string;
+  /** The layouts not on screen, by owner ("" = Code's while a panel's is shown). */
+  stashed: Record<string, Layout>;
   config: Config;
   prefixActive: boolean;
   dialog: Dialog;
@@ -256,6 +261,8 @@ export const useStore = create<State>(() => ({
   catchingUp: {},
   older: {},
   layout: defaultLayout(),
+  layoutOwner: "",
+  stashed: {},
   config: DEFAULT_CONFIG,
   device: loadDevice(),
   prefixActive: false,

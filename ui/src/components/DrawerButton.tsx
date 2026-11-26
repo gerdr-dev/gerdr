@@ -5,7 +5,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { switchSpace } from "@/lib/actions";
 import { currentSpace, spaceList, type Space } from "@/lib/layout";
 import { railItems, usePanels } from "@/lib/panels";
-import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
+import { codeLayout, set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { PanelIcon } from "./PanelIcon";
@@ -82,7 +82,7 @@ export function DrawerButton({ children }: { children?: React.ReactNode }) {
 }
 
 function AllViews({ done }: { done: () => void }) {
-  const spaces = spaceList(useStore((s) => s.layout));
+  const spaces = spaceList(useStore((s) => codeLayout(s)));
   return (
     <>
       {spaces.map((sp, i) => (

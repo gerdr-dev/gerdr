@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { api } from "../api";
 import { askConfirm } from "../confirm";
 import { allLeaves, currentSpace, locateSession, mutedSession, paneSpace, setPane, spaceList, type PaneLeaf } from "../layout";
-import { get, hostStart, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
+import { codeLayout, get, hostStart, markRead, overviewShown, set, setLayout, setMode, setWorkPanel } from "../store";
 import { focusTile, overviewIds, replaceTile, toggleOverview } from "../overview";
 import { openWorkChat, panelOfKey, spaceOfKey, workProjectOf } from "../work";
 import { currentView } from "./views";
@@ -12,6 +12,7 @@ import { focusedLeaf, shutdownGone } from "./shared";
 import { switchSpace } from "./spaces";
 import { addTab, addTabForSession } from "./tabs";
 import { ownerOf, showInPanel } from "../panelRoute";
+import { ownerHost, showOwner } from "../hostView";
 import { t } from "../i18n";
 
 // ---- 会话 ----
@@ -134,7 +135,7 @@ export function openInWork(sessionId: string): boolean {
   const key = workProjectOf(sessionId);
   if (!key) return false;
   const project = spaceOfKey(key);
-  if (currentSpace(get().layout) !== project && spaceList(get().layout).some((s) => s.id === project)) switchSpace(project);
+  if (currentSpace(codeLayout()) !== project && spaceList(codeLayout()).some((s) => s.id === project)) switchSpace(project);
   setWorkPanel(project, panelOfKey(key)); // a panel's agent: that panel
   setMode("work");
   openWorkChat(sessionId, key);
@@ -155,6 +156,13 @@ export function focusSession(sessionId: string) {
   // Already the one in front (in Work: the page's conversation or the Work agent itself): stay
   if (currentView().session() === sessionId) return markRead(sessionId);
   if (openInWork(sessionId)) return;
+  // Its own side first (lib/hostView.ts): one of Code's while a panel's own panes are on screen brings Code's layout
+  // back; a panel's (with panes of its own) goes to its panel, which shows it in its own
+  const side = ownerHost(sessionId);
+  if (side !== get().layoutOwner) {
+    if (!side) showOwner("");
+    else return void (showInPanel(side, sessionId), markRead(sessionId));
+  }
   const loc = locateSession(get().layout, sessionId);
   if (loc) focusPane(loc.pane.id);
   else {
@@ -171,6 +179,7 @@ export function openSessionHere(sessionId: string) {
   // "Here" is the focused pane, and in Work that's hidden: open it the way going to a session does
   if (currentView().name === "work") return focusSession(sessionId);
   if (openInWork(sessionId)) return;
+  if (ownerHost(sessionId) !== get().layoutOwner) return focusSession(sessionId);
   const loc = locateSession(get().layout, sessionId);
   if (loc) return focusPane(loc.pane.id);
   const p = focusedLeaf(get().layout);

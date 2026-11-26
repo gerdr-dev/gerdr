@@ -111,16 +111,29 @@ func (s *Server) renameInConfig(key, nkey string) {
 	}
 }
 
-// moveInLayout: Code workspaces, drafts and terminals opened in the panel's directory follow it.
+// moveInLayout: Code workspaces, drafts and terminals opened in the panel's directory follow it; so do the panes in
+// the panels' own layouts (panellayout.go), the secretary's among them.
 func (s *Server) moveInLayout(from, to string) {
 	if s.Layout == nil {
 		return
 	}
 	layoutMu.Lock()
 	defer layoutMu.Unlock()
+	if out, ok := movePaths(s.Layout.Get(), from, to); ok && s.Layout.Set(out) == nil && s.Hub != nil {
+		s.Hub.Broadcast("layout", map[string]any{"data": out, "client": "gerdr-work"})
+	}
+	for key, raw := range s.PanelLayouts() {
+		if out, ok := movePaths(raw, from, to); ok {
+			_ = s.putPanelLayout(key, out, "gerdr-work")
+		}
+	}
+}
+
+// movePaths: raw with every path at or under `from` moved under `to`; ok = something changed.
+func movePaths(raw json.RawMessage, from, to string) (json.RawMessage, bool) {
 	var l any
-	if json.Unmarshal(s.Layout.Get(), &l) != nil {
-		return
+	if json.Unmarshal(raw, &l) != nil {
+		return nil, false
 	}
 	changed := false
 	var walk func(v any) any
@@ -144,17 +157,11 @@ func (s *Server) moveInLayout(from, to string) {
 	}
 	l = walk(l)
 	if !changed {
-		return
+		return nil, false
 	}
 	b, err := json.Marshal(l)
 	if err != nil {
-		return
+		return nil, false
 	}
-	out := json.RawMessage(b)
-	if s.Layout.Set(out) != nil {
-		return
-	}
-	if s.Hub != nil {
-		s.Hub.Broadcast("layout", map[string]any{"data": out, "client": "gerdr-work"})
-	}
+	return json.RawMessage(b), true
 }

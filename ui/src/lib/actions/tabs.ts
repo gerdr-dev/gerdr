@@ -11,7 +11,8 @@ import {
   newWorkspace,
   rid,
   sideRows,
-  viewWorkspaces,
+  spaceOf,
+  spaceWorkspaces,
   updateTab,
   updateWs,
   type Side,
@@ -23,7 +24,7 @@ import { onlyBlank, remember } from "./reopen";
 import { createInPane } from "./sessions";
 import { inheritDraft, inSpace, killTerms, removeTab, selectTabIn, shutdownGone } from "./shared";
 import { showCode } from "./views";
-import { ownerHost } from "../hostView";
+import { ownerHost, showOwner } from "../hostView";
 
 // ---- tab ----
 
@@ -61,14 +62,14 @@ export function addTab(opts?: { workspaceId?: string; cwd?: string; agent?: stri
 export function addTabForSession(sessionId: string) {
   const s = get().sessions[sessionId];
   const cwd = (s?.cwd ?? "").replace(/\/+$/, "");
+  // In its own side's layout (lib/hostView.ts): a panel's conversation in that panel's own panes, the rest in Code's.
+  // The screen goes there first, so what follows acts on that layout
+  showOwner(ownerHost(sessionId));
   if (!cwd) return addTab({ sessionId });
-  // In its owner's view (lib/hostView.ts): a panel's conversation in that panel's own Code, the rest in Code's. Out of
-  // the view on screen, the screen follows it there
-  const host = ownerHost(sessionId) ?? "";
   setLayout((l) => {
     const space = currentSpace(l);
     let best: Workspace | undefined;
-    for (const w of viewWorkspaces(l, { space, host })) {
+    for (const w of spaceWorkspaces(l, space)) {
       const wc = (w.cwd ?? "").replace(/\/+$/, "");
       if (wc && (cwd === wc || cwd.startsWith(wc + "/")) && wc.length > (best?.cwd?.length ?? -1)) best = w;
     }
@@ -79,11 +80,10 @@ export function addTabForSession(sessionId: string) {
         best.id,
         t.id,
       );
-    const w = { ...newWorkspace(cwd.split("/").pop() || cwd, cwd), space: inSpace(space), ...(host ? { host } : {}) };
+    const w = { ...newWorkspace(cwd.split("/").pop() || cwd, cwd), space: inSpace(space) };
     const fresh = { ...w, tabs: [t], activeTab: t.id };
     return { ...l, workspaces: [...l.workspaces, fresh], active: fresh.id, lastActive: l.active };
   });
-  showCode();
 }
 
 export function selectTab(index: number) {
@@ -267,7 +267,7 @@ export function moveTabToWorkspace(tabId: string, wsId: string, index?: number) 
 export function placeRow(paneId: string, wsId: string, index: number) {
   setLayout((l) => {
     const owner = allLeaves(l).find((x) => x.pane.id === paneId);
-    const rows = owner && sideRows(l, owner.ws).get(wsId);
+    const rows = owner && sideRows(l, spaceOf(owner.ws)).get(wsId);
     if (!owner || !rows) return l;
     const pins = rows.filter((r) => r.pinned && r.pane.id !== paneId).map((r) => r.pane.id);
     const pin = index <= pins.length;
@@ -288,7 +288,7 @@ export function placeRow(paneId: string, wsId: string, index: number) {
 /** Keep a row at the top of its sidebar group (after the ones already kept there), or let it sort by activity again. */
 export function pinRow(paneId: string, wsId: string, on: boolean) {
   const owner = allLeaves(get().layout).find((x) => x.pane.id === paneId);
-  const rows = owner && sideRows(get().layout, owner.ws).get(wsId);
+  const rows = owner && sideRows(get().layout, spaceOf(owner.ws)).get(wsId);
   if (rows) placeRow(paneId, wsId, on ? rows.filter((r) => r.pinned && r.pane.id !== paneId).length : Infinity);
 }
 

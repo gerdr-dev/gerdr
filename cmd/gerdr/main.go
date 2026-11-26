@@ -508,8 +508,11 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 		Service: svc, Terms: term.New(func() []string { return sysenv.ChildEnv() }, log)}
 	defer srv.Terms.Close()
 	// A Browser pane closed closes its page (server/browserpanes.go): seen on every layout save
-	layout.OnSet = func(b json.RawMessage) { wr.SaveLayouts(b); srv.LayoutSaved(b) }
-	srv.LayoutSaved(layout.Get())
+	// A panel's panes kept in Code's layout before they had a layout of their own (server/panellayout.go): moved out
+	// now, and on every save while a device still runs a UI from before (it may put them back); nothing to do after
+	layout.OnSet = func(b json.RawMessage) { wr.SaveLayouts(b); srv.MigrateHostWorkspaces(); srv.LayoutSaved(srv.LayoutAll()) }
+	srv.MigrateHostWorkspaces()
+	srv.LayoutSaved(srv.LayoutAll())
 	wr.Inbox = srv  // ctx.inbox (server/inbox.go)
 	wr.Badges = srv // ctx.badge (server/badge.go)
 	// Other computers this one drives (docs/dev/MULTIHOST.md). A broken peers.json only turns that off.

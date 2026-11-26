@@ -400,7 +400,7 @@ func (s *Server) workRoutes(mux *http.ServeMux) {
 		// An agent running it from its repository (not a Work directory) gets the default project from its cwd; the
 		// project its conversation is in is the one it works for (a worker the lb board started: lb)
 		if b.From != "" && (b.Project == "" || b.Project == work.DefaultProject) {
-			if sp, ok := s.sessionSpace(SessionSpaces(s.Layout.Get()), b.From); ok && sp != "" {
+			if sp, ok := s.sessionSpace(SessionSpaces(s.LayoutAll()), b.From); ok && sp != "" {
 				b.Project = sp
 			}
 		}

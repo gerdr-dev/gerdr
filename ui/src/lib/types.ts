@@ -98,6 +98,8 @@ export type Hello = {
   agents: AgentInfo[];
   sessions: SessionSummary[];
   layout: any;
+  /** The panels with panes of their own: key → their layout (server/panellayout.go); missing from older backends. */
+  panelLayouts?: Record<string, unknown>;
   config: any;
   /** Sessions finished unseen, shared by every device (server/unread.go); missing from older backends. */
   unread?: Record<string, boolean>;

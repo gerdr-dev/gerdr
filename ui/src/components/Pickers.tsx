@@ -1,6 +1,6 @@
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { basename, focusSession, openSessionHere, selectWorkspace, tabName } from "@/lib/actions";
-import { currentSpace, locateSession, spaceList, spaceOf, viewWorkspaces } from "@/lib/layout";
+import { currentSpace, locateSession, spaceList, spaceOf, spaceWorkspaces } from "@/lib/layout";
 import { closeDialog, useStore, useStoreWhile } from "@/lib/store";
 import type { SessionSummary } from "@/lib/types";
 import { AgentIcon, StatusDot, dotStatus } from "./AgentIcon";
@@ -72,7 +72,7 @@ export function SessionsDialog({ open }: { open: boolean }) {
 
 export function WorkspacesDialog({ open }: { open: boolean }) {
   const layout = useStore((s) => s.layout);
-  const list = viewWorkspaces(layout); // only the ones on screen (this project, Code's or the panel's), like the sidebar
+  const list = spaceWorkspaces(layout); // only the current session's, like the sidebar
   return (
     <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title={t("pickers.workspaces")} description={t("pickers.switchWorkspace")}>
       <CommandInput placeholder={t("pickers.workspacePlaceholder")} />

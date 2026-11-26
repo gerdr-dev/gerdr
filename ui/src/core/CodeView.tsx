@@ -2,15 +2,19 @@ import { type ReactNode, useContext, useEffect, useMemo, useRef } from "react";
 import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
 import { addTab, addTabForSession, focusPane, replaceSessionInPane } from "@/lib/actions";
-import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
+import { activeTab, currentSpace, locateSession, sideRows, type Layout } from "@/lib/layout";
+import { ownerHost, showOwner } from "@/lib/hostView";
 import { type CodeCloseFn, type CodeMenuFn, type CodePaneTagFn, setCodeCloseFallback, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
 import { syncWatch } from "@/lib/sync";
 import {
   type CodeDir,
   type CodeStartFn,
+  codeLayout,
   focusedSession,
   get,
+  layoutOf,
+  panelsApart,
   markRead,
   set,
   setCodeDirs,
@@ -33,10 +37,10 @@ import { frozenOrder, useModFrozen, useModShown } from "@/lib/modHeld";
  * - `sidebar` with `list="replace"`: the panel draws the whole list, grouping the same panes its own way (by a task's
  *   status, by person…) from useCodeRows, each row drawn with CodeRow so it looks and behaves as in Code.
  *
- * The panes are Code's own (Panes.tsx, the same tabs / splits / terminals), but with list="replace" the panel has a
- * set of workspaces of its own in the one stored layout (Workspace.host, lib/hostView.ts): its conversations open there
- * and Code's stay in Code mode, each view keeping what it had in front. A conversation is never in both: a panel imports
- * one by starting a new conversation that carries it on. list="add" shows Code's own workspaces, so Code's layout.
+ * The panes are Code's own kind (Panes.tsx: the same tabs / splits / terminals), but with list="replace" they are the
+ * panel's own, stored and held apart from Code mode's (store/layoutSync.ts, lib/hostView.ts): its conversations open
+ * there, Code's stay in Code mode. A conversation is never in both: a panel imports one by starting a new one that
+ * carries it on. list="add" shows Code's own layout.
  * docs/dev/HOSTED-CODE.md. The rest of the panel's page isn't drawn while this is mounted.
  */
 export function CodeView({ sidebar, list = "add" }: { sidebar?: ReactNode; list?: "add" | "replace" }) {
@@ -79,12 +83,15 @@ export type CodeRowInfo = {
  * mode's instead (what the person has open there: what a panel offers to import).
  */
 export function useCodeRows(of: "here" | "code" = "here"): CodeRowInfo[] {
-  const layout = useStore((s) => s.layout);
+  // This panel's own panes (on screen or put aside: its list is kept up while Code mode shows), or Code's
+  const key = useContext(PanelKeyContext);
+  const layout = useStore((s) => (of === "code" ? codeLayout(s) : (key && layoutOf(key, s)) || (panelsApart() ? EMPTY : codeLayout(s))));
   const sessions = useStore((s) => s.sessions);
   return useMemo(() => {
+    if (layout === EMPTY) return [];
     const cur = activeTab(layout);
     const out: CodeRowInfo[] = [];
-    for (const rows of sideRows(layout, of === "code" ? { space: currentSpace(layout), host: "" } : undefined, sessions).values())
+    for (const rows of sideRows(layout, undefined, sessions).values())
       for (const { ws, tab, pane } of rows) {
         const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
         out.push({
@@ -99,6 +106,8 @@ export function useCodeRows(of: "here" | "code" = "here"): CodeRowInfo[] {
     return out;
   }, [layout, sessions, of]);
 }
+
+const EMPTY: Layout = { version: 1, workspaces: [], active: "" };
 
 /** Code's own row for a pane (icon, status, unread, its menu, dragging it onto a pane): `where` replaces the folder shown at its end. */
 export { PaneRow as CodeRow } from "@/components/UnifiedSidebar";
@@ -122,6 +131,8 @@ export function newCodeTab(opts?: { cwd?: string }) {
  * (onShowSession): here "showing it" is a pane like any other.
  */
 export function showInCodeView(id: string, replace?: string) {
+  // In its own side's panes: this panel's own for its conversations (lib/hostView.ts), on screen first
+  showOwner(ownerHost(id));
   if (replace && replace !== id) return replaceSessionInPane(replace, id);
   toggleOverview(false);
   const loc = locateSession(get().layout, id);

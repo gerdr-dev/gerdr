@@ -49,7 +49,7 @@ type svcSince struct {
 }
 
 func (b *addonBridge) sessions() []svcSession {
-	spaces := SessionSpaces(b.s.Layout.Get())
+	spaces := SessionSpaces(b.s.LayoutAll())
 	out := []svcSession{}
 	seen := map[string]bool{}
 	for _, sum := range b.s.Hub.List() {

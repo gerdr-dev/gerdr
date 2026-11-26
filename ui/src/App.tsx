@@ -33,7 +33,7 @@ import { watchCopyOnSelect } from "./lib/copysel";
 import { watchNavButtons } from "./lib/actions/nav";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
 import { AddonSlot as AddonSlotView } from "./components/AddonSlot";
-import { focusedSession, fontSizeOf, get, hostsCode, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
+import { codeLayout, focusedSession, fontSizeOf, get, hostsCode, keyFor, prefOf, markUnread, set, useStore, visibleSessions } from "./lib/store";
 import { boot } from "./lib/sync";
 import { startHostViews } from "./lib/hostView";
 import { BrowserWindow, browserOnly } from "./core/SessionBrowser";
@@ -235,8 +235,8 @@ export default function App() {
   // Which (herdr-style) session this window shows: in the title when there's more than one (tells the App's windows apart),
   // in the address (/<project id>, so a reload or a window opened for a project stays on it), and told to the App shell
   const spaceId = useStore((s) => currentSpace(s.layout));
-  const spaceName = useStore((s) => spaceList(s.layout).find((x) => x.id === spaceId)?.name ?? spaceId);
-  const many = useStore((s) => spaceList(s.layout).length > 1);
+  const spaceName = useStore((s) => spaceList(codeLayout(s)).find((x) => x.id === spaceId)?.name ?? spaceId);
+  const many = useStore((s) => spaceList(codeLayout(s)).length > 1);
   const space = { id: spaceId, name: spaceName, many };
   useEffect(() => {
     document.title = space.many ? `${tabName(tab)} · ${space.name} · Gerdr` : `${tabName(tab)} · Gerdr`;

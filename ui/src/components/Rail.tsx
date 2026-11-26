@@ -9,7 +9,7 @@ import { iconTextColor } from "./IconPicker";
 import { solidIconColor } from "./AgentGlyph";
 import { TEXT_ICON } from "@/lib/iconImage";
 import { currentSpace, spaceInitials, spaceList, type Space } from "@/lib/layout";
-import { set, setMode, toggleSidebar, useStore } from "@/lib/store";
+import { codeLayout, set, setMode, toggleSidebar, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { nativeTitleBar, updateWaitsForClick } from "@/lib/native";
 import { StatusDot } from "./AgentIcon";
@@ -44,7 +44,7 @@ const tip = (label: React.ReactNode, el: React.ReactElement) => (
  * with it (tools/scrolltest/tabrenders.mjs).
  */
 function RailProjects() {
-  const layout = useStore((s) => s.layout);
+  const layout = useStore((s) => codeLayout(s));
   const sessions = useStore((s) => s.sessions);
   const unread = useStore((s) => s.unread);
   const badges = useBadges((s) => s.byPanel);

@@ -36,7 +36,7 @@ func (s *Server) quietSession(id string, muted map[string]bool) bool {
 		}
 	}
 	if muted == nil && s.Layout != nil {
-		muted = MutedSessions(s.Layout.Get())
+		muted = MutedSessions(s.LayoutAll())
 	}
 	return muted[id]
 }
@@ -158,7 +158,7 @@ func (s *Server) crossSpace(from, to string) error {
 	if from == "" || to == "" || from == to {
 		return nil
 	}
-	sp := SessionSpaces(s.Layout.Get())
+	sp := SessionSpaces(s.LayoutAll())
 	a, okA := s.sessionSpace(sp, from)
 	b, okB := s.sessionSpace(sp, to)
 	if okA && okB && a != b {
