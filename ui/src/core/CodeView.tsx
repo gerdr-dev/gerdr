@@ -3,7 +3,7 @@ import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
 import { addTab, addTabForSession, focusPane, replaceSessionInPane } from "@/lib/actions";
 import { activeTab, currentSpace, locateSession, sideRows } from "@/lib/layout";
-import { type CodeMenuFn, type CodePaneTagFn, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
+import { type CodeCloseFn, type CodeMenuFn, type CodePaneTagFn, setCodeCloseFallback, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
 import { toggleOverview } from "@/lib/overview";
 import { syncWatch } from "@/lib/sync";
 import {
@@ -177,6 +177,22 @@ export function useCodeRowMenu(fn: CodeMenuFn) {
 }
 
 export type { CodeMenuItem } from "@/lib/codeMenu";
+
+/**
+ * ⌘W / ⇧⌘W where Gerdr has nothing to close (with useCodeOrder, a conversation alone on screen: only splits and
+ * untouched new conversations close): `fn` gets the pane and its conversation, to answer the key the panel's way (ask
+ * where a task goes now). Without it the key does nothing there.
+ */
+export function useCodeCloseFallback(fn: CodeCloseFn) {
+  const key = useContext(PanelKeyContext);
+  const f = useRef(fn);
+  f.current = fn;
+  useEffect(() => {
+    if (!key) return;
+    setCodeCloseFallback(key, (row) => f.current(row));
+    return () => setCodeCloseFallback(key, null);
+  }, [key]);
+}
 
 /**
  * Close the phone's drawer (Code's list over the page): after something in the panel's part of the list opened what

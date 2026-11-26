@@ -374,6 +374,12 @@ declare module "@gerdr/core" {
    * Give the ones worth swiping between (at work, waiting on the person), not your whole list.
    */
   export function useCodeOverview(sessions: string[]): void;
+  /**
+   * With useCodeOrder: ⌘W / ⇧⌘W where Gerdr closes nothing (a conversation alone on screen; it closes only a split's
+   * part and an untouched new conversation). `fn` gets the pane and its conversation, to answer the key your way (ask
+   * where a task goes now). Without it the key does nothing there.
+   */
+  export function useCodeCloseFallback(fn: (row: { pane: string; session?: string }) => void): void;
   /** With useCodeOrder: the number (1–9) to show on this conversation's row while ⌘ is held, else undefined. */
   export function useCodeNumber(session?: string): number | undefined;
   export function useCodeStart(fn: (o: { agent: string; cwd: string; mode?: string; continueFrom?: string }) => Promise<string>): void;

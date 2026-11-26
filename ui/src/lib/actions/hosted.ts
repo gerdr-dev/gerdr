@@ -5,6 +5,7 @@
 // workspaces the panel hides (the person, 2026-11-25: 「快捷键应该直接作用到面板上」). Here they go by the list.
 // The pane keys (split, ⌘D, focus, zoom…) still act on what is on screen, as in Code.
 import type { KeyAction } from "../keys";
+import { codeCloseFallback } from "../codeMenu";
 import { activeTab, leaves, locateSession } from "../layout";
 import { focusedSession, get, hostOrder, markRead, useStore } from "../store";
 import { toggleOverview } from "../overview";
@@ -52,7 +53,8 @@ function previous() {
  *   - a split: that part of it goes, the rest of the tab fills its place (Code's own close);
  *   - a new conversation not spoken to yet (⌘T's, or the new-conversation page): it goes (a panel lists an empty task of
  *     its own only while it's on screen, so ⇧⌘T brings back the same task) and the one shown before it comes back;
- *   - a task alone on screen: nothing. A task isn't closed; it ends by moving it to 已完成.
+ *   - a task alone on screen: Gerdr closes nothing (a task isn't closed; it ends by moving it to 已完成) and hands the key
+ *     to the panel (core useCodeCloseFallback): a task board asks where the task goes now (the person, 2026-11-26).
  * Nothing it closes is stopped while working, and there is no second press to confirm.
  */
 function close(whole: boolean): Run {
@@ -65,7 +67,7 @@ function close(whole: boolean): Run {
     // An agent's conversation with nothing in it yet (no events, no title): what ⌘T opens. A pane with no
     // conversation is the new-conversation page itself
     const empty = !id || (!!s && !s.lastSeq && !s.title);
-    if (!split && !empty) return;
+    if (!split && !empty) return codeCloseFallback(tab.focus, id);
     // The one seen before: the new-conversation page has no conversation, so the last one seen is still "now"
     const back = id ? shown.before : shown.now;
     if (whole) closeTab(undefined, true);

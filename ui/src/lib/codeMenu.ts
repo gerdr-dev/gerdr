@@ -47,6 +47,36 @@ export function codeMenuItems(pane: string, session?: string): CodeMenuItem[] {
 }
 
 /**
+ * What a hosting panel does when ⌘W / ⇧⌘W has nothing to close (a conversation alone on screen: hosted.ts closes
+ * only splits and untouched new conversations). Gerdr does nothing there by itself; the panel may answer the key its
+ * own way (a task board asks where the task goes now).
+ */
+export type CodeCloseFn = (row: { pane: string; session?: string }) => void;
+
+const closeByPanel = new Map<string, CodeCloseFn>();
+
+/** core useCodeCloseFallback: panel `key`'s handler; null takes it away. */
+export function setCodeCloseFallback(key: string, fn: CodeCloseFn | null) {
+  if (fn) closeByPanel.set(key, fn);
+  else closeByPanel.delete(key);
+}
+
+/** Hands an unanswered ⌘W to the hosting panel shown, if it took them. */
+export function codeCloseFallback(pane: string, session?: string) {
+  const s = get();
+  if (s.mode !== "work") return;
+  const space = currentSpace(s.layout);
+  const panel = s.workPanels[space];
+  const key = panel ? `${space}/${panel}` : space;
+  if (!s.codeHosts[key]) return;
+  try {
+    closeByPanel.get(key)?.({ pane, session });
+  } catch (e) {
+    console.error("panel close fallback", e);
+  }
+}
+
+/**
  * A tag a hosting panel puts after a pane's title: what the panel knows about the conversation in it (a task's number
  * and status). Data, not an element: Gerdr draws the chip and, with `items`, the menu it opens (the way to change it,
  * one tap from the pane on a phone too).

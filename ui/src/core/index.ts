@@ -20,6 +20,7 @@ export {
   CodeRow,
   useCodeRowDrop,
   useCodeRowMenu,
+  useCodeCloseFallback,
   type CodeMenuItem,
   showInCodeView,
   jumpInCode,
