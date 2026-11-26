@@ -85,8 +85,10 @@ export function Tile({
 }) {
   const session = useStore((s) => s.sessions[id]);
   const unread = useStore((s) => !!s.unread[id]);
-  const where = useStore((s) => whereOf(s.layout, id, !phone));
   const fromPanel = useStore((s) => !!panelTiles(s));
+  // Where the agent sits in Code (tab · workspace). A hosting panel's tiles come from its own list, and the panel has no
+  // workspaces: the Code workspace that happens to hold the pane meant nothing there.
+  const where = useStore((s) => (fromPanel ? "" : whereOf(s.layout, id, !phone)));
   const front = useWindowInFront();
   // Only while the window is in front (lib/front.ts)
   useEffect(() => {
