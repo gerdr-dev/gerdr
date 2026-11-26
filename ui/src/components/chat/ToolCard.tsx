@@ -243,18 +243,24 @@ export function BuiltinCard({ card, done, undoMs }: { card: Card; done?: CardDon
               <div className={cn(row, "text-muted-foreground/70")}>{t("toolCard.pick")}</div>
             )
           ) : (
-            <div className={cn(row, extra && (ok ? "bg-ok/10" : "bg-warn/10"))}>
-              {extra && <span className="min-w-0 flex-1 whitespace-pre-wrap">{extra}</span>}
-              <span className={cn("min-w-0 truncate text-[12px]", !extra && "flex-1", waiting || grey ? "text-muted-foreground" : "text-ok")}>
-                {waiting ? t("toolCard.sending", { n: left }) : settled ? done!.note : t("toolCard.sent")}
-              </span>
-              {waiting && (
-                <button className="shrink-0 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground" onClick={undo}>
-                  <Undo2 className="mr-1 inline size-3" />
-                  {t("toolCard.undo")}
-                </button>
-              )}
-              {settled && done!.action}
+            // Over an invisible copy of the "other" box, so the row is at least that box's height to the pixel: the
+            // row's own padding matched it, but its 12px status text made a shorter line than the box's 1em one, and
+            // the card shrank a few pixels when answered or ignored (2026-11-26)
+            <div className="grid">
+              <ChoiceOther aria-hidden tabIndex={-1} readOnly className="invisible col-start-1 row-start-1" />
+              <div className={cn(row, "col-start-1 row-start-1", extra && (ok ? "bg-ok/10" : "bg-warn/10"))}>
+                {extra && <span className="min-w-0 flex-1 whitespace-pre-wrap">{extra}</span>}
+                <span className={cn("min-w-0 truncate text-[12px]", !extra && "flex-1", waiting || grey ? "text-muted-foreground" : "text-ok")}>
+                  {waiting ? t("toolCard.sending", { n: left }) : settled ? done!.note : t("toolCard.sent")}
+                </span>
+                {waiting && (
+                  <button className="shrink-0 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground" onClick={undo}>
+                    <Undo2 className="mr-1 inline size-3" />
+                    {t("toolCard.undo")}
+                  </button>
+                )}
+                {settled && done!.action}
+              </div>
             </div>
           )}
           {multi && open && (
