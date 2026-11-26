@@ -171,7 +171,9 @@ export function TabView({ tab }: { tab: Tab }) {
   const seams: { split: PaneSplit; box: Box }[] = [];
   place(root, FULL, panes, seams);
   const zoom = !phone && tab.zoom && panes.some((p) => p.pane.id === tab.zoom) ? tab.zoom : undefined;
-  // 分屏时和 herdr 一样：每个 pane 一圈边框、中间留缝，焦点那个边框高亮。只有一个 pane（或放大着）时不画框（省地方）。
+  // Split panes are flat: edge to edge, a 1px line between them, the focused one told apart only by its neighbours'
+  // dimmed title bars. Asked for: rounded cards with gaps and a brand ring round the focused one were loud, looked
+  // nothing like a lone pane and wasted space; a brand line along the focused pane's top was still too loud.
   const anim = useZoomAnim(zoom, phone);
   // Frames stay on while a zoom animates (the growing pane looks like a window sliding over its neighbours) and drop at the end.
   // Only the docked panes count: one docked pane under floating ones is drawn as a tab's only pane (asked for: framed,
@@ -181,8 +183,8 @@ export function TabView({ tab }: { tab: Tab }) {
   // transition, so only its clipping box moves: the chat list / xterm see one resize at the zoomed end instead of one per
   // frame (re-measuring every row or refitting the terminal each frame is what made a naive width/height transition stutter).
   // Only the body (PaneBody): the frame and title bar follow the moving box, or the right / bottom border and the title
-  // bar's buttons would sit outside it, clipped, until the end. Minus the 3px frame padding on each side.
-  const pin = anim && box.current ? { width: box.current.clientWidth - 6, height: box.current.clientHeight - 6 } : undefined;
+  // bar's buttons would sit outside it, clipped, until the end.
+  const pin = anim && box.current ? { width: box.current.clientWidth, height: box.current.clientHeight } : undefined;
   let count: (Count & { pane: string }) | undefined;
   if (phone && panes.length < all.length) {
     const p = panes.find((x) => x.pane.id === tab.focus)?.pane ?? panes[0].pane;
@@ -221,10 +223,8 @@ export function TabView({ tab }: { tab: Tab }) {
     window.addEventListener("pointercancel", up);
   };
 
-  // Outer 3px + each pane's own 3px: 6px to the edges and 6px between panes, the same inset as the sidebar's rows
-  // and the tab bar's tabs, so the cards line up with both across the divider
   return (
-    <div className={cn("h-full min-h-0", framed && "p-[3px]")}>
+    <div className="h-full min-h-0">
       <div ref={box} className="relative h-full w-full">
         {panes.map(({ pane, box: b }) => {
           const z = zoom === pane.id;
@@ -244,14 +244,16 @@ export function TabView({ tab }: { tab: Tab }) {
               }}
               className={cn(
                 "absolute min-h-0 min-w-0 overflow-hidden",
-                framed && "p-[3px]",
+                // The dividers: each pane draws the line on its left / top side when something is there
+                framed && !z && at.x > 0.0001 && "border-l",
+                framed && !z && at.y > 0.0001 && "border-t",
                 // Neighbours stay put under the moving pane and are only hidden once it covers them.
                 zoom && !z && !anim && "invisible",
                 moving ? "z-20" : zoom && z && "z-10",
               )}
             >
               {/* Opaque while moving: it slides over its neighbours, which panes don't otherwise need to cover */}
-              <div className={cn("h-full w-full", moving && "rounded-md bg-background")}>
+              <div className={cn("relative h-full w-full", moving && "bg-background")}>
                 <PanePin.Provider value={moving ? pin : undefined}>
                   <PaneView pane={pane} tab={tab} framed={framed} zoomed={z || undefined} count={count?.pane === pane.id ? count : undefined} />
                 </PanePin.Provider>
@@ -271,7 +273,7 @@ export function TabView({ tab }: { tab: Tab }) {
                 onPointerDown={(e) => startDrag(e, split, b)}
                 style={style}
                 className={cn(
-                  // 缝本身透明（两边各有边框），悬停时亮一条提示能拖
+                  // Transparent (the 1px divider is the panes' own border), lit on hover to show it can be dragged
                   "absolute z-10 bg-transparent bg-clip-content transition-colors hover:bg-brand/50",
                   row ? "w-1.5 -translate-x-1/2 cursor-col-resize px-[2px]" : "h-1.5 -translate-y-1/2 cursor-row-resize py-[2px]",
                   // touch-none: a fast touch drag otherwise turns into a page pan (pointercancel) and the seam stops following.
@@ -473,7 +475,7 @@ function FloatPane({ pane, tab, box: fb, area }: { pane: PaneLeaf; tab: Tab; box
         style={{ left: geom.left, top: geom.top, width: geom.w, height: geom.h }}
         className={cn("absolute min-h-0 min-w-0 p-[3px]", focused ? "z-40" : "z-30")}
       >
-        <div className="h-full w-full rounded-md bg-background shadow-2xl">
+        <div className={cn("h-full w-full overflow-hidden rounded-md border bg-background shadow-2xl", focused ? "border-brand" : "border-border")}>
           <FloatMove.Provider value={onMove}>
             <FloatFitDrawn.Provider value={onFitDrawn}>
               <FloatViewOnly.Provider value={(geom.w - FLOAT_CHROME_W) / pwMax < FLOAT_OPERABLE}>
@@ -558,14 +560,20 @@ type Count = { i: number; n: number; next: string };
  * 被拖着的那个 pane 淡下去，和 tab 栏里被拖的 tab 一样。
  */
 /**
- * A lone pane's title bar sits right beside the desktop sidebar's header (no tab bar above it then), so it takes that
- * header's height and the two bottom borders line up. Split panes are framed and keep the short bar.
+ * The title bars sit right beside the desktop sidebar's header, so they take that header's height and the bottom
+ * borders line up. Split panes too, now that they are flat and start at the very top (no inset frame).
  */
-function usePaneHeadHeight(framed: boolean) {
+function usePaneHeadHeight(_framed: boolean) {
   const phone = usePhone();
   const besideSidebar = useStore((s) => s.sidebar);
-  return !framed && besideSidebar && !phone ? "h-10" : "h-8";
+  return besideSidebar && !phone ? "h-10" : "h-8";
 }
+
+/**
+ * A split pane that isn't focused: its title bar fades and its icons (the agent's mark, folder, branch…) go grey, so the
+ * focused one is the only coloured bar. Only svg / img: the status dots are spans and keep their colour (waiting, running).
+ */
+const DIM_HEAD = "opacity-70 [&_svg]:grayscale [&_img]:grayscale";
 
 function usePaneDrag(paneId: string, ghost: TabGhost) {
   const phone = usePhone();
@@ -655,18 +663,13 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
   return (
     <div
       data-pane-id={pane.id}
-      className={cn(
-        "flex h-full min-h-0 flex-col",
-        framed && "overflow-hidden rounded-md border",
-        framed && (focused ? "border-brand" : "border-border"),
-        drag.dragging && "opacity-40",
-      )}
+      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden", drag.dragging && "opacity-40")}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       {/* 手机上和顶栏两头对齐：左 16px，16px 图标的中线落在 24px（= ☰：px-1.5 + 36px 按钮）；右边照旧 12px，24px 的 ⋯ 按钮中线也落在 24px（= 右上角 +）。三种 pane 的标题栏同一个边距 */}
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         <Bot className="size-4 shrink-0 text-muted-foreground" />
         <FadeText className="min-w-0 shrink-[2] text-muted-foreground">{task?.subagent || t("panes.subAgent")}</FadeText>
@@ -721,17 +724,12 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   return (
     <div
       data-pane-id={pane.id}
-      className={cn(
-        "flex h-full min-h-0 flex-col",
-        framed && "overflow-hidden rounded-md border",
-        framed && (focused ? "border-brand" : "border-border"),
-        drag.dragging && "opacity-40",
-      )}
+      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden", drag.dragging && "opacity-40")}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         <FileText className="size-4 shrink-0 text-muted-foreground" />
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{basename(path)}</FadeText>
@@ -792,8 +790,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       data-pane-id={pane.id}
       className={cn(
         "flex h-full min-h-0 flex-col",
-        framed && "overflow-hidden rounded-md border",
-        framed && (focused ? "border-brand" : "border-border"),
+        framed && "overflow-hidden",
         // floating too small to use: the page only shows (FloatViewOnly), and the border says so
         viewOnly && "border-dashed",
         drag.dragging && "opacity-40",
@@ -805,7 +802,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           project={b.project}
           tab={b.tab}
           url={url}
-          headClassName={cn(headH, !focused && many && "opacity-70")}
+          headClassName={cn(headH, !focused && many && DIM_HEAD)}
           onHeadPointerDown={drag.onPointerDown}
           Body={PaneBody}
           end={
@@ -840,7 +837,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           }}
           onFitDrawn={fitDrawn}
           viewOnly={viewOnly}
-          headClassName={cn(headH, !focused && many && "opacity-70")}
+          headClassName={cn(headH, !focused && many && DIM_HEAD)}
           onHeadPointerDown={drag.onPointerDown}
           extra={
             <>
@@ -968,17 +965,12 @@ function FolderPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; 
   return (
     <div
       data-pane-id={pane.id}
-      className={cn(
-        "flex h-full min-h-0 flex-col",
-        framed && "overflow-hidden rounded-md border",
-        framed && (focused ? "border-brand" : "border-border"),
-        drag.dragging && "opacity-40",
-      )}
+      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden", drag.dragging && "opacity-40")}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         <FolderOpen className="size-4 shrink-0 text-brand" />
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{f.session ? t("folder.open") : basename(f.path)}</FadeText>
@@ -1011,17 +1003,12 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   return (
     <div
       data-pane-id={pane.id}
-      className={cn(
-        "flex h-full min-h-0 flex-col",
-        framed && "overflow-hidden rounded-md border",
-        framed && (focused ? "border-brand" : "border-border"),
-        drag.dragging && "opacity-40",
-      )}
+      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden", drag.dragging && "opacity-40")}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         <SquareTerminal className="size-4 text-muted-foreground" />
         {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
@@ -1169,17 +1156,12 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   return (
     <div
       data-pane-id={pane.id}
-      className={cn(
-        "flex h-full min-h-0 flex-col",
-        framed && "overflow-hidden rounded-md border",
-        framed && (focused ? "border-brand" : "border-border"),
-        drag.dragging && "opacity-40",
-      )}
+      className={cn("flex h-full min-h-0 flex-col", framed && "overflow-hidden", drag.dragging && "opacity-40")}
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
         onPointerDown={drag.onPointerDown}
-        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && "opacity-70")}
+        className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         {alone && session ? (
           <PhonePath path={session.workdir ?? session.cwd} branch={session.branch} home={home} agent={session.agent} />
