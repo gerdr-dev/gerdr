@@ -205,6 +205,28 @@ function loadCodeHosts(): Record<string, CodeHost> {
     return {};
   }
 }
+/**
+ * The overview tiles a hosting panel last gave (core useCodeOverview), remembered with the hosts and for the same
+ * reason: until the panel has loaded and read its own list again, the phone's overview shows these instead of falling
+ * back to Code's "active", which a panel's list doesn't show (asked for: after a reload it flashed 进行中是空的, then
+ * the panel's tasks).
+ */
+const OVERVIEWS_KEY = "gerdr.codeOverviews";
+function loadCodeOverviews(): Record<string, string[]> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(OVERVIEWS_KEY) || "{}") ?? {};
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(saved)) if (Array.isArray(v) && v.every((x) => typeof x === "string")) out[k] = v;
+    return out;
+  } catch {
+    return {};
+  }
+}
+function saveCodeOverviews(o: Record<string, string[]>) {
+  try {
+    localStorage.setItem(OVERVIEWS_KEY, JSON.stringify(o));
+  } catch {}
+}
 function saveCodeHosts(hosts: Record<string, CodeHost>) {
   try {
     localStorage.setItem(HOSTS_KEY, JSON.stringify(Object.fromEntries(Object.entries(hosts).map(([k, v]) => [k, v.list]))));
@@ -247,7 +269,7 @@ export const useStore = create<State>(() => ({
   workPanels: loadWorkPanels(),
   codeHosts: loadCodeHosts(),
   codeDirs: {},
-  codeOverviews: {},
+  codeOverviews: loadCodeOverviews(),
   panelUpdates: 0,
   codeSlot: null,
   overview: loadOverview(),
@@ -460,6 +482,7 @@ export function setCodeOverview(key: string, ids: string[] | null) {
   if (ids) next[key] = ids;
   else delete next[key];
   set({ codeOverviews: next });
+  saveCodeOverviews(next);
 }
 
 /** The panel on screen hosts Code (core CodeView). */
@@ -486,7 +509,9 @@ export function setCodeHost(key: string, host: CodeHost | null) {
 
 /** Panel `key` has drawn (or failed) without mounting CodeView: a remembered "it hosts Code" was wrong, give its page back. */
 export function dropGuessedHost(key: string) {
-  if (guessedHosts.has(key)) setCodeHost(key, null);
+  if (!guessedHosts.has(key)) return;
+  setCodeHost(key, null);
+  setCodeOverview(key, null);
 }
 
 export function setMode(mode: "agents" | "work") {
