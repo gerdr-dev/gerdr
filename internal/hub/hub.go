@@ -498,6 +498,20 @@ func (h *Hub) Agents() []map[string]any {
 			if c := optionChoices(o.Config, "effort"); len(c) > 0 {
 				m["efforts"] = c
 			}
+			// modes: what `start` takes as mode (claude: default / acceptEdits / plan / auto; codex: its own; a role:
+			// its engine's). Each agent names its own, so a panel can't hard-code them (codex's full-access was missing
+			// from the Superagent's list).
+			if o.Modes != nil && len(o.Modes.AvailableModes) > 0 {
+				var c []map[string]any
+				for _, x := range o.Modes.AvailableModes {
+					v := map[string]any{"id": string(x.Id), "name": x.Name}
+					if x.Description != nil && *x.Description != "" {
+						v["description"] = *x.Description
+					}
+					c = append(c, v)
+				}
+				m["modes"] = c
+			}
 		}
 	}
 	return out

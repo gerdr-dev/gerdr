@@ -568,7 +568,7 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "agents",
-		Short: i18n.S("能开哪些 agent（new --agent 填 id）：内置的 + 用户在设置里建的角色，角色带它的提示词（看它是干什么的），还有可选的模型和思考强度（new --model / --effort 填 id，name 是界面上显示的名字和版本）", "Agents you can start (pass the id to new --agent): built-in ones + roles the user made in Settings, each role with its prompt (so you can see what it's for), and the models and efforts it offers (pass the id to new --model / --effort; name is what the picker shows, with the version)"),
+		Short: i18n.S("能开哪些 agent（new --agent 填 id）：内置的 + 用户在设置里建的角色，角色带它的提示词（看它是干什么的），还有可选的模型、思考强度和权限模式（new --model / --effort / --mode 填 id，name 是界面上显示的名字和版本）", "Agents you can start (pass the id to new --agent): built-in ones + roles the user made in Settings, each role with its prompt (so you can see what it's for), and the models, efforts and permission modes it offers (pass the id to new --model / --effort / --mode; name is what the picker shows, with the version)"),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			var h struct {
 				Agents []map[string]any `json:"agents"`
@@ -588,9 +588,9 @@ and hand it a task, wait for it to finish, read its reply. Refer to a session by
 				if b, _ := a["base"].(string); b != "" {
 					v["base"] = b
 				}
-				// What new --model / --effort take, with the names the picker shows ("fable" = "Fable 5.2"):
+				// What new --model / --effort / --mode take, with the names the picker shows ("fable" = "Fable 5.2"):
 				// known once this kind of agent has run here
-				for _, k := range []string{"models", "efforts"} {
+				for _, k := range []string{"models", "efforts", "modes"} {
 					if x, ok := a[k]; ok {
 						v[k] = x
 					}

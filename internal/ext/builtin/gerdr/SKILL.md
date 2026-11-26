@@ -89,7 +89,8 @@ gerdr session new --agent codex --title reviewer \
 - `--model` / `--effort` pick the model and thinking effort: the ids under that agent's `models` / `efforts` in
   `gerdr session agents`. An id is often an alias (claude's `fable`); its `name` says which version it is now
   (`Fable 5.2`), so check there when the user asks for a specific version instead of guessing. Not given = the user's
-  default for that agent. Built-in engines and their roles default to `medium` when the model supports it.
+  default for that agent. Built-in engines and their roles default to `medium` when the model supports it. `--mode`
+  takes an id under that agent's `modes` there (each agent names its own).
   An id the agent doesn't offer is refused with the list. `models` is missing for an agent that
   hasn't run on this computer yet;
 - `--title` 起个短名字，之后可以 `gerdr session send reviewer …`；这个名字固定：不会被自动起的标题换掉，/clear 之后也还在。
