@@ -256,6 +256,11 @@ function MountRoot({ project }: { project: string }) {
   useEffect(() => {
     if (error) dropGuessedHost(project);
   }, [error, project]);
+  const loading = !error && !drawn;
+  useEffect(() => {
+    setPageLoading(project, loading);
+    return () => setPageLoading(project, false);
+  }, [project, loading]);
   const manual = useRef(0);
   const retry = useCallback(() => {
     // A second failed try by hand: the failure may be a module the entry imports, which the browser can keep for this
@@ -284,6 +289,26 @@ function MountRoot({ project }: { project: string }) {
       {error && <MountError project={project} error={error} net={netFail && !info?.error} onRetry={retry} />}
       {!error && !drawn && <LoadingScreen inline text={t("common.loading")} />}
     </div>
+  );
+}
+
+/**
+ * The panel pages still loading (MountRoot's loader up), for the phone's bar to stay out of the way meanwhile: its
+ * 页面 / 助手 switch is gone the moment a panel that hosts Code has loaded, so showing it first only made the screen
+ * change twice (asked for).
+ */
+const loadingPages = new Set<string>();
+const loadingSubs = new Set<() => void>();
+function setPageLoading(project: string, on: boolean) {
+  if (on === loadingPages.has(project)) return;
+  if (on) loadingPages.add(project);
+  else loadingPages.delete(project);
+  for (const f of loadingSubs) f();
+}
+function usePageLoading(project: string): boolean {
+  return useSyncExternalStore(
+    (f) => (loadingSubs.add(f), () => void loadingSubs.delete(f)),
+    () => loadingPages.has(project),
   );
 }
 
@@ -928,6 +953,7 @@ function WorkViewBody() {
   const showChat = useCallback(() => setSide("chat"), []);
   const barFilled = usePhoneBarFilled(phone ? project : null);
   const barSlot = useCallback((el: HTMLDivElement | null) => setPhoneBarSlot(project, el), [project]);
+  const pageLoading = usePageLoading(project);
   // Every panel of the project removed, its own Work too: nothing to show but the way to add one
   if (loaded && !panels.length) return <NoPanels space={space} ownRemoved={ownRemoved} />;
   if (ownChat && !phone)
@@ -943,7 +969,7 @@ function WorkViewBody() {
   if (phone) {
     return (
       <div className="flex h-full flex-col bg-background">
-        <div data-phone-titlebar className="flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5">
+        <div data-phone-titlebar className={cn("flex h-11 shrink-0 items-center gap-1 border-b bg-sidebar px-1.5", pageLoading && at === "page" && "hidden")}>
           {/* The drawer, as in Code (PhoneBar): projects, the Code / panel switch, settings, and the panel's own items
               (core/phoneMenu.ts). It used to be a Code button, which left a phone no way to anything else */}
           <DrawerButton />
