@@ -315,13 +315,18 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   // such a panel may not even show (the repositories in its settings). Code mode keeps the workspaces.
   const panelDirs = useStore((s) => hostDirs(s));
   const wsDirs = useMemo(() => {
+    // A panel's path may be written "~/…" (the Superagent panel's settings take what the person typed): expanded, or
+    // the chip never matched the folder it picked and showed as not chosen
     if (panelDirs)
-      return panelDirs.map((d) => ({ id: d.path, cwd: trimSlash(d.path), name: d.name || trimSlash(d.path).split("/").pop() || d.path, color: d.color }));
+      return panelDirs.map((d) => {
+        const cwd = trimSlash(expand(d.path, home));
+        return { id: d.path, cwd, name: d.name || cwd.split("/").pop() || d.path, color: d.color };
+      });
     const seen = new Set<string>();
     return paneView(layout, pane.id)
       .filter((w) => w.cwd && !seen.has(w.cwd) && (seen.add(w.cwd), true))
       .map((w) => ({ id: w.id, cwd: w.cwd!, name: w.name, color: undefined as string | undefined }));
-  }, [layout, pane.id, panelDirs]);
+  }, [layout, pane.id, panelDirs, home]);
   // Whatever this pane becomes goes into the workspace whose folder is picked: the chips above name workspaces, and
   // picking one while the empty pane sat in another left the new session stuck in the wrong group (user report). The
   // pane's own workspace wins when it has that folder too; another computer's folders aren't these workspaces.

@@ -22,8 +22,16 @@ export function ownerHost(session: string, s: Pick<State, "sessions" | "codeHost
   const ses = s.sessions[session];
   if (!ses) return undefined;
   const k = ses.tags?.panel;
-  // A panel that doesn't have a Code of its own shows its conversations in Code ("open in Code"), as before
-  return k && ownLayout(s, k) ? k : "";
+  if (!k) return "";
+  // Whether a panel has a Code of its own is only known on a device where its CodeView has mounted (codeHosts). Not
+  // known here = leave its panes where they are: taking it for Code's moved every pane of the panel into Code's view on
+  // a device that hadn't opened the panel (a phone, another window), the device showing the panel moved them back, and
+  // the two kept overwriting each other's layout, so a conversation just started from the panel lost its pane (user
+  // report: 开始 did nothing, the task was made each time).
+  const host = s.codeHosts[k];
+  if (!host) return undefined;
+  // A panel that adds its part over Code's list (list="add") shows its conversations in Code ("open in Code"), as before
+  return host.list === "replace" ? k : "";
 }
 
 /** The view on screen: "" = Code mode, a panel key = that panel's Code; null = a panel page that isn't Code. */

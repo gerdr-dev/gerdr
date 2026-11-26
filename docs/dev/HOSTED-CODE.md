@@ -35,7 +35,11 @@ conversations carry `tags.panel`; importing a Code conversation into the panel s
   2. **a conversation's pane is in its owner's view** (`placeOwned`): `tags.panel` of a panel with its own layout →
      that panel's, everything else → Code's. A pane in the wrong one moves, as its own tab, into the right view's
      workspace for its directory. This is also the one-time migration of layouts from before, and it catches any code
-     path that opens a tab without knowing about views. Conversations not loaded yet are left alone.
+     path that opens a tab without knowing about views. Conversations not loaded yet are left alone, and so are a
+     panel's while this device doesn't know whether that panel has its own layout (`codeHosts` is filled only where its
+     CodeView has mounted). The layout is shared by every device: a phone or window that hadn't opened the panel once
+     took its conversations for Code's and moved them, the device showing the panel moved them back, and in the tug a
+     conversation just started there lost its pane (开始 seemed to do nothing).
 - `addTabForSession` and `openSessionNear` place a conversation in its owner's view directly, so it doesn't land in the
   wrong one first.
 - `useCodeRows()` gives the panel its own panes; `useCodeRows("code")` gives Code mode's (what 从 Code 导入 offers).
