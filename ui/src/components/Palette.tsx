@@ -3,7 +3,7 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { basename, focusSession } from "@/lib/actions";
 import { allCommands, runCommand } from "@/lib/commands";
 import { formatCombo } from "@/lib/keys";
-import { locateSession } from "@/lib/layout";
+import { currentSpace, locateSession, spaceOf } from "@/lib/layout";
 import { panelTitle } from "@/lib/panels";
 import { useWorkProject } from "@/lib/work";
 import { usePanelSearch } from "@/core/search";
@@ -77,9 +77,14 @@ export function Palette({ open }: { open: boolean }) {
           ))}
         </CommandGroup>
         <CommandGroup heading={t("palette.sessions")}>
-          {/* 只列开在 pane 里的：关掉的 pane 连 agent 一起关了（shutdownGone），这里再搜出来像没关掉。全部会话在 prefix+g */}
+          {/* Only those open in a pane of the project on screen: a closed pane shut its agent down with it (shutdownGone),
+              so finding it here would look like it never closed; another project's read as noise over a panel's own rows
+              (the person, 2026-11-26). Every conversation is in prefix+g */}
           {Object.values(sessions)
-            .filter((s) => locateSession(layout, s.id))
+            .filter((s) => {
+              const at = locateSession(layout, s.id);
+              return !!at && spaceOf(at.ws) === currentSpace(layout);
+            })
             .sort((a, b) => b.updatedAt - a.updatedAt)
             .map((s) => (
               <CommandItem
