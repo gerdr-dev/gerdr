@@ -21,7 +21,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         success: <CircleCheckIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,
         warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
+        error: <OctagonXIcon className="size-4 text-bad" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
       style={
@@ -38,9 +38,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
           pointerEvents: "auto",
         } as React.CSSProperties
       }
-      // An error looked like any other toast (the icon alone, in the text's colour): its text and border in the bad
-      // token, the card's background left as it is, the way an error note looks in the composer
-      toastOptions={{ classNames: { error: "text-bad! border-bad/40!" } }}
+      // An error is told apart by its icon in the bad token and nothing else: the whole text and border in red was
+      // loud enough that the user asked for it to be toned down, and the text reads better in the normal colour
       {...props}
     />
   )
