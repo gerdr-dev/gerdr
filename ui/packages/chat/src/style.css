@@ -98,6 +98,14 @@
   background: color-mix(in oklch, currentColor 10%, transparent);
   border-color: color-mix(in oklch, currentColor 20%, transparent);
 }
+/* Links (URLs and local paths) are brand-coloured, which is the bubble's own colour: the text's colour, underlined */
+.is-user .gerdr-md a {
+  color: inherit;
+  text-decoration-color: color-mix(in oklch, currentColor 55%, transparent);
+}
+.is-user .gerdr-md a:hover {
+  text-decoration-color: currentColor;
+}
 .is-user .gerdr-md [data-streamdown="list-item"]::marker {
   color: color-mix(in oklch, currentColor 70%, transparent);
 }
