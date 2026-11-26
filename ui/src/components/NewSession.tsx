@@ -508,6 +508,8 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
                   data-on={w.cwd === trimSlash(abs) || undefined}
                   title={tilde(w.cwd, home)}
                   onClick={() => setCwd(tilde(w.cwd, home))}
+                  // Same as double-clicking an agent card: pick it and start right away
+                  onDoubleClick={() => start(undefined, undefined, agent, w.cwd)}
                   className={cn(
                     "flex max-w-48 shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors",
                     w.cwd === trimSlash(abs) ? "border-brand bg-brand/8" : "hover:bg-accent",
