@@ -11,7 +11,7 @@
  */
 export { SessionChat } from "./SessionChat";
 // An agent's icon as Gerdr draws it (the person's own icon / colour for a role included), for a page's own rows
-export { AgentIcon } from "@/components/AgentIcon";
+export { AgentIcon, StatusDot, dotStatus } from "@/components/AgentIcon";
 export { FeedChat, type FeedEntry } from "./FeedChat";
 // Code's own layout in the panel's place, with the panel's part at the top of its list (CodeView.tsx)
 export {

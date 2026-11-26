@@ -43,9 +43,13 @@ export function Palette({ open }: { open: boolean }) {
                   setTimeout(() => x.onSelect(), 0);
                 }}
               >
-                {x.icon}
-                <span className="min-w-0 truncate">{x.label}</span>
-                {x.detail && (
+                {x.content ?? (
+                  <>
+                    {x.icon}
+                    <span className="min-w-0 truncate">{x.label}</span>
+                  </>
+                )}
+                {!x.content && x.detail && (
                   <span
                     className={cn(
                       "ml-auto shrink-0 text-[11px]",

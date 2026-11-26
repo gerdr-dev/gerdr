@@ -62,6 +62,14 @@ declare module "@gerdr/core" {
   /** An agent's icon as Gerdr draws it everywhere (`agent`: its id, a session's `agent`), for a page's own rows. */
   export function AgentIcon(props: { agent: string; className?: string }): ReactNode;
 
+  /**
+   * A conversation's status dot as Code's rows draw it (pulsing amber running, red waiting / error, green unread).
+   * `status`: dotStatus(session), or a session's `status`.
+   */
+  export function StatusDot(props: { status?: string; unread?: boolean; className?: string }): ReactNode;
+  /** The dot's status for a session: its `status`, or "background" while idle with a background task running. */
+  export function dotStatus(s?: { status: string; tasks?: { status: string }[] }): string | undefined;
+
   /** The chat's running indicator (the dots by "working…"). */
   export function PixelLoader(props: { className?: string }): ReactNode;
 
@@ -271,6 +279,12 @@ declare module "@gerdr/core" {
     keywords?: string;
     /** E.g. a lucide icon element. */
     icon?: ReactNode;
+    /**
+     * The whole row drawn by the panel, in place of icon / label / detail: when ⌘K should show the same row as the
+     * panel's own list (its icon, number, second line, status dot). label / detail / keywords are still what's
+     * matched. Redrawn with every render of the page, so it stays live.
+     */
+    content?: ReactNode;
     /** The palette closes, then this runs (open the thing in the page). */
     onSelect: () => void;
   }

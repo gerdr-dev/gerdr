@@ -19,6 +19,12 @@ export type SearchItem = {
   /** More words to match that aren't shown (a summary, tags). */
   keywords?: string;
   icon?: ReactNode;
+  /**
+   * The whole row, drawn by the panel in place of icon / label / detail: for rows that should look like the panel's
+   * own list (a board's task row: its agent, number, line and dot). label / detail / keywords are still what's
+   * matched. The palette redraws it with every render of the panel, so it stays live (a dot that starts pulsing).
+   */
+  content?: ReactNode;
   /** The palette closes, then this runs. */
   onSelect: () => void;
 };
@@ -37,7 +43,7 @@ export function usePanelSearch(key: string | null | undefined): Entry | undefine
 
 /**
  * Give this panel's rows to the command palette: call it in the panel's page with the current list. Republished only
- * when ids / labels / details / keywords change; onSelect always runs the latest one. heading: the group's name
+ * when ids / labels / details / keywords change (every render when rows bring their own content); onSelect always runs the latest one. heading: the group's name
  * (defaults to the panel's).
  */
 export function useSearchItems(items: SearchItem[], opts?: { heading?: string }) {
@@ -45,9 +51,12 @@ export function useSearchItems(items: SearchItem[], opts?: { heading?: string })
   const latest = useRef(items);
   latest.current = items;
   const heading = opts?.heading;
-  const sig = items
-    .map((x) => `${x.id ?? x.label}\u0000${x.label}\u0000${x.detail ?? ""}\u0000${x.tone ?? ""}\u0000${x.pill ? 1 : 0}\u0000${x.keywords ?? ""}`)
-    .join("\u0001");
+  // Rows the panel draws itself can't be compared: republished with every render (a fresh object never equals the last)
+  const sig = items.some((x) => x.content != null)
+    ? {}
+    : items
+        .map((x) => `${x.id ?? x.label}\u0000${x.label}\u0000${x.detail ?? ""}\u0000${x.tone ?? ""}\u0000${x.pill ? 1 : 0}\u0000${x.keywords ?? ""}`)
+        .join("\u0001");
   useEffect(() => {
     if (!key) return;
     lists.set(key, {
