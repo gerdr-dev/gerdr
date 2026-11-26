@@ -4,6 +4,10 @@ import { addTab, tabName } from "@/lib/actions";
 import { activeWs, allLeaves, currentSpace, findLeaf, spaceOf } from "@/lib/layout";
 import { applyTabLabel } from "@/lib/addons";
 import { set, useStore } from "@/lib/store";
+import { useSwipePages } from "@/lib/phoneSwipe";
+import { basename } from "@/lib/actions/shared";
+import type { Layout } from "@/lib/layout";
+import type { SessionSummary } from "@/lib/types";
 import { FadeText } from "./FadeText";
 import { StatusDot } from "./AgentIcon";
 import { InboxButton } from "./Inbox";
@@ -26,9 +30,12 @@ export function PhoneBar() {
   const unread = useStore((s) => s.unread);
   useStore((s) => s.addonVersion);
   const ws = activeWs(layout);
-  const ti = ws.tabs.findIndex((t) => t.id === ws.activeTab);
-  const tab = ws.tabs[ti] ?? ws.tabs[0];
-  const st = tabStatus(tab, sessions, unread);
+  const tab = ws.tabs.find((t) => t.id === ws.activeTab) ?? ws.tabs[0];
+  // The title is the page drawn (PhonePager: the tab held on screen while a switched-to one catches up), so it changes
+  // with the page, and the neighbours' titles wait beside it to fade in as a swipe drags their page in (followSwipe)
+  const swipe = useSwipePages();
+  const cur = pageTitle(layout, sessions, unread, swipe.shown ?? tab.id) ?? { title: tabName(tab), ...tabStatus(tab, sessions, unread) };
+  const side = ([-1, 1] as const).map((at) => ({ at, p: pageTitle(layout, sessions, unread, at < 0 ? swipe.prev : swipe.next) }));
   // The phone shows the focused pane only. When that is already an empty one (the new-session screen), + would only
   // stack another identical tab on top of it, so it's off.
   const shown = findLeaf(tab.root, tab.zoom ?? tab.focus);
@@ -56,11 +63,31 @@ export function PhoneBar() {
         )}
       </DrawerButton>
       {/* data-titlebar-drag: in a narrow App window the title drags the window instead (index.css); ☰ opens the drawer */}
-      <button data-titlebar-drag className="-ml-1.5 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md pr-1.5 pl-0 text-left" onClick={openDrawer}>
-        <FadeText className="min-w-0 text-[13px] font-medium">{applyTabLabel(tab, ti, ws, tabName(tab))}</FadeText>
+      <button
+        data-titlebar-drag
+        className="relative -ml-1.5 flex h-9 min-w-0 flex-1 items-center overflow-hidden rounded-md pr-1.5 pl-0 text-left"
+        onClick={openDrawer}
+      >
         {/* With a single pane its title bar shows the path instead of the title and dot (Panes.tsx PhonePath), so the dot
             is this session's; with several it sums up the tab */}
-        <StatusDot status={st.status} unread={st.unread} />
+        <span data-swipe-title="0" className="flex min-w-0 items-center gap-1.5">
+          <FadeText className="min-w-0 text-[13px] font-medium">{cur.title}</FadeText>
+          <StatusDot status={cur.status} unread={cur.unread} />
+        </span>
+        {side.map(
+          ({ at, p }) =>
+            p && (
+              <span
+                key={at}
+                data-swipe-title={at}
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-1.5 left-0 flex items-center gap-1.5 opacity-0"
+              >
+                <FadeText className="min-w-0 text-[13px] font-medium">{p.title}</FadeText>
+                <StatusDot status={p.status} unread={p.unread} />
+              </span>
+            ),
+        )}
       </button>
       {/* Square 36px buttons with no gap between them (narrower boxes were tried and felt cramped) */}
       <div className="flex shrink-0 items-center">
@@ -71,4 +98,18 @@ export function PhoneBar() {
       </div>
     </div>
   );
+}
+
+/** A page's title and status dot (PhonePager's keys): the tab's label, or the conversation's for one with no tab yet. */
+function pageTitle(layout: Layout, sessions: Record<string, SessionSummary>, unread: Record<string, true>, key: string | undefined) {
+  if (!key) return undefined;
+  if (key.startsWith("s:")) {
+    const ss = sessions[key.slice(2)];
+    return ss && { title: ss.title || basename(ss.cwd), status: ss.status as string | undefined, unread: !!unread[ss.id] };
+  }
+  for (const ws of layout.workspaces) {
+    const i = ws.tabs.findIndex((t) => t.id === key);
+    if (i >= 0) return { title: applyTabLabel(ws.tabs[i], i, ws, tabName(ws.tabs[i])), ...tabStatus(ws.tabs[i], sessions, unread) };
+  }
+  return undefined;
 }
