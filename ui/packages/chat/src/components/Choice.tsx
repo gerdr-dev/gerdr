@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from "react";
+import type { HTMLAttributes, InputHTMLAttributes, KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
 import { Check } from "lucide-react";
 import { cn } from "../utils";
 
@@ -34,7 +34,9 @@ export function ChoiceList({ children, className }: { children: ReactNode; class
   return <div className={cn("-mx-2.5 flex flex-col gap-1.5", className)}>{children}</div>;
 }
 
-type RowProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
+type RowProps = Omit<HTMLAttributes<HTMLDivElement>, "children"> & {
+  /** Not answerable now (being sent, or the card is settled): no click, no hover. */
+  disabled?: boolean;
   label: ReactNode;
   /** Muted text after the label (what the option costs, what it means). */
   desc?: ReactNode;
@@ -54,9 +56,9 @@ type RowProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
 };
 
 const pickedRow = {
-  muted: "bg-muted enabled:hover:bg-muted",
-  warn: "border-warn/40 bg-warn/10 enabled:hover:bg-warn/10",
-  ok: "border-ok/40 bg-ok/10 enabled:hover:bg-ok/10",
+  muted: "bg-muted hover:bg-muted",
+  warn: "border-warn/40 bg-warn/10 hover:bg-warn/10",
+  ok: "border-ok/40 bg-ok/10 hover:bg-ok/10",
 };
 const pickedBadge = { muted: "bg-foreground/10 text-foreground", warn: "bg-warn/20 text-warn", ok: "bg-ok/20 text-ok" };
 
@@ -66,22 +68,59 @@ const pickedBadge = { muted: "bg-foreground/10 text-foreground", warn: "bg-warn/
  * the number trailing on the right and no edge, a long option read as more of the question's text (user report).
  * The number and lead sit on the first line (h-[1lh]), not centred on a wrapped option.
  */
-export function ChoiceRow({ label, desc, n, on, focused, tone = "muted", lead, badge = true, dim, className, ...rest }: RowProps) {
+export function ChoiceRow({
+  label,
+  desc,
+  n,
+  on,
+  focused,
+  tone = "muted",
+  lead,
+  badge = true,
+  dim,
+  disabled,
+  className,
+  onClick,
+  onKeyDown,
+  ...rest
+}: RowProps) {
+  // A div acting as a button, not a <button>: text in a button can't be drag-selected (Chromium / WebKit start no
+  // selection inside one), and people want to copy an option's text (a domain, a command) out of the card.
+  // A click that ends a drag-selection inside the row is that selection, not a pick.
+  const click = (e: MouseEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && sel.anchorNode && e.currentTarget.contains(sel.anchorNode)) return;
+    onClick?.(e);
+  };
+  const key = (e: KeyboardEvent<HTMLDivElement>) => {
+    onKeyDown?.(e);
+    if (e.defaultPrevented || disabled || e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.(e as unknown as MouseEvent<HTMLDivElement>);
+    }
+  };
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled || undefined}
       className={cn(
-        "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left text-[1em] leading-normal outline-none ring-1 ring-transparent ring-inset transition-colors enabled:hover:bg-muted/60",
+        "flex w-full cursor-pointer items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left text-[1em] leading-normal outline-none ring-1 ring-transparent ring-inset transition-colors select-text",
+        disabled ? "cursor-default" : "hover:bg-muted/60",
         on && pickedRow[tone],
-        focused && "bg-brand/10 ring-brand/50 enabled:hover:bg-brand/10",
+        focused && "bg-brand/10 ring-brand/50 hover:bg-brand/10",
         dim && "opacity-50",
         className,
       )}
+      onClick={click}
+      onKeyDown={key}
       {...rest}
     >
       {lead && <span className="flex h-[1lh] shrink-0 items-center">{lead}</span>}
       {badge && (
-        <span className="flex h-[1lh] shrink-0 items-center">
+        <span className="flex h-[1lh] shrink-0 items-center select-none">
           <span
             className={cn(
               "flex size-5 items-center justify-center rounded-md bg-muted text-[11px] text-muted-foreground tabular-nums",
@@ -97,7 +136,7 @@ export function ChoiceRow({ label, desc, n, on, focused, tone = "muted", lead, b
         <span>{label}</span>
         {desc && <span className="ml-1.5 text-muted-foreground">{desc}</span>}
       </span>
-    </button>
+    </div>
   );
 }
 
