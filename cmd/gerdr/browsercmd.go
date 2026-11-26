@@ -62,7 +62,7 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 		RunE: func(_ *cobra.Command, _ []string) error { return browserStatus(asJSON) },
 	}
 	cmd.PersistentFlags().BoolVar(&asJSON, "json", false, i18n.S("输出 JSON", "print JSON"))
-	cmd.PersistentFlags().IntVarP(&tab, "tab", "t", 0, i18n.S("哪个窗口（open 打印的 tab；默认最后打开的那个）", "which window (the tab open printed; default: the one opened last)"))
+	cmd.PersistentFlags().IntVarP(&tab, "tab", "t", 0, i18n.S("哪个窗口（open 打印的 tab；默认你最后打开的那个，没有就是项目里最后打开的）", "which window (the tab open printed; default: the one you opened last, else your project's last)"))
 
 	act := func(action string, a chromeext.ActArgs) (*chromeext.ActResult, error) {
 		return browserAct(tab, action, a)

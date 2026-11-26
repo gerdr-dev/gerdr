@@ -53,13 +53,13 @@ gerdr browser close                        # its Browser pane closes too; --keep
 
 - The user can also open pages in the Browser pane themselves; `status` lists your project's pages.
 - **Each project's browser is its own**: you see and drive only your project's pages (a panel's workers: the panel's
-  project). Without `-t`, actions take the last page opened in your project; another project's page number is refused
+  project). Without `-t`, actions take the last page you opened (else your project's last); another project's page number is refused
   as unknown. In the user's Chrome, a page another project's agent opened is theirs; pages the user opened are everyone's.
 - Several Chrome profiles can be connected (`status` lists them, each with the name the user gave it in the
   extension's popup, like "Work"). When the user says which one ("the Work Chrome"), pass `open --profile Work`
   (a name or an id); otherwise `open` picks one that allowed the site. A profile without a name: ask the user to name
   it in the Gerdr extension's popup (toolbar icon) rather than guessing between ids.
-- Actions without `-t <tab>` use the page opened last. Refs come from the latest snapshot; after the page changes,
+- Your project's other conversations share its browser: pass `-t` when you have several pages. Refs come from the latest snapshot; after the page changes,
   take a new one (an old ref that is gone says so). `snapshot --find 发送` narrows a long page.
 - Also: `hover`, `drag <from> <to>`, `upload <ref> <files>`, `goto / back / forward / reload`, `eval <js>`,
   `resize 390x844 --mobile`, `dialog accept|dismiss` (the page is paused while an alert / confirm is open), `cdp`.

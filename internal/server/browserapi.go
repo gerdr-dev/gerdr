@@ -181,8 +181,8 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		// the last page opened (Tabs: oldest first), of the caller's project for an agent
-		id, err := s.scopedTab(b, s.browserScope(in.Caller), in.Tab)
+		// the last page opened (Tabs: oldest first): for an agent its own, else its project's
+		id, err := s.scopedTab(b, s.browserScope(in.Caller), in.Caller.Session, in.Tab)
 		if err != nil {
 			httpError(w, http.StatusNotFound, err.Error())
 			return
@@ -282,8 +282,9 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		// an agent drives its project's pages only; without a number, the last one of them (browserscope.go)
-		tab, err := s.scopedTab(b, s.browserScope(in.Caller), in.Tab)
+		// an agent drives its project's pages only; without a number, the last one it opened, else its project's
+		// last (browserscope.go)
+		tab, err := s.scopedTab(b, s.browserScope(in.Caller), in.Caller.Session, in.Tab)
 		if err != nil {
 			httpError(w, http.StatusNotFound, err.Error())
 			return

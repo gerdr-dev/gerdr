@@ -87,14 +87,23 @@ func (s *Server) scopedTabs(b *chromeext.Bridge, scope string) []chromeext.Tab {
 
 var errNoPageHere = errors.New("no page")
 
-// scopedTab: the page id a caller of scope means: tab, or for 0 the last one it may see. An id of another project's
-// page is refused as if it didn't exist.
-func (s *Server) scopedTab(b *chromeext.Bridge, scope string, tab int) (int, error) {
+// scopedTab: the page id a caller of scope means: tab, or for 0 the last one session opened that is still open, else
+// the last one it may see. Session first: agents of one project share its browser, and "the project's last page" was
+// another conversation's whenever two worked at once (user report: a screenshot of the other task's game). An id of
+// another project's page is refused as if it didn't exist.
+func (s *Server) scopedTab(b *chromeext.Bridge, scope, session string, tab int) (int, error) {
 	if scope == "" {
 		return tab, nil
 	}
 	ts := s.scopedTabs(b, scope)
 	if tab == 0 {
+		if session != "" {
+			for i := len(ts) - 1; i >= 0; i-- {
+				if ts[i].Session == session && ts[i].Gone == "" {
+					return ts[i].ID, nil
+				}
+			}
+		}
 		if len(ts) == 0 {
 			return 0, fmt.Errorf("%w: %s", errNoPageHere, i18n.S("这个项目的浏览器还没开页面：先 open", "This project's browser has no page open: open one first"))
 		}
