@@ -174,6 +174,22 @@ function QueuedSteer({
   );
 }
 
+/**
+ * A user's words as Markdown that keeps their line breaks: every line but the last of a paragraph ends in a hard break
+ * (Markdown would join them into one line). Code fences and the lines inside them are left alone.
+ */
+function userMd(text: string): string {
+  const lines = text.split("\n");
+  let fence = false;
+  const code = lines.map((l) => {
+    const edge = /^\s*(```|~~~)/.test(l);
+    const inside = fence || edge;
+    if (edge) fence = !fence;
+    return inside;
+  });
+  return lines.map((l, i) => (code[i] || code[i + 1] || !l.trim() || !lines[i + 1]?.trim() ? l : `${l}  `)).join("\n");
+}
+
 export const MessageView = memo(function MessageView({
   msg,
   sessionId,
@@ -220,11 +236,7 @@ export const MessageView = memo(function MessageView({
             </div>
           )}
           <MessageContent
-            className={cn(
-              "whitespace-pre-wrap break-words text-[1em] leading-[1.5]",
-              stackPrev && "group-[.is-user]:rounded-tr-md",
-              stackNext && "group-[.is-user]:rounded-br-md",
-            )}
+            className={cn("break-words text-[1em] leading-[1.5]", stackPrev && "group-[.is-user]:rounded-tr-md", stackNext && "group-[.is-user]:rounded-br-md")}
           >
             {files.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
@@ -256,7 +268,13 @@ export const MessageView = memo(function MessageView({
                 ))}
               </div>
             )}
-            <span data-message={msg.metadata?.messageId ?? msg.id}>{text}</span>
+            {/* Markdown like a reply (asked for: Slack / Meegle text the panels pass on has **bold**, lists, code), each
+                line break kept as written (userMd): a person types line by line, as in any chat box */}
+            {text.trim() && (
+              <div className="gerdr-md" data-message={msg.metadata?.messageId ?? msg.id}>
+                <Markdown>{userMd(text)}</Markdown>
+              </div>
+            )}
           </MessageContent>
         </div>
         {showMeta && (
