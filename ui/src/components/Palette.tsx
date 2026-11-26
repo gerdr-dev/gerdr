@@ -28,9 +28,17 @@ export function Palette({ open }: { open: boolean }) {
   const inPanel = useStoreWhile(open, (s) => s.mode === "work");
   const panel = usePanelSearch(open && inPanel ? panelKey : null);
   return (
-    <CommandDialog open={open} onOpenChange={(o) => !o && closeDialog()} title={t("palette.title")} description={t("palette.description")}>
+    <CommandDialog
+      open={open}
+      onOpenChange={(o) => !o && closeDialog()}
+      title={t("palette.title")}
+      description={t("palette.description")}
+      // Wider and taller than the stock 512 × 300px: a panel's rows are two lines (a board's task with its line under it),
+      // and at that size four of them filled the list (the person, 2026-11-26)
+      className="sm:max-w-2xl"
+    >
       <CommandInput placeholder={t("palette.placeholder")} />
-      <CommandList>
+      <CommandList className="max-h-[min(65vh,600px)]">
         <CommandEmpty>{t("palette.empty")}</CommandEmpty>
         {panel && panel.items.length > 0 && (
           <CommandGroup heading={panel.heading || panelTitle(panelKey) || t("palette.panel")}>
