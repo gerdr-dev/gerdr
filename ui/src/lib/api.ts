@@ -72,6 +72,8 @@ export type BrowserTab = {
   project?: string;
   profile?: string;
   url: string;
+  /** its title as last seen (chromeext Tab.Title) */
+  title?: string;
   gone?: string;
   opened: number;
   opener?: number;

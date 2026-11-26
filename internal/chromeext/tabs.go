@@ -31,16 +31,19 @@ type Tab struct {
 	Native bool `json:"native,omitempty"`
 	// Replaces: the tab this one took over (the same page moved into the App's browser when it connected): a pane
 	// showing that one moves here (ui/src/lib/actions/browser.ts)
-	Replaces int    `json:"replaces,omitempty"`
+	Replaces int `json:"replaces,omitempty"`
 	// Session: the agent session that opened the page (gerdr browser open), or the page it came from (Opener,
 	// Replaces). A panel shows its conversation's pages beside it with this (ui/src/core/SessionBrowser.tsx): a
 	// panel's agent is in no pane, so no Browser pane comes up beside it
 	Session string `json:"session,omitempty"`
-	URL      string `json:"url"`            // what it was opened on
-	WS       string `json:"ws,omitempty"`   // CDP browser WebSocket (extension tabs only)
-	HTTP     string `json:"http,omitempty"` // the same as http://host:port (for clients that fetch /json/version)
-	Gone     string `json:"gone,omitempty"` // why it can't be driven any more; "" while it can
-	Opened   int64  `json:"opened"`
+	URL     string `json:"url"`            // what it was opened on
+	WS      string `json:"ws,omitempty"`   // CDP browser WebSocket (extension tabs only)
+	HTTP    string `json:"http,omitempty"` // the same as http://host:port (for clients that fetch /json/version)
+	Gone    string `json:"gone,omitempty"` // why it can't be driven any more; "" while it can
+	Opened  int64  `json:"opened"`
+	// Title: the page's title as last seen (Tabs fills it in): the Browser pane's page list names every page by it,
+	// not only the one it shows (user report: a list of "localhost:8770"s, the shown page alone by its name)
+	Title string `json:"title,omitempty"`
 
 	// send runs one DevTools command in the page: through the extension, or the project browser's pipe
 	send func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
@@ -55,6 +58,7 @@ type Tab struct {
 	watch  *watchers
 	cast   *caster       // the screencast its viewers share (view.go)
 	cur    *atomic.Value // CurrentURL
+	title  *atomic.Value // Title: after each load (readTitle) and from a watching View (pageLoop)
 	// onNav runs when the main frame's address changed (the bridge's tabsChanged): the UI marks a page it isn't
 	// showing as changed (a minimized Browser pane's dot, ui/src/lib/actions/browser.ts)
 	onNav func()
@@ -99,6 +103,7 @@ func newTab(id int, url string) *Tab {
 	t := &Tab{ID: id, URL: url, Opened: time.Now().UnixMilli(), log: newTabLog(), watch: &watchers{fns: map[int]func(string, json.RawMessage){}}}
 	t.cast = &caster{t: t}
 	t.cur = &atomic.Value{}
+	t.title = &atomic.Value{}
 	t.phoneOnce = &sync.Once{}
 	return t
 }
@@ -121,14 +126,36 @@ func (t *Tab) event(method string, params json.RawMessage) {
 			}
 			if u != "" && !strings.HasPrefix(u, "about:") && !strings.HasPrefix(u, "data:") && u != t.CurrentURL() {
 				t.cur.Store(u)
+				t.title.Store("") // the left page's name; read again once this one loads
 				if t.onNav != nil {
 					t.onNav()
 				}
 			}
 		}
 	}
+	if method == "Page.loadEventFired" || method == "Page.navigatedWithinDocument" {
+		go t.readTitle()
+	}
 	t.log.record(method, params)
 	t.watch.emit(method, params)
+}
+
+// readTitle asks the page for its title after a load, for pages no Browser pane is watching (their View would keep
+// it). Once more a moment later: a page's script often sets it only after the load (an app's own router).
+func (t *Tab) readTitle() {
+	for _, wait := range []time.Duration{0, 1500 * time.Millisecond} {
+		time.Sleep(wait)
+		if t.send == nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		raw, err := t.eval(ctx, "document.title")
+		cancel()
+		var s string
+		if err == nil && json.Unmarshal(raw, &s) == nil {
+			t.title.Store(s)
+		}
+	}
 }
 
 // CurrentURL: where the page is now (the last main-frame navigation), else where it was opened.
@@ -313,6 +340,7 @@ func (b *Bridge) Tabs() []Tab {
 		// where it is now, not where it was opened: the Browser pane's page list named a page by the site it had
 		// left long ago (user report: "www.baidu.com" for a page at talizen.com)
 		c.URL = t.CurrentURL()
+		c.Title, _ = t.title.Load().(string)
 		out = append(out, c)
 	}
 	b.mu.Unlock()

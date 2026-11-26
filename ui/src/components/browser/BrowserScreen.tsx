@@ -998,7 +998,7 @@ export function BrowserScreen({
   // failed address): the page info lags the Enter by a navigation, and the old address flashed back meanwhile
   const typed = pending && page?.url === pending.from ? pending.url : undefined;
   const shown = editing ? addr : (typed ?? page?.url ?? cur?.url ?? (gone ? (lastURL ?? "") : ""));
-  const title = page?.title || (cur ? hostOf(cur.url) : "");
+  const title = page?.title || cur?.title || (cur ? hostOf(cur.url) : "");
   const busy = opening || (live && (navigating || !!page?.loading || resizing));
   // A picked size (docked): the picture no wider than the page (a phone's page on a desktop pane stays its size, not
   // blown up), centred; on a desktop also no taller than the box, so the whole page shows. A phone keeps width-fit
@@ -1125,7 +1125,7 @@ export function BrowserScreen({
             {pages.map((p) => (
               <DropdownMenuItem key={p.tab} onClick={() => show(p.tab)} className={cn(p.tab === tab && "font-medium")}>
                 <Globe className={cn(p.tab === tab ? "text-brand" : "text-muted-foreground")} />
-                <span className="truncate">{p.tab === tab && page?.title ? page.title : hostOf(p.url)}</span>
+                <span className="truncate">{(p.tab === tab && page?.title) || p.title || hostOf(p.url)}</span>
                 {p.tab === tab && <Check className="ml-auto" />}
                 {/* in a window of its own: picked here, this view shows a card for it (core/SessionBrowser.tsx) */}
                 {p.tab !== tab && inWindows.includes(p.tab) && (

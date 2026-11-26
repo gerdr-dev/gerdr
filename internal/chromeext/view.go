@@ -431,6 +431,9 @@ func (v *View) pageLoop() {
 		}
 		cancel()
 		p.Loading = ready != "" && ready != "complete"
+		if p.Title != "" {
+			v.t.title.Store(p.Title)
+		}
 		v.mu.Lock()
 		changed := v.page != p
 		v.page = p
