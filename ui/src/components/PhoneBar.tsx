@@ -1,21 +1,19 @@
-import { GalleryHorizontalEnd, Plus } from "lucide-react";
-import { useRef } from "react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { addTab, focusedSessionId, tabName } from "@/lib/actions";
+import { addTab, tabName } from "@/lib/actions";
 import { activeWs, allLeaves, currentSpace, findLeaf, spaceOf } from "@/lib/layout";
 import { applyTabLabel } from "@/lib/addons";
-import { get, set, useStore } from "@/lib/store";
-import { MAX_TILES, focusTile, overviewIds, showInOverview, toggleOverview } from "@/lib/overview";
+import { set, useStore } from "@/lib/store";
 import { FadeText } from "./FadeText";
 import { StatusDot } from "./AgentIcon";
-import { toast } from "sonner";
 import { InboxButton } from "./Inbox";
 import { DrawerButton } from "./DrawerButton";
 import { tabStatus } from "./TabBar";
 import { t } from "@/lib/i18n";
 
 /**
- * The phone's stand-in for the tab bar: ☰ (the drawer) · where you are · the overview · the inbox · new tab.
+ * The phone's stand-in for the tab bar: ☰ (the drawer) · where you are · the inbox · new tab. (An overview button used to
+ * sit here, opening a separate screen that paged through the conversations; the main view swipes itself now: PhonePager.)
  *
  * A phone shows one pane at a time and a row of small tabs can neither be hit nor fit, so switching tabs / panes is the
  * drawer's job (UnifiedSidebar, roomier rows and a search box on touch); both ☰ and the title open it. This row only
@@ -66,78 +64,11 @@ export function PhoneBar() {
       </button>
       {/* Square 36px buttons with no gap between them (narrower boxes were tried and felt cramped) */}
       <div className="flex shrink-0 items-center">
-        <OverviewButton />
         <InboxButton phone />
         <Button variant="ghost" size="icon" className="size-9" aria-label={t("phoneBar.newTab")} disabled={onNewPage} onClick={() => addTab()}>
           <Plus className="size-[18px]" />
         </Button>
       </div>
     </div>
-  );
-}
-
-/**
- * A long-press that swaps the screen leaves the finger down on whatever was drawn under it, and the system's own
- * long-press (Android: select the word, show copy / share) then lands on that. Refuse any selection until the finger lifts.
- */
-function blockSelectionUntilLift() {
-  const block = (e: Event) => e.preventDefault();
-  const lift = () => {
-    document.removeEventListener("selectstart", block, true);
-    window.removeEventListener("pointerup", lift, true);
-    window.removeEventListener("pointercancel", lift, true);
-  };
-  document.addEventListener("selectstart", block, true);
-  window.addEventListener("pointerup", lift, true);
-  window.addEventListener("pointercancel", lift, true);
-  window.getSelection()?.removeAllRanges();
-}
-
-/**
- * The phone bar's overview button. Tap opens the overview, on the tile of the session you're on when it already has
- * one (asked for: no hunting for it in the strip); long-press (or right-click) puts the pane you're on into it
- * and goes to that tile. Our own timer rather than relying on contextmenu: iOS Safari never fires it on a long-press.
- */
-function OverviewButton() {
-  const timer = useRef<number | undefined>(undefined);
-  const held = useRef(false);
-  const hold = () => {
-    held.current = true;
-    blockSelectionUntilLift();
-    const id = focusedSessionId();
-    if (!id) return toggleOverview(true); // a terminal or an empty pane: nothing to put in
-    if (!showInOverview(id)) toast(t("phoneBar.gridFull", { n: MAX_TILES }));
-  };
-  const cancel = () => clearTimeout(timer.current);
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      // No text selection / iOS callout from the long-press
-      className="size-9 select-none [-webkit-touch-callout:none]"
-      aria-label={t("phoneBar.active")}
-      onPointerDown={() => {
-        held.current = false;
-        cancel();
-        timer.current = window.setTimeout(hold, 500);
-      }}
-      onPointerUp={cancel}
-      onPointerLeave={cancel}
-      onPointerCancel={cancel}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        cancel();
-        if (!held.current) hold();
-      }}
-      onClick={() => {
-        // The click that ends a long-press already did its thing
-        if (held.current) return void (held.current = false);
-        const id = focusedSessionId();
-        if (id && overviewIds(get()).includes(id)) focusTile(id);
-        toggleOverview(true);
-      }}
-    >
-      <GalleryHorizontalEnd className="size-[18px]" />
-    </Button>
   );
 }

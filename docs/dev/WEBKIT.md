@@ -38,7 +38,7 @@ blank pages.
 
 ### Fallbacks for APIs WebKit lacks
 
-- `requestIdleCallback`: Safari has none. `ChatList.tsx` (`scheduleBatch`) and `OverviewPhone.tsx` (`onIdle`) fall
+- `requestIdleCallback`: Safari has none. `ChatList.tsx` (`scheduleBatch`) falls
   back to timers.
 - `scrollend`: missing before Safari 18 (iOS 16 has none). Nothing depends on it now (the native `scroll-snap` pager
   that did was dropped, docs/dev/SCROLL.md).

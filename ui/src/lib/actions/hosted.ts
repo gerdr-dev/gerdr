@@ -14,8 +14,8 @@ import { addTabForSession, closeTab } from "./tabs";
 
 type Run = () => void;
 
-/** As core showInCodeView: its pane when it has one, else a tab for it. */
-function show(id: string) {
+/** As core showInCodeView: its pane when it has one, else a tab for it. Also the phone's swipe between conversations (PhonePager). */
+export function show(id: string) {
   toggleOverview(false);
   const loc = locateSession(get().layout, id);
   if (loc) focusPane(loc.pane.id);

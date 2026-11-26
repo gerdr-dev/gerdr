@@ -1,14 +1,11 @@
-// Phone overview: quick sideways swipes in a row, frame by frame. Counts frames where a page on screen is blank
-// (no chat drawn, nor its snapshot): the flash of empty background between pages (OverviewPhone.tsx, Snap).
+// Phone main view: quick sideways swipes in a row, frame by frame. Counts frames where a page on screen is blank: the
+// flash of empty background between pages (PhonePager.tsx). The pages are "active" (in progress): put the tabs' sessions there.
 //   node swipe.mjs [--cpu=4] [--rounds=3]
 import { args, launch, open } from "./lib.mjs";
 
 const a = args({ cpu: 4, rounds: 3 });
 const { browser, page } = await launch({ width: 390, height: 844, mobile: true });
 await open(page);
-const url = await page.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name).find((n) => /\/src\/lib\/overview\.ts/.test(n)));
-await page.evaluate(async (u) => (await import(u)).toggleOverview(true), url);
-await page.waitForTimeout(2500);
 const cdp = await page.context().newCDPSession(page);
 if (+a.cpu > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: +a.cpu });
 

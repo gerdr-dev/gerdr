@@ -108,8 +108,6 @@ export const zh = {
 
   "phoneBar.sidebar": "侧栏（长按：切项目 / 面板）",
   "phoneBar.newTab": "新建 Tab",
-  "phoneBar.gridFull": "网格最多放 {n} 个，先从进行中移出几个",
-  "phoneBar.active": "进行中（长按：把当前面板加进去）",
 
   "connStatus.reconnectingHint": "和 Gerdr 后台的连接断了，正在重连",
   "connStatus.connectingHint": "正在连接 Gerdr 后台",
@@ -350,8 +348,6 @@ export const en: Record<keyof typeof zh, string> = {
 
   "phoneBar.sidebar": "Sidebar (long-press: switch project / panel)",
   "phoneBar.newTab": "New tab",
-  "phoneBar.gridFull": "The grid holds up to {n}. Remove some from Active first",
-  "phoneBar.active": "Active (long-press: add the current pane)",
 
   "connStatus.reconnectingHint": "Lost the connection to the Gerdr backend, reconnecting",
   "connStatus.connectingHint": "Connecting to the Gerdr backend",

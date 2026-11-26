@@ -33,6 +33,7 @@ import { syncWatch } from "./sync";
 import type { SessionSummary } from "./types";
 import { t } from "./i18n";
 import { isPhone } from "./phone";
+import { show as showSession } from "./actions/hosted";
 
 export { activeIds, MAX_TILES, overviewFocus, overviewIds, type Overview };
 
@@ -77,9 +78,10 @@ export const useOverviewIds = () => useStore((s) => overviewIds(s).join(","));
 export const useActiveIds = () => useStore((s) => activeIds(s).join(","));
 
 export function toggleOverview(on = !get().overview.on) {
-  // Desktop dropped the multi-tile grid; keep the overview state off there while preserving phone overview.
-  const next = isPhone() ? on : false;
-  setOverview((o) => (o.on === next ? o : { ...o, on: next }));
+  // No device opens it any more: desktop dropped the multi-tile grid, and the phone's main view swipes between the same
+  // conversations itself (PhonePager). Kept so callers that close it, and an "on" left in localStorage, stay harmless.
+  void on;
+  setOverview((o) => (o.on ? { ...o, on: false } : o));
 }
 
 // An agent that joined "active" on its status (started running, asks you something…) stays once that passes: finishing
@@ -213,18 +215,17 @@ export function setActiveAllProjects(on: boolean) {
   setActive((a) => ({ ...a, allIn: on ? [...a.allIn.filter((x) => x !== sp), sp] : a.allIn.filter((x) => x !== sp) }));
 }
 
-/** Open the grid on this session: put it in "active" and focus its tile. False (grid left alone) when it can't be a tile. */
+/** Put this session in "active" and show it (on a phone its page in the main view's swipe). False when it can't join. */
 export function showInOverview(id: string): boolean {
   if (!overviewIds(get()).includes(id)) {
     addActive([id]);
     if (!overviewIds(get()).includes(id)) return false;
   }
-  focusTile(id);
-  toggleOverview(true);
+  showSession(id);
   return true;
 }
 
-/** "Add to active" from a menu: on a phone offer jumping into PhoneOverview; on desktop the sidebar's Active section shows it directly. */
+/** "Add to active" from a menu: on a phone offer going to it (the sidebar isn't on screen there to show it). */
 export function addToActive(id: string) {
   addActive([id]);
   if (!activeIds(get()).includes(id)) return void toast(t("overview.addedElsewhere"));

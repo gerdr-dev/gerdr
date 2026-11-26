@@ -169,7 +169,7 @@ exactly **one visible change, from the old view straight to the ready new one**:
 1. **The control answers at once**: the picked row / chip takes its selected look on the tap (change the layout right
    away; only the drawing waits).
 2. **Hold the old view** until the new one is ready: draw through `useCaughtUp(key, sessionIds, canHold)` (`src/lib/catchup.ts`;
-   examples in `App.tsx` for tabs, `Panes.tsx` `HeldSessionPane`, `OverviewPhone.tsx` `PhoneOverview`). Effects that would
+   examples in `App.tsx` for tabs, `Panes.tsx` `HeldSessionPane`, `PhonePager.tsx` via App's held tab). Effects that would
    uncover the view (closing the phone drawer) go through `whenCaughtUp(id, fn)`. Both give up after `HOLD_MS` (500ms)
    and draw what there is.
 3. **Past 200ms, mark the control**: `<BorderFlow />` inside it (the control is `relative`), shown while

@@ -1,5 +1,5 @@
 import { KeyRound } from "lucide-react";
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConnToast } from "./components/ConnStatus";
@@ -11,7 +11,7 @@ import { AppContextMenu as AppContextMenuView } from "./components/AppContextMen
 import { TabActive, TabView as TabViewFn } from "./components/Panes";
 import { WorkView as WorkViewFn } from "./components/WorkView";
 import { LoadingScreen } from "./components/LoadingScreen";
-import { OverviewView as OverviewViewFn } from "./components/Overview";
+import { PhonePager } from "./components/PhonePager";
 import { UnifiedSidebar as UnifiedSidebarView } from "./components/UnifiedSidebar";
 import { Rail as RailView, RailCorner } from "./components/Rail";
 import { tabName } from "./lib/actions";
@@ -55,7 +55,6 @@ const AppContextMenu = memo(AppContextMenuView);
 const CliApprove = memo(CliApproveView);
 const AddonSlot = memo(AddonSlotView);
 const WorkView = memo(WorkViewFn);
-const OverviewView = memo(OverviewViewFn);
 // A tab's object only changes when that tab does (selectTabIn keeps the others), so kept tabs left alone stay put
 const TabView = memo(TabViewFn);
 
@@ -263,18 +262,10 @@ export default function App() {
   const mode = useStore((s) => s.mode);
   const workKept = useStore((s) => s.workKept);
   useEffect(() => syncWatch(), [mode]);
-  // The phone-only overview (PhoneOverview) covers the tabs one tile at a time. Once opened it stays mounted, hidden,
-  // so reopening keeps each chat's scroll position, like the kept tabs below. Desktop uses the sidebar's Active list directly.
-  // Read unconditionally: `phone && useStore(...)` skipped the hook on wide screens, so a phone crossing the width
-  // (rotating, split screen, the WebView resizing on resume) changed the hook count and crashed with React #311.
-  const overviewOn = useStore((s) => s.overview.on);
   // A panel that hosts Code (core CodeView) is shown: Code's layout is on screen, the panel's page stays under it
   const hosted = useStore((s) => hostsCode(s));
   const codeOn = mode !== "work" || hosted;
-  const overview = phone && overviewOn && codeOn;
   const unified = !phone;
-  const [overviewMounted, setOverviewMounted] = useState(overview);
-  if (overview && !overviewMounted) setOverviewMounted(true);
   const all = new Map<string, Tab>();
   for (const w of layout.workspaces) for (const t of w.tabs) all.set(t.id, t);
   // Switched to a tab that wasn't kept: its transcripts are cached but behind until the catch-up arrives. Keep the
@@ -321,11 +312,6 @@ export default function App() {
     <GerdrChatProvider>
       <TooltipProvider delayDuration={400}>
         <div className="relative flex h-full">
-          {overviewMounted && !unified && (
-            <div className={cn("absolute inset-0 z-30", !overview && "pointer-events-none invisible")} aria-hidden={!overview}>
-              <OverviewView shown={overview} />
-            </div>
-          )}
           {/* gerdr's strip on the left in every mode (projects, Code / Work, add-ons, inbox, settings); Code mode's list
               beside it. Work mode has no list: the rest is the Work site's, then its agent */}
           {!phone && <Rail />}
@@ -357,17 +343,31 @@ export default function App() {
               {/* 按 id 排个固定顺序再画，不能直接用 kept（最近用的排最前）：那样每切一次 tab 顺序就变，React 会在 DOM 里
                 挪这些节点，而**挪动 DOM 节点会把里面的滚动位置清零** —— 切走的 tab 一藏起来就回到最顶上（踩过）。
                 顺序固定的话切 tab 只改 invisible，节点不动。 */}
-              {[...kept].sort().map((id) => {
-                const t = all.get(id)!;
-                const active = id === shownTab;
-                return (
-                  <div key={id} className={cn("absolute inset-0", !active && "pointer-events-none invisible")} aria-hidden={!active}>
-                    <TabActive.Provider value={active && !overview}>
+              {/* A phone swipes between conversations (PhonePager), drawing the same kept tabs as pages */}
+              {phone ? (
+                <PhonePager
+                  kept={kept}
+                  all={all}
+                  shown={shownTab ?? tab.id}
+                  render={(t, active) => (
+                    <TabActive.Provider value={active}>
                       <TabView tab={t} />
                     </TabActive.Provider>
-                  </div>
-                );
-              })}
+                  )}
+                />
+              ) : (
+                [...kept].sort().map((id) => {
+                  const t = all.get(id)!;
+                  const active = id === shownTab;
+                  return (
+                    <div key={id} className={cn("absolute inset-0", !active && "pointer-events-none invisible")} aria-hidden={!active}>
+                      <TabActive.Provider value={active}>
+                        <TabView tab={t} />
+                      </TabActive.Provider>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

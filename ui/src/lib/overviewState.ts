@@ -52,7 +52,7 @@ export type Overview = {
   shapes: Record<string, { counts: number[]; cols?: boolean }>;
   /** Tiles minimized by hand: kept off the grid, waiting in its "more" row with the ones that didn't fit (OverviewGrid). */
   mini?: string[];
-  /** The phone's page order, taken when it opened (OverviewPhone.tsx, phoneOrder). Not stored: each opening sorts afresh. */
+  /** The phone's swipe order, held while swiping (PhonePager.tsx, phoneOrder). Not stored: taken afresh as the drawer closes. */
   phone?: string[];
 };
 
@@ -66,7 +66,7 @@ export function loadOverview(): Overview {
     const v = JSON.parse(localStorage.getItem(OVERVIEW_KEY) ?? "null");
     if (!v) return d;
     return {
-      on: !!v.on,
+      on: false, // the overview isn't opened any more (lib/overview.ts toggleOverview)
       ids: strs(v.ids),
       main: typeof v.main === "string" ? v.main : undefined,
       ratio: typeof v.ratio === "number" ? Math.min(0.8, Math.max(0.2, v.ratio)) : 0.5,
@@ -235,7 +235,7 @@ export function overviewIds(st: ActiveSrc): string[] {
 }
 
 /**
- * The phone's tiles in its chip strip's order (OverviewPhone.tsx): the sidebar's "look at first" order, not the order
+ * The phone's swipe order (PhonePager.tsx): the sidebar's "look at first" order, not the order
  * they were put in; ties keep that order (sort is stable). Sorted once, when the overview opens (`frozen`): re-sorted
  * live, reading a tile reordered the strip under the finger and a swipe landed somewhere unexpected (asked for). While
  * it stays open the frozen order holds, those taken out just drop out and newcomers go on the end.
@@ -259,7 +259,7 @@ export function phoneOrder(
  * The phone's pages: the focused tile and two either side of it. They are mounted off screen (and so watched) so a
  * sideways swipe drags the real next page in, not a blank that fills in after the switch. Two steps, not one: a page
  * watched only once a turn made it a neighbour got its whole log pushed right then, and taking it in was the biggest
- * task of a turn (~400ms at CPU x4, as the slide came to rest), and the far pages mounted ahead (OverviewPhone.tsx)
+ * task of a turn (~400ms at CPU x4, as the slide came to rest), and the far pages the old phone overview mounted ahead
  * had nothing to show.
  */
 export function phonePages(st: ActiveSrc): string[] {
