@@ -30,17 +30,19 @@ agent 之间还能互相对话：开新会话、派活、等回复、读回复�
 不习惯终端？Gerdr 是另一个同样好的选择，而且是图形界面：agent 给的图片、视频、PDF 直接在对话里看，点一下路径就打开文件；
 出门了用手机远程接着看、接着管。
 
-## Superagent：替你派活的秘书
+## Superagent：帮你接外面的活
 
-开了好几个 agent 之后，派活和盯进度就成了全职工作。[Superagent 面板](https://github.com/gerdr-dev/gerdr-panel-superagent)把这件事交给一个秘书：
+飞书 / Slack 上有人找你，秘书把活接进待办；你补一句备注、点「派出去」，接着做自己的事。要找运维开权限、找负责人合代码，
+worker 自己发消息、自己等；几个小时后做完了才叫你：看一眼它的汇报，点「发送」，回复就到了找你的人那里。
+这就是 [Superagent 面板](https://github.com/gerdr-dev/gerdr-panel-superagent)：
 
-- **只跟秘书说话**：交代一件事，它判断该去哪个仓库，派给 Claude Code 或 Codex 的 worker 去做。
-- **它替你盯着**：MR 上的 review 意见、挂掉的流水线，交给对应的 worker 处理；只有要你拍板的事才来问你，到点写简报。
-- **任务一目了然**：同一批任务按「待办 / 进行中 / 待验收 / 已完成」排在列表上，点开一个就是它 worker 的对话，直接跟它说。
-- **外面来的活**：Slack / 飞书的私信和 @、告警，也可以交给它判断接不接、派给谁。
-- **Let it go**：按时间设几套规矩，决定哪些事它可以不问你自己定（比如下班后外面来的活先进待办）。
+- **秘书接消息、排任务**：Slack / 飞书私信、@ 你的、告警先到秘书，它判断建任务、并进已有任务还是不接；你一句话交代的事，它挑仓库、挑 agent 派出去。
+- **你直接和 worker 说话**：一个任务一个 worker，点开就是它的对话。它上下文最全，问出来的问题也最准，具体的事不隔着秘书转述。要你拍板或亲手做一步时，任务标黄排最前。
+- **等人交给面板**：等审批、等 MR 的 review 和合并、等同事回话，worker 说清等什么就结束这一轮，到了面板叫醒它；Gerdr 重启、换 agent 接手都不丢。
+- **记忆**：按仓库记规矩（走不走 MR、发布找谁批），按人记眼下谁在等什么，外面来的消息靠它交给对的任务。
+- **Let it go**：按时间设几套规矩，决定哪些事可以不问你（比如下班后外面来的活先进待办）。
 
-<p align="center"><img src="docs/images/superagent.gif" alt="Superagent：左边是秘书和按状态分组的任务，右边是 worker 的对话" width="100%" /></p>
+<p align="center"><img src="docs/images/superagent.gif" alt="Superagent：Slack 上来活，秘书接进待办，派出去，几个小时后点发送" width="100%" /></p>
 
 安装：设置 → 面板 → 从 GitHub 安装面板，填 `https://github.com/gerdr-dev/gerdr-panel-superagent`。
 

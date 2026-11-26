@@ -32,19 +32,24 @@ start sessions, hand out work, wait for the replies and read them.
 Not at home in a terminal? Gerdr is an equally good choice, as an app: images, videos and PDFs from the agent show right in the chat, and clicking a path
 opens the file; away from your desk, keep watching and steering from your phone.
 
-## Superagent: a secretary that hands out the work
+## Superagent: takes in the work from outside
 
-With several agents going at once, dispatching and following them becomes the job. The
-[Superagent panel](https://github.com/gerdr-dev/gerdr-panel-superagent) gives that job to a secretary:
+Someone asks for something on Slack or Feishu; the secretary puts it in to do. You add a note, click dispatch, and get
+on with your day. The worker messages ops for access and the owner for a merge, and waits; hours later, when it's
+done, it calls you: read its report, click send, and the reply goes back to whoever asked. That is the
+[Superagent panel](https://github.com/gerdr-dev/gerdr-panel-superagent):
 
-- **talk to one chat** — tell it what needs doing; it picks the repository and hands the task to a Claude Code or Codex worker.
-- **it follows up** — new MR review comments and failed pipelines go back to the worker; it only asks you when a
-  decision is yours, and sends a briefing on a schedule.
-- **every task in view** — grouped by to do / in progress / to review / done; open one and you are in its worker's chat, talking to it directly.
-- **work from outside** — Slack / Feishu messages and mentions, alerts: it decides whether to take them and who gets them.
-- **let it go** — sets of rules by the clock for what it may decide without asking you (say, after hours new work waits in to do).
+- **the secretary takes messages and lines up tasks** — Slack / Feishu DMs, mentions and alerts reach it first; it
+  opens a task, folds the message into one, or lets it go. Say what needs doing and it picks the repository and the agent.
+- **you talk to the worker** — one task, one worker; open the task and you are in its chat. It has the most context and
+  asks the sharpest questions, so nothing gets relayed through the secretary. Tasks that need you float to the top.
+- **the panel does the waiting** — approvals, MR reviews and merges, a colleague's reply: the worker says what it waits
+  for and ends its turn, and the panel wakes it when it comes, across restarts and agent swaps.
+- **memory** — per-repo rules (MRs or not, who approves releases) and who is waiting on what right now, so incoming
+  messages land on the right task.
+- **let it go** — sets of rules by the clock for what may be decided without asking you.
 
-<p align="center"><img src="docs/images/superagent.gif" alt="Superagent: the secretary and tasks grouped by status on the left, a worker's chat on the right" width="100%" /></p>
+<p align="center"><img src="docs/images/superagent-en.gif" alt="Superagent: work arrives on Slack, goes to to do, gets dispatched, and hours later you click send" width="100%" /></p>
 
 Its UI is in Chinese for now. Install: Settings → Panels → install from GitHub, `https://github.com/gerdr-dev/gerdr-panel-superagent`.
 
