@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { browserHere, continueInPane, createInPane, focusPane, focusSession, movePaneToWorkspace, openTerminal, resumeInPane, runAction } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
-import { get, hostDirs, hostStart, set, useStore, type AgentDef } from "@/lib/store";
+import { get, hostDirs, hostOrder, hostStart, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
 import { allLeaves, locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
@@ -423,11 +423,18 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
     return () => window.removeEventListener("keydown", onKey);
   }, [focused, pane.id]);
 
+  // A panel hosting Code (Superagent) opens this page with ⌘T, not by quitting an agent with Ctrl+C, and closes it with
+  // closePane (⌘W, actions/hosted.ts): name that key there. Code keeps the shell-like Ctrl+D (the person, 2026-11-26)
+  const hosted = useStore((s) => !!hostOrder(s));
+  useStore((s) => s.config); // keyText reads the keys from it: follow a rebinding
+  const closeKey = hosted ? keyText("closePane") : "";
+  const title = !hosted ? t("newSession.title") : closeKey ? t("newSession.titleKey", { key: closeKey }) : t("newSession.titlePlain");
+
   return (
     <div className="flex h-full items-start justify-center overflow-auto p-6">
       <div className="mt-[8vh] w-full max-w-lg space-y-5">
         <div className="flex items-center text-[13px] font-medium text-muted-foreground">
-          {t("newSession.title")}
+          {title}
           {/* 角色、各 agent 新会话的默认模式 / 模型都在设置 → Agent 里，从这儿直接过去 */}
           <button
             className="ml-auto flex items-center gap-1 text-[11px] font-normal hover:text-foreground"
