@@ -362,6 +362,12 @@ declare module "@gerdr/core" {
   };
   export function useCodeRowMenu(fn: (row: { pane: string; session?: string }) => CodeMenuItem[]): void;
   /**
+   * With CodeView: Gerdr's own menu items for one of your conversations that has no pane (its tab was closed): what
+   * a CodeRow's menu has besides yours (mark read, open beside, rename). For your own row drawn in its place, so it
+   * offers the same menu as a CodeRow; call it when the menu opens.
+   */
+  export function codeSessionMenu(session: string): CodeMenuItem[];
+  /**
    * With CodeView: close the phone's drawer (Code's list over the page), after something in your part of the list
    * opened what shows behind it. Overlays you open over Code (a sheet, a dialog) need `visible pointer-events-auto`
    * on themselves: the panel's page is hidden under Code, and they are part of it.

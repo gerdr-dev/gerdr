@@ -1,7 +1,10 @@
 import { type ReactNode, useContext, useEffect, useMemo, useRef } from "react";
 import { ROW_DROP } from "@/components/TabDrag";
 import { createPortal } from "react-dom";
-import { addTab, addTabForSession, focusPane, replaceSessionInPane } from "@/lib/actions";
+import { addTab, addTabForSession, focusPane, mergeTab, replaceSessionInPane } from "@/lib/actions";
+import { MailCheck, Pencil, SquareSplitHorizontal } from "lucide-react";
+import { t } from "@/lib/i18n";
+import type { CodeMenuItem } from "@/lib/codeMenu";
 import { activeTab, currentSpace, locateSession, sideRows, type Layout } from "@/lib/layout";
 import { ownerHost, showOwner } from "@/lib/hostView";
 import { type CodeCloseFn, type CodeMenuFn, type CodePaneTagFn, setCodeCloseFallback, setCodeJump, setCodeMenu, setCodePaneTag } from "@/lib/codeMenu";
@@ -193,6 +196,43 @@ export function useCodeRowMenu(fn: CodeMenuFn) {
 }
 
 export type { CodeMenuItem } from "@/lib/codeMenu";
+
+/**
+ * Gerdr's own menu items for a hosting panel's conversation that has no pane (its tab was closed): what a CodeRow's
+ * right-click menu has for it apart from the panel's items (标为已读 when unread, 在右侧分屏打开, 重命名会话), so the
+ * panel's own row for it can offer the same menu as its rows that have a pane. A task's row in the Superagent panel
+ * had only the panel's 移到… / 放弃任务 once its conversation was closed, its neighbours Gerdr's items too (the
+ * person, 2026-11-26: "做成和普通的一模一样"). Asked each time the menu opens: it reads the state then.
+ */
+export function codeSessionMenu(session: string): CodeMenuItem[] {
+  const st = get();
+  const s = st.sessions[session];
+  if (!s) return [];
+  const out: CodeMenuItem[] = [];
+  if (st.unread[session]) out.push({ id: "read", label: t("unifiedSidebar.markRead"), icon: <MailCheck />, onSelect: () => markRead(session) });
+  out.push({
+    id: "beside",
+    label: t("unifiedSidebar.openBeside"),
+    icon: <SquareSplitHorizontal />,
+    onSelect: () => {
+      // On the right of the tab in front of its own side's panes, as a CodeRow's 在右侧分屏打开 puts its tab there
+      showOwner(ownerHost(session));
+      toggleOverview(false);
+      const before = activeTab(get().layout)?.id;
+      addTabForSession(session);
+      const loc = locateSession(get().layout, session);
+      if (before && loc && loc.tab.id !== before) mergeTab(loc.tab.id, before, undefined, "right");
+      markRead(session);
+    },
+  });
+  out.push({
+    id: "rename",
+    label: t("unifiedSidebar.renameSession"),
+    icon: <Pencil />,
+    onSelect: () => set({ dialog: { kind: "rename", target: "session", id: session, value: s.title ?? "" } }),
+  });
+  return out;
+}
 
 /**
  * ⌘W / ⇧⌘W where Gerdr has nothing to close (with useCodeOrder, a conversation alone on screen: only splits and
