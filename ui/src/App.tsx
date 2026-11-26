@@ -10,6 +10,7 @@ import { GerdrChatProvider } from "./lib/chatHost";
 import { AppContextMenu as AppContextMenuView } from "./components/AppContextMenu";
 import { TabActive, TabView as TabViewFn } from "./components/Panes";
 import { WorkView as WorkViewFn } from "./components/WorkView";
+import { LoadingScreen } from "./components/LoadingScreen";
 import { OverviewView as OverviewViewFn } from "./components/Overview";
 import { UnifiedSidebar as UnifiedSidebarView } from "./components/UnifiedSidebar";
 import { Rail as RailView, RailCorner } from "./components/Rail";
@@ -383,43 +384,5 @@ export default function App() {
         <ConnToast />
       </TooltipProvider>
     </GerdrChatProvider>
-  );
-}
-
-// LoadingScreen: the "connecting" screen, drawn exactly like the page's own loading screen (loadingHTML in
-// internal/uisite/html.go) that it replaces: same box, spinner, font and colours (system colours, since that one shows
-// before any theme), so mounting only swaps the line of text. The spinner's phase follows the page clock like that
-// one's, so it carries on at the same angle instead of restarting. Keep the two in step.
-function LoadingScreen({ text }: { text: string }) {
-  const [delay] = useState(() => -(performance.now() % 800));
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        font: "13px/1.5 system-ui,-apple-system,sans-serif",
-        color: "CanvasText",
-        background: "Canvas",
-      }}
-    >
-      <style>{"@keyframes __gerdr_spin{to{transform:rotate(360deg)}}"}</style>
-      <div
-        style={{
-          width: 22,
-          height: 22,
-          boxSizing: "border-box",
-          borderRadius: "50%",
-          border: "2px solid color-mix(in srgb,CanvasText 15%,transparent)",
-          borderTopColor: "color-mix(in srgb,CanvasText 60%,transparent)",
-          animation: `__gerdr_spin .8s linear ${delay}ms infinite`,
-        }}
-      />
-      <div style={{ opacity: 0.6 }}>{text}</div>
-    </div>
   );
 }

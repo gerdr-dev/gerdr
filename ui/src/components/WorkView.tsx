@@ -16,6 +16,7 @@ import { useBrowserTabs } from "@/lib/actions";
 import { cardOf } from "@/components/chat/ToolCard";
 import type { GPart } from "@gerdr/chat";
 import { PixelLoader } from "@/components/chat/PixelLoader";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -281,11 +282,7 @@ function MountRoot({ project }: { project: string }) {
       <div ref={ref} className={cn("size-full", error && "hidden")} />
       <div ref={portal} data-gerdr-portal="" />
       {error && <MountError project={project} error={error} net={netFail && !info?.error} onRetry={retry} />}
-      {!error && !drawn && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <PixelLoader className="size-4" />
-        </div>
-      )}
+      {!error && !drawn && <LoadingScreen inline text={t("common.loading")} />}
     </div>
   );
 }
