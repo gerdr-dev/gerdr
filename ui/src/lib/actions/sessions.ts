@@ -14,6 +14,7 @@ import { addTab, addTabForSession } from "./tabs";
 import { ownerOf, showInPanel } from "../panelRoute";
 import { ownerHost, showOwner } from "../hostView";
 import { t } from "../i18n";
+import { defaultsOf, MODE } from "../defaults";
 
 // ---- 会话 ----
 
@@ -28,7 +29,10 @@ export async function createInPane(
   const viaPanel = !o.import && !o.host ? hostStart() : undefined;
   if (viaPanel)
     try {
-      const id = await viaPanel({ agent: o.agent, cwd: o.cwd, mode: o.mode });
+      // The person started it here, so Settings' default mode is theirs to have, permissive ones included: the panel
+      // starts sessions as code an agent may have written (workHost FromCLI), which skips a permissive default on
+      // its own, and a Native agent set to full access came up asking. Settings win over the panel's own choice.
+      const id = await viaPanel({ agent: o.agent, cwd: o.cwd, mode: o.mode || defaultsOf(o.agent)[MODE] });
       setLayout((l) => setPane(l, paneId, { sessionId: id, draft: undefined }));
       return get().sessions[id];
     } catch (e: any) {
