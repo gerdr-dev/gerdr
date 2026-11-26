@@ -171,6 +171,13 @@ interface Ctx {
        */
       continueFrom?: string;
       /**
+       * With `continueFrom`: a fork the person asked for (useCodeStart hands you `fork` / `forkText`), not a
+       * replacement. The same engine copies the agent's own session (`forkText`: the chat as text instead), and the
+       * original may be running: the fork takes everything before its running turn.
+       */
+      fork?: boolean;
+      forkText?: boolean;
+      /**
        * Where the agent puts what it makes that isn't committed (images, reports, drafts, copy): a folder from
        * `ctx.artifacts.folder` for the task it works on. Its prompt names it and its sandbox may write there. Default:
        * its repository's artifacts folder (`~/Gerdr/<project>/<repo>/`), shared by every conversation in that repository.

@@ -121,6 +121,11 @@ type StartOptions struct {
 	// ContinueFrom: a conversation (of this panel's) this new one carries on: its chat is copied above and the first
 	// message brings it along to the agent (hub handoff.go), so the person reads one conversation across the switch.
 	ContinueFrom string `json:"continueFrom,omitempty"`
+	// Fork / ForkText: with ContinueFrom, a fork the person asked for (hub CreateOptions.Fork / ForkText): the same
+	// engine copies the agent's own session, and the original may still be running (the fork takes what is settled).
+	// A plain ContinueFrom is a switch, which waits for the original's turn to end.
+	Fork     bool `json:"fork,omitempty"`
+	ForkText bool `json:"forkText,omitempty"`
 	// Muted: do not disturb from the start (hub Record.Muted): its turns ending, its questions and panel items about
 	// it notify nobody; it still turns unread. For a conversation the person reads when they choose to (an always-on
 	// secretary), not one whose stops they must hear about.

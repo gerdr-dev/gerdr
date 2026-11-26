@@ -38,7 +38,7 @@ export function ForkSessionDialog() {
       // A panel hosting Code makes the fork its own (core useCodeStart: carried on from this one), as any start there
       const viaPanel = session.host ? undefined : hostStart();
       if (viaPanel) {
-        const id = await viaPanel({ agent, cwd: session.cwd, continueFrom: session.id });
+        const id = await viaPanel({ agent, cwd: session.cwd, continueFrom: session.id, fork: true, forkText: text && same(agent) });
         closeDialog();
         openSessionNear(id, session.id, true);
         return;

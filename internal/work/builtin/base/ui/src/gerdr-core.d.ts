@@ -377,7 +377,7 @@ declare module "@gerdr/core" {
   /**
    * With CodeView: every conversation started in Code while this panel shows goes through `fn` instead of becoming
    * Code's own: the new-conversation page (Cmd+T, newCodeTab), ⌘D (a copy of the focused one: same agent, folder,
-   * mode), the overview's new agent, and a fork (`continueFrom`: the one forked, its chat carried along). Start one of
+   * mode), the overview's new agent, and a fork (`continueFrom`: the one forked, its chat carried along; `fork` / `forkText`: pass them on to ctx.sessions.start, so a running one can be forked and the same engine copies its session). Start one of
    * yours (e.g. a task's worker via a local function and ctx.sessions.start) in `cwd` with `agent` (and `mode`,
    * `continueFrom` when given), send nothing (the person types the first message), and resolve to its id; Code shows
    * it. Throw to fail (an error toast, nothing opens). Not routed: importing an agent's old conversation, /resume,
@@ -404,7 +404,7 @@ declare module "@gerdr/core" {
   export function useCodeCloseFallback(fn: (row: { pane: string; session?: string }) => void): void;
   /** With useCodeOrder: the number (1–9) to show on this conversation's row while ⌘ is held, else undefined. */
   export function useCodeNumber(session?: string): number | undefined;
-  export function useCodeStart(fn: (o: { agent: string; cwd: string; mode?: string; continueFrom?: string }) => Promise<string>): void;
+  export function useCodeStart(fn: (o: { agent: string; cwd: string; mode?: string; continueFrom?: string; fork?: boolean; forkText?: boolean }) => Promise<string>): void;
   /**
    * With CodeView: a tag after a pane's title, what you know about the conversation in it (a task's number and
    * status); with `items`, a menu on it (move it). Data, drawn by Gerdr. Asked again whenever your component renders.
