@@ -54,8 +54,32 @@ function visibleIndex(s: string, k: number): number {
   return s.length;
 }
 
+/**
+ * How much of each text has already been shown, across mounts: a reply's Markdown remounts while the turn is still
+ * running (switching tabs, a resize that rebuilds the row, the virtual list dropping it off screen and back), and a
+ * fresh hook took everything already there for a new batch, so the whole reply faded in again each time (user report).
+ * Keyed by the text's first visible characters, so the same text met again starts where it was; text never seen
+ * (a part that arrives whole, often the closing paragraph together with the end of the turn) still fades in.
+ */
+const KEY_CHARS = 64;
+const MAX_SEEN = 200;
+const seen = new Map<string, number>();
+
+function seenKey(text: string): string {
+  let k = "";
+  for (let i = 0; i < text.length && k.length < KEY_CHARS; i++) if (!isSpace(text[i])) k += text[i];
+  return k;
+}
+
+function remember(prev: string | null, key: string, total: number) {
+  if (prev !== null && prev !== key) seen.delete(prev);
+  seen.delete(key); // re-insert: Map order is the eviction order
+  seen.set(key, total);
+  if (seen.size > MAX_SEEN) seen.delete(seen.keys().next().value!);
+}
+
 type Batch = { from: number; to: number; start: number };
-type State = { root: Element | null; total: number; batches: Batch[]; ranges: [Range, number][]; raf: number };
+type State = { root: Element | null; key: string | null; total: number; batches: Batch[]; ranges: [Range, number][]; raf: number };
 
 function clear(st: State) {
   const hs = levels();
@@ -122,10 +146,10 @@ export function useLinger(on: boolean, ms: number) {
 export function useStreamFade(streaming: boolean) {
   const active = useLinger(streaming, TAIL_MS);
   const id = useId();
-  const st = useRef<State>({ root: null, total: -1, batches: [], ranges: [], raf: 0 });
-  // Every render: text past what was there before is a new batch. Text already there on mount fades in too: a
-  // closing paragraph often arrives in one batch together with the end of the turn (a chat reopened mid-reply fades
-  // its text in once, which is fine). Painted before the browser paints, so new text never shows at full first.
+  const st = useRef<State>({ root: null, key: null, total: -1, batches: [], ranges: [], raf: 0 });
+  // Every render: text past what was there before is a new batch. Text already there on mount fades in too (a closing
+  // paragraph often arrives in one batch together with the end of the turn), unless this text was shown before this
+  // mount (`seen`). Painted before the browser paints, so new text never shows at full first.
   useLayoutEffect(() => {
     const s = st.current;
     if (!active || !supported || matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -137,9 +161,14 @@ export function useStreamFade(streaming: boolean) {
     }
     s.root = document.querySelector(`[data-gerdr-fade="${id}"]`);
     if (!s.root) return;
-    const total = countVisible(s.root.textContent ?? "");
+    const text = s.root.textContent ?? "";
+    const total = countVisible(text);
+    const key = seenKey(text);
+    if (s.total < 0) s.total = Math.min(seen.get(key) ?? 0, total);
     if (total > Math.max(s.total, 0)) s.batches.push({ from: Math.max(s.total, 0), to: total, start: performance.now() });
     s.total = total;
+    remember(s.key, key, total);
+    s.key = key;
     if (s.raf) cancelAnimationFrame(s.raf);
     paint(s);
   });
