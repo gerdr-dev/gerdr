@@ -921,9 +921,14 @@ type CreateOptions struct {
 	Muted bool `json:"muted,omitempty"`
 	// SkillUpdates: see Record.SkillUpdates.
 	SkillUpdates *bool `json:"skillUpdates,omitempty"`
-	// FromCLI：`gerdr session new` 开的（agent 自己跑的命令）。这时默认模式是「全放开」那种的不套：
-	// 那条命令不审批就放行（sysenv.SafeGerdrCLI 不许带 --mode 就是为这个），沙箱里的 agent 不能借用户的默认值开一个不设防的会话。
+	// FromCLI: started by code (`gerdr session new`, a panel): a model / effort it names must be on offer
+	// (checkConfig), and switching to the same agent is allowed.
 	FromCLI bool `json:"-"`
+	// NoPermissiveDefault: a permissive default mode (full access) isn't applied on its own. Set for `gerdr session
+	// new`, which runs without approval (sysenv.SafeGerdrCLI refuses --mode for the same reason): a sandboxed agent
+	// must not borrow the user's default to open an unguarded session. Not for panels: the user installed them, and a
+	// worker the user's panel starts should get the mode the user set as default (the user, 2026-11-27).
+	NoPermissiveDefault bool `json:"-"`
 }
 
 // BuiltinMode: the mode a new session starts in when Settings has none for its agent (or role), by engine. The
@@ -977,7 +982,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		if d.Mode == "" {
 			d.Mode = BuiltinMode[base]
 		}
-		if o.Mode == "" && !(o.FromCLI && permissive.MatchString(d.Mode)) {
+		if o.Mode == "" && !(o.NoPermissiveDefault && permissive.MatchString(d.Mode)) {
 			o.Mode = d.Mode
 		}
 	}

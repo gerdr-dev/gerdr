@@ -39,8 +39,8 @@ func (h workHost) StartSession(ctx context.Context, project string, o work.Start
 	if err != nil {
 		return nil, err
 	}
-	// FromCLI: started by code an agent may have written, so a permissive default mode isn't applied on its own (the
-	// same rule as `gerdr session new`); an explicit mode still is.
+	// FromCLI: started by code, so a model / effort it names is checked. Settings' default mode applies in full,
+	// full access included (unlike `gerdr session new`): the user installed the panel and set that default.
 	// The Work's skills go with every session it starts: the worker reads the user's way of working as it needs it
 	var skills []string
 	if dir, err := s.workDir(project); err == nil {

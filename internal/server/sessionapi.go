@@ -334,6 +334,7 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	// 带 open 的是 `gerdr session new`（agent 跑的），界面自己开会话不带
 	o.CreateOptions.FromCLI = o.Open != nil
+	o.CreateOptions.NoPermissiveDefault = o.Open != nil
 	// Started by an agent: that agent's session is its parent (open.near is the caller's own session), so who handed
 	// what to whom can be followed any number of levels down
 	if o.Open != nil && o.Parent == "" {

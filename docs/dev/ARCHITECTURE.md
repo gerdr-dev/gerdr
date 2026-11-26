@@ -916,8 +916,10 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   `llm.defaultModel`，不另存）。**在后端套**（`hub.Create`，`Options.Defaults` 每次现取）：界面和 `gerdr session new` 开出来的一样。
   三家在 session/new 里能接的配置项不一样（claude 接 model / effort，codex、native 只接 model），所以新建之后对着 agent 报回来的当前值
   补 `SetConfig`：先 model（换模型会重置思考强度）再别的，值不在可选项里的跳过（存的模型可能已经没了）。默认模式 agent 不认不报错
-  （`checkMode` 只查调用方点名的）。`gerdr session new` 开的（FromCLI）不套「全放开」的默认模式：那条命令不审批，不能让沙箱里的 agent
-  借用户的默认值开一个不设防的会话（和不许带 `--mode` 同一个理由）。
+  （`checkMode` 只查调用方点名的）。Sessions from `gerdr session new` (NoPermissiveDefault) don't get a permissive ("full
+  access") default mode: that command runs without approval, so a sandboxed agent must not borrow the user's default to
+  open an unguarded session (same reason it refuses `--mode`). A panel's sessions (workHost) do get it: the user installed
+  the panel and set that default, and workers coming up in ask mode was the bug (2026-11-27).
 - 编辑默认值的下拉框拿 optCache（上次这种 agent 报的模式 / 配置项，`Agents()` 的 `options`）画；没开过会话的角色用底子的。
   输入框下面每个下拉底部「设为新会话的默认」直接存当前值（`ui/src/lib/defaults.ts`）。
 
