@@ -87,8 +87,14 @@ export function Tile({
   const unread = useStore((s) => !!s.unread[id]);
   const fromPanel = useStore((s) => !!panelTiles(s));
   // Where the agent sits in Code (tab · workspace). A hosting panel's tiles come from its own list, and the panel has no
-  // workspaces: the Code workspace that happens to hold the pane meant nothing there.
-  const where = useStore((s) => (fromPanel ? "" : whereOf(s.layout, id, !phone)));
+  // workspaces: the Code workspace that happens to hold the pane meant nothing there, so it names the repository the
+  // agent works in instead (its folder; left out when the title already is that, as an untitled one's is).
+  const where = useStore((s) => {
+    if (!fromPanel) return whereOf(s.layout, id, !phone);
+    const ss = s.sessions[id];
+    const repo = ss ? basename(ss.cwd) : "";
+    return ss?.title ? repo : "";
+  });
   const front = useWindowInFront();
   // Only while the window is in front (lib/front.ts)
   useEffect(() => {
