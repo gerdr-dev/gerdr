@@ -45,7 +45,8 @@ func resolvePath(p, cwd string) string {
 	return filepath.Clean(p)
 }
 
-// suffixMatches：相对路径（不带 `..`）在 cwd 下找「以它结尾」的文件，按路径长短排，最多 20 个，返回绝对路径。
+// suffixMatches: for a relative path (no `..`), the files under cwd whose absolute path ends with it, shortest
+// first, at most 20, as absolute paths.
 // cwd 为空（没有会话目录）不找：那会去走整个家目录。
 func suffixMatches(p, cwd string) []string {
 	return suffixIn(p, cwd, nil)
@@ -62,9 +63,12 @@ func suffixIn(p, cwd string, files []string) []string {
 	if files == nil {
 		files = listFiles(dir)
 	}
+	// Match against the whole path, the session directory included: agents also write paths relative to a
+	// directory above it (`v5/src/a.js` from inside .../v5), whose first part is the session directory's own name.
+	abs := filepath.ToSlash(dir) + "/"
 	var out []string
 	for _, f := range files {
-		if f == p || strings.HasSuffix(f, "/"+p) {
+		if f == p || strings.HasSuffix(abs+f, "/"+p) {
 			out = append(out, filepath.Join(dir, filepath.FromSlash(f)))
 		}
 	}

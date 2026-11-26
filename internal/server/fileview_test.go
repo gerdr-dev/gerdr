@@ -87,6 +87,10 @@ func TestFileStatSuffix(t *testing.T) {
 	if code, body := stat("hat/a.tsx"); code != 404 || strings.Contains(body, "candidates") {
 		t.Errorf("只按整段目录名对，不按半截：%d %s", code, body)
 	}
+	// Written relative to the directory above the session's: `<cwd name>/src/chat/a.tsx` from inside cwd.
+	if code, body := stat(filepath.Join(filepath.Base(dir), "ui/src/chat/a.tsx")); code != 200 || !strings.Contains(body, filepath.Join(dir, "ui/src/chat/a.tsx")) {
+		t.Errorf("relative to the parent directory: %d %s", code, body)
+	}
 	if got := suffixMatches("../a.tsx", dir); got != nil {
 		t.Errorf("带 .. 的不猜：%v", got)
 	}
