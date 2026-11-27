@@ -44,7 +44,7 @@ worker 自己发消息、自己等；几个小时后做完了才叫你：看一�
 
 <p align="center"><img src="docs/images/superagent.gif" alt="Superagent：Slack 上来活，秘书接进待办，派出去，几个小时后点发送" width="100%" /></p>
 
-安装：设置 → 面板 → 从 GitHub 安装面板，填 `https://github.com/gerdr-dev/gerdr-panel-superagent`。
+安装：设置 → 面板 → 从 GitHub 安装面板，填 `https://github.com/gerdr-dev/gerdr-panel-superagent`。收 Slack / 飞书的消息，再到设置 → 扩展 → 商店装对应的插件（机器人版，或用你本人账号的「私聊」版）。
 
 ## 其他功能
 
@@ -63,6 +63,7 @@ worker 自己发消息、自己等；几个小时后做完了才叫你：看一�
 **工作区**
 
 - **终端**：`ctrl+b t` 在旁边开一个，刷新页面、换到手机上都还在。
+- **worktree**：同一个仓库开几个 agent，跟它说「在 worktree 里做」，各干各的互不干扰；pane 顶上显示分支，旁边的终端、恢复的会话都跟过去。
 - **从 herdr 搬过来**：快捷键一样；工作空间、tab、分屏原样导入，每个 agent 接上它的会话。
 
 **DIY 自己的 Gerdr**

@@ -51,7 +51,7 @@ done, it calls you: read its report, click send, and the reply goes back to whoe
 
 <p align="center"><img src="docs/images/superagent-en.gif" alt="Superagent: work arrives on Slack, goes to to do, gets dispatched, and hours later you click send" width="100%" /></p>
 
-Its UI is in Chinese for now. Install: Settings → Panels → install from GitHub, `https://github.com/gerdr-dev/gerdr-panel-superagent`.
+Its UI is in Chinese for now. Install: Settings → Panels → install from GitHub, `https://github.com/gerdr-dev/gerdr-panel-superagent`. For Slack / Feishu (Lark) messages, add the matching add-on from Settings → Add-ons → Store (a bot, or a "DMs" one that uses your own account).
 
 ## everything else
 
@@ -70,6 +70,7 @@ Its UI is in Chinese for now. Install: Settings → Panels → install from GitH
 **workspace**
 
 - **terminals** — `ctrl+b t` opens one alongside; it survives reloads and follows you to your phone.
+- **worktrees** — several agents on one repository: tell one to "work in a worktree" and they stay out of each other's way; the pane shows its branch, and its terminal and resumed session go with it.
 - **coming from herdr** — same keys; import your workspaces, tabs and splits, each agent reattached to its session.
 
 **DIY your own Gerdr**
