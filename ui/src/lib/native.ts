@@ -97,6 +97,12 @@ export const nativeTitleBar = (): { height: number; right: number } | null => (w
     root.style.setProperty("--titlebar-inset", `${Math.max(0, right - 48)}px`);
     // from the window's left edge: the phone layout (a window under PHONE_MAX wide) has no rail, its top bar starts there
     root.style.setProperty("--titlebar-right", `${right}px`);
+    // While a Radix modal is open (it puts pointer-events: none on body's inline style) nothing drags the window
+    // (index.css, .titlebar-modal). A class here, not a CSS selector on body's style attribute: a rule like
+    // `body[style*=…] *` makes Chrome restyle the whole subtree of ANY element whose inline style changes, and the
+    // phone's swipe pager writes a transform every frame (40–70ms of style recalc per frame on the phone, measured).
+    const modal = () => root.classList.toggle("titlebar-modal", document.body?.style.pointerEvents === "none");
+    if (document.body) new MutationObserver(modal).observe(document.body, { attributes: true, attributeFilter: ["style"] });
   }
 }
 

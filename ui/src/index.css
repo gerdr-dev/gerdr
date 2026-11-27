@@ -217,8 +217,11 @@
   /* A drag region takes the clicks whatever is drawn over it: a sheet / dialog / menu over a title bar (a panel's
      settings sheet over a pane's title bar, Panes.tsx usePaneHeadAtTop) couldn't be clicked there. While a Radix modal
      is open (it sets body's pointer-events: none) nothing drags the window, so its backdrop's click-to-close works too;
-     a non-modal popper's content never drags. !important: the drag regions are inline styles. */
-  .native-titlebar body[style*="pointer-events: none"] *,
+     a non-modal popper's content never drags. !important: the drag regions are inline styles. The modal is a class
+     on <html> set in lib/native.ts: never select on an element's style attribute with descendants after it
+     (`body[style*=…] *`), Chrome then restyles a whole subtree on every inline style write anywhere (the phone's
+     swipe dropped to ~20fps). */
+  .titlebar-modal.native-titlebar *,
   .native-titlebar [data-radix-popper-content-wrapper],
   .native-titlebar [data-radix-popper-content-wrapper] * {
     -webkit-app-region: no-drag !important;
