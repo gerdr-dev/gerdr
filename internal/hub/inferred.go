@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"time"
 
 	"github.com/coder/acp-go-sdk"
@@ -11,13 +12,13 @@ import (
 // on sending session/update for minutes. ACP has no message for "the agent started a turn on its own": our adapters
 // say it with _meta.gerdr.autoTurn (onGerdrInfo), a third-party agent says nothing, so the session read as idle
 // while the agent was plainly working (user report, 2026-11-23). For those agents the turn is inferred: content
-// arriving while no turn runs opens an auto turn, which ends once nothing new has come for inferQuiet and no tool
-// call or permission is still open. Only for external agents: ours report their own turns, and a stray late update
-// from them must not open one.
+// arriving while no turn runs opens an auto turn. Unfinished tool calls also carry straight into an inferred turn
+// when the prompt answers, without waiting for another update. Our adapters report their own turns.
 const (
 	inferQuiet     = 60 * time.Second // agy goes ~45s without a word while it writes a big file
 	inferOpenLimit = 10 * time.Minute // a tool call that never reports done doesn't hold the turn forever
 	inferStopQuiet = 3 * time.Second  // after Escape: what still trickles in is dropped until it goes quiet
+	inferAgyPoll   = 5 * time.Second
 )
 
 func (s *Session) infersTurns() bool {
@@ -27,55 +28,70 @@ func (s *Session) infersTurns() bool {
 
 // noteActivity runs for each content update from an external agent, before it is emitted (the turn_start goes first).
 func (s *Session) noteActivity(u acp.SessionUpdate) {
-	var callID string
+	var callID, title string
 	var status acp.ToolCallStatus
 	switch {
 	case u.ToolCall != nil:
-		callID, status = string(u.ToolCall.ToolCallId), u.ToolCall.Status
+		callID, status, title = string(u.ToolCall.ToolCallId), u.ToolCall.Status, u.ToolCall.Title
+		if status == "" {
+			status = acp.ToolCallStatusPending
+		}
 	case u.ToolCallUpdate != nil:
 		callID = string(u.ToolCallUpdate.ToolCallId)
 		if u.ToolCallUpdate.Status != nil {
 			status = *u.ToolCallUpdate.Status
+		}
+		if u.ToolCallUpdate.Title != nil {
+			title = *u.ToolCallUpdate.Title
 		}
 	case u.AgentMessageChunk == nil && u.AgentThoughtChunk == nil && u.Plan == nil:
 		return
 	}
 	s.mu.Lock()
 	// session/load replays the whole conversation as updates: that's history, not work
-	if s.loading > 0 || (s.stopping != nil && !s.infer) {
+	if s.loading > 0 || s.shut || (s.stopping != nil && !s.infer) {
 		s.mu.Unlock()
 		return
 	}
 	start := !s.running
-	if start {
-		s.running, s.auto, s.infer, s.lastErr = true, true, true, ""
-		s.turnStarted, s.turnTokens = now(), 0
-		s.turnMode = s.turnModeLocked()
-		s.quiet = false
-		s.inferOpen = map[string]bool{}
-	}
-	if !s.infer {
-		s.mu.Unlock()
-		return
-	}
 	if callID != "" {
-		if status == acp.ToolCallStatusCompleted || status == acp.ToolCallStatusFailed {
+		switch status {
+		case acp.ToolCallStatusCompleted, acp.ToolCallStatusFailed:
 			delete(s.inferOpen, callID)
-		} else {
+		case acp.ToolCallStatusPending, acp.ToolCallStatusInProgress:
+			if s.inferOpen == nil {
+				s.inferOpen = map[string]bool{}
+			}
 			s.inferOpen[callID] = true
 		}
 	}
-	s.inferLast = time.Now()
-	if s.stopTurn {
-		s.armInferLocked(inferStopQuiet)
-	} else {
-		s.armInferLocked(inferQuiet)
+	if s.agyACP && status == acp.ToolCallStatusCompleted && title == "Run invoke_subagent" {
+		s.agyChildren = true // the launch finished; the child has its own conversation and can still be working
+	}
+	if start {
+		s.startInferredLocked()
+	} else if s.infer {
+		s.inferLast = time.Now()
+		if s.stopTurn {
+			s.armInferLocked(inferStopQuiet)
+		} else {
+			s.armInferLocked(inferQuiet)
+		}
 	}
 	s.mu.Unlock()
 	if start {
 		s.emit(&Event{Kind: EvTurnStart, Auto: true})
 		s.setStatus()
 	}
+}
+
+func (s *Session) startInferredLocked() {
+	s.running, s.auto, s.infer, s.lastErr = true, true, true, ""
+	s.turnStarted, s.turnTokens = now(), 0
+	s.turnMode = s.turnModeLocked()
+	s.quiet = false
+	s.inferLast = time.Now()
+	s.armInferLocked(inferQuiet)
 }
 
 func (s *Session) armInferLocked(d time.Duration) {
@@ -100,6 +116,7 @@ func (s *Session) inferCheck() {
 			return
 		}
 		s.running, s.auto, s.infer, s.stopTurn = false, false, false, false
+		s.inferOpen, s.agyChildren = nil, false
 		s.mu.Unlock()
 		s.setStatus()
 		return
@@ -118,19 +135,39 @@ func (s *Session) inferCheck() {
 		s.mu.Unlock()
 		return
 	}
+	last, probe, sid := s.inferLast, s.agyProbe, s.rec.AgentSessionID
+	checkChildren := s.agyChildren && probe != nil
 	s.mu.Unlock()
-	s.endInferred()
+	if checkChildren && probe(sid) {
+		s.mu.Lock()
+		if s.infer && !s.stopTurn && s.inferLast == last {
+			s.armInferLocked(inferAgyPoll)
+		}
+		s.mu.Unlock()
+		return
+	}
+	s.finishInferred(last)
 }
 
 // endInferred closes an inferred turn: it went quiet, or a person sent a message (Send), which then goes as a new
 // prompt instead of being refused as a steer the agent can't take.
 func (s *Session) endInferred() {
+	s.finishInferred(time.Time{})
+}
+
+func (s *Session) finishInferred(last time.Time) {
 	s.mu.Lock()
-	if !s.infer {
+	if !s.infer || !last.IsZero() && (s.inferLast != last || s.stopTurn) {
+		s.mu.Unlock()
+		return
+	}
+	if !last.IsZero() && len(s.pending) > 0 {
+		s.armInferLocked(inferQuiet)
 		s.mu.Unlock()
 		return
 	}
 	s.running, s.auto, s.infer = false, false, false
+	s.inferTimer.Stop()
 	stopped := s.stopTurn
 	s.stopTurn = false
 	for id, p := range s.pending {
@@ -138,15 +175,30 @@ func (s *Session) endInferred() {
 		delete(s.pending, id)
 	}
 	held := s.popDeferredLocked()
+	if !last.IsZero() || s.shut {
+		s.inferOpen, s.agyChildren = nil, false
+	}
+	closeNow := s.closeAfter && !s.shut && !last.IsZero() && held == nil
+	if closeNow || s.shut {
+		s.closeAfter = false
+	}
+	reason := acp.StopReasonEndTurn
+	if s.shut {
+		reason = acp.StopReasonCancelled
+		s.quiet = true
+	}
 	dur, tok := now()-s.turnStarted, s.turnTokens
 	s.mu.Unlock()
 	if !stopped {
-		s.emit(&Event{Kind: EvTurnEnd, StopReason: string(acp.StopReasonEndTurn), Auto: true, DurationMs: dur, OutputTokens: tok})
+		s.emit(&Event{Kind: EvTurnEnd, StopReason: string(reason), Auto: true, DurationMs: dur, OutputTokens: tok})
 	}
 	s.flush(true)
 	s.setStatus()
 	if held != nil {
 		go s.sendDeferred(held)
+	}
+	if closeNow {
+		go s.h.CloseUI(context.Background(), s.ID())
 	}
 }
 

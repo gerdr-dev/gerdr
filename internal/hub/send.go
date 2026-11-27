@@ -318,6 +318,7 @@ var retryWaits = chatlog.RetryWaits
 func retryable(msg string) bool { return chatlog.Retryable(msg) }
 
 func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []acp.ContentBlock) {
+	s.prepareAgyInference(c)
 	res, err := c.Conn.Prompt(context.Background(), acp.PromptRequest{SessionId: acp.SessionId(agentSID), MessageId: &msgID, Prompt: content})
 	// 网络出错：等一会儿让 agent 从断的地方接着做（发一句「继续」，不进对话记录 —— 界面上是一行提示）。
 	for attempt := 0; err != nil && attempt < len(retryWaits) && retryable(errText(err)) && !s.isShut(); attempt++ {
@@ -370,14 +371,21 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 		s.lastErr, s.lastLogin = ev.Error, acpx.LoginCommandOf(err)
 	}
 	next := s.autoNext && err == nil
+	inferred := !next && !stopped && !s.shut && ev.StopReason == string(acp.StopReasonEndTurn) &&
+		(len(s.inferOpen) > 0 || s.agyChildren)
+	if !next && !inferred {
+		s.inferOpen, s.agyChildren = nil, false
+	}
 	wake := s.autoWake
 	s.autoNext, s.autoWake = false, nil
 	// agent 自己又接着开了一轮（后台任务回来了）就等那一轮也跑完。出错了、人按了停止就不关了：人要看一眼 / 改主意了
-	closeNow := s.closeAfter && !next && err == nil && ev.StopReason != "cancelled"
-	if !next {
+	closeNow := s.closeAfter && !next && !inferred && err == nil && ev.StopReason != "cancelled"
+	if !next && !inferred {
 		s.closeAfter = false
 	}
-	if next {
+	if inferred {
+		s.startInferredLocked()
+	} else if next {
 		s.running, s.auto = true, true
 		s.turnStarted, s.turnTokens = now(), 0
 		s.turnMode = s.turnModeLocked()
@@ -385,7 +393,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 	}
 	// A slash command held back while this turn ran goes next (deferred.go); after the agent's own turn if one follows
 	var held *deferredMsg
-	if !next {
+	if !next && !inferred {
 		held = s.popDeferredLocked()
 	}
 	s.mu.Unlock()
@@ -393,7 +401,7 @@ func (s *Session) runTurn(c *agenthost.Host, agentSID, msgID string, content []a
 		s.emit(ev)
 	}
 	go s.autoTitle()
-	if next {
+	if next || inferred {
 		s.emit(&Event{Kind: EvTurnStart, Auto: true, Wake: wake})
 	}
 	s.flush(true)

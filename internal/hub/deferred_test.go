@@ -28,11 +28,12 @@ type fakeAgent struct {
 	steers     []string
 	release    chan struct{}
 	finished   chan string
-	forkBefore string        // the last MethodFork's Before
-	silent     bool          // the first turn says nothing (Escape rolls it back)
-	stopDelay  time.Duration // how long the first turn takes to stop after Cancel (a claude still starting up)
-	started    chan struct{} // the first prompt reached the agent (nil = not reported)
-	rewinds    []string      // MethodRewind's message ids
+	forkBefore string              // the last MethodFork's Before
+	silent     bool                // the first turn says nothing (Escape rolls it back)
+	stopDelay  time.Duration       // how long the first turn takes to stop after Cancel (a claude still starting up)
+	started    chan struct{}       // the first prompt reached the agent (nil = not reported)
+	rewinds    []string            // MethodRewind's message ids
+	updates    []acp.SessionUpdate // extra updates sent in the first prompt
 }
 
 func (f *fakeAgent) SetConn(c *acp.AgentSideConnection) { f.conn = c }
@@ -57,6 +58,9 @@ func (f *fakeAgent) Prompt(ctx context.Context, p acp.PromptRequest) (acp.Prompt
 		// say something first: a turn the agent already answered in (Escape takes back only what's queued)
 		if !f.silent {
 			_ = f.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: p.SessionId, Update: acp.UpdateAgentMessageText("on it")})
+		}
+		for _, u := range f.updates {
+			_ = f.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: p.SessionId, Update: u})
 		}
 		if f.started != nil {
 			close(f.started)

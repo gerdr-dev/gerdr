@@ -932,10 +932,15 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
 - **External ACP agents work on after their prompt answers and say nothing** (`agy acp`, measured 2026-11-23: end_turn
   right after starting background subagents, then minutes of tool calls / messages as they come back). ACP has no
   "auto turn" message, so for agents with a `command` the hub guesses one (`internal/hub/inferred.go`): a content
-  update while idle opens an auto turn, which ends after 60s with no update and no tool call / permission open. A
-  message sent during it ends the guessed turn and goes as a new prompt (it isn't a turn that takes steers);
-  session/load replays are bracketed by `loading` so history doesn't open one. Not for our adapters: they report
-  their own turns, and a stray late update from them must not start one.
+  update while idle opens an auto turn. An unfinished tool call also carries straight into an auto turn when the
+  prompt returns, so session status and `/api/busy` stay busy until the agent has reported completion and gone quiet.
+  Agy reports `invoke_subagent` complete when the child is launched. After that launch, the hub uses Agy's local
+  read-only conversation index (when available via `sqlite3`) to keep the inferred turn open through quiet periods
+  while the child still has work. An asynchronous Shell launch without a corresponding step output also counts
+  as active: the index can briefly say idle during those commands. If local state is unavailable, use the ACP quiet
+  timer. Agy accepts `session/cancel` for inferred turns. A message during an inferred turn starts a new prompt
+  and carries forward any outstanding work.
+  Session replay doesn't start one, and our adapters report their own turns.
 - **A background sub-agent keeps the turn open; a background Bash doesn't** (measured, 2.1.323). The CLI's own schema
   says idle "fires after heldBackResult flushes and the bg-agent do-while exits": while a background Agent runs, the
   CLI holds the result and stays running even after the model has finished talking, so Gerdr keeps spinning and later

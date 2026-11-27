@@ -180,11 +180,14 @@ type Session struct {
 	autoNext bool
 	autoWake json.RawMessage // what woke that auto turn (acpx.AutoTurnWakeKey), for its turn_start
 	// infer: the running auto turn is a guess (inferred.go): an external agent kept sending work with no turn open.
-	infer      bool
-	inferLast  time.Time
-	inferOpen  map[string]bool // tool calls of the inferred turn not reported done yet
-	inferTimer *time.Timer
-	loading    int // a session/load is replaying the conversation: its updates are history (inferred.go)
+	infer       bool
+	inferLast   time.Time
+	inferOpen   map[string]bool // external ACP tool calls not reported done yet
+	inferTimer  *time.Timer
+	agyACP      bool
+	agyChildren bool
+	agyProbe    func(string) bool // optional local Antigravity run-state lookup
+	loading     int               // a session/load is replaying the conversation: its updates are history (inferred.go)
 	// closeAfter：会话自己 `gerdr session close` 了自己（用户叫它「做完就关掉 pane」）。当场关会把它正在跑的这一轮
 	// （就是发出这条命令的这一轮）掐掉，收尾的话说不出来；所以记下来，这一轮跑完再关（Hub.CloseAfterTurn）
 	closeAfter  bool
@@ -969,6 +972,7 @@ func (s *Session) close(ctx context.Context) {
 			_, _ = c.Conn.CloseSession(ctx, acp.CloseSessionRequest{SessionId: acp.SessionId(sid)})
 		}
 	}
+	s.endInferred()
 }
 
 func (s *Session) heldElsewhere(ctx context.Context, c *agenthost.Host) []acpx.Holder {
