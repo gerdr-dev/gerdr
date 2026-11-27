@@ -107,6 +107,24 @@ function showCaret(el: HTMLTextAreaElement, at: number) {
   else if (bottom - line < el.scrollTop) el.scrollTop = bottom - line - parseFloat(cs.paddingTop);
 }
 
+/** A tap can open the soft keyboard after the caret has already been revealed, shrinking the box again. */
+export function keepComposerCaretVisible(el: HTMLTextAreaElement, text: string, at: number) {
+  const observer = new ResizeObserver(() => {
+    if (document.activeElement === el && el.value === text && el.selectionStart === at && el.selectionEnd === at) showCaret(el, at);
+  });
+  const stop = () => {
+    observer.disconnect();
+    clearTimeout(timer);
+    el.removeEventListener("pointerdown", stop);
+    el.removeEventListener("blur", stop);
+  };
+  // Follow the keyboard's opening animation, then leave scrolling to the user.
+  const timer = setTimeout(stop, 750);
+  el.addEventListener("pointerdown", stop);
+  el.addEventListener("blur", stop);
+  observer.observe(el);
+}
+
 /** Put text in at the caret (over the selection, if any), the caret after it. */
 export function insertComposerText(paneId: string, s: string) {
   const t = draft(paneId);
