@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { composerSelection, setComposerText } from "./composerText";
 import { isFeed } from "./feedChat";
-import { isCoarse } from "./phone";
+import { isCoarse, keyboardUp } from "./phone";
 import { get } from "./store";
 
 export type CopyPoint = { x: number; y: number };
@@ -49,7 +49,9 @@ export function insertSelectionQuote(box: HTMLTextAreaElement | null | undefined
     .map((line) => `> ${line}`)
     .join("\n");
   const head = `${before}${gap}${block}\n\n`;
-  if (!isCoarse()) box.focus({ preventScroll: true });
+  // Stay inside the quote tap. Android can leave the field focused after hiding the keyboard.
+  if (isCoarse() && document.activeElement === box && !keyboardUp()) box.blur();
+  box.focus({ preventScroll: true });
   setComposerText(paneId, head + after, head.length);
   dismissQuote(id);
 }
