@@ -4,16 +4,18 @@ import { locateSession, spaceOf } from "./layout";
 import { get, prefOf } from "./store";
 
 /** 系统通知：mac App 走原生通知，浏览器走 Notification API（要权限，第一次会问）。 */
-export function systemNotify(title: string, body: string, sessionId?: string) {
+/** item: an inbox item with no conversation (a panel's): clicking opens it (lib/inbox openInboxItemById) in its project. */
+export function systemNotify(title: string, body: string, sessionId?: string, item?: { id: string; space?: string }) {
   if (!prefOf(get(), "notifications")) return;
   const loc = sessionId ? locateSession(get().layout, sessionId) : undefined;
-  if (nativeNotify(title, body, sessionId, loc && spaceOf(loc.ws))) return;
+  if (nativeNotify(title, body, sessionId, (loc && spaceOf(loc.ws)) || item?.space, item?.id)) return;
   if (!("Notification" in window)) return;
   const show = () => {
     const n = new Notification(title, { body, tag: sessionId });
     n.onclick = () => {
       window.focus();
       if (sessionId) import("./actions").then((a) => a.focusSession(sessionId));
+      else if (item) import("./inbox").then((x) => x.openInboxItemById(item.id));
     };
   };
   if (Notification.permission === "granted") show();

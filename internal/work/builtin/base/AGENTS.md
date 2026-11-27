@@ -56,7 +56,7 @@ and their choices are what they set or wrote down, not what the code says.
     when this panel's agent or a worker it started opens a page),
     `<FeedChat>` (the page's own list of what happened — several agents' feed — drawn and answered as a chat),
     `useSession` / `useSessions`, `usePanelChange`, `usePanelVisible`, `onShowSession` (the conversations this panel started are its own: brought up from a notification or
-    the inbox they come back here, and the page shows them), `askSecret`, `registerCard`, `toast`, `useDark`, `usePhoneMenu` (on a phone, the panel's top-left button
+    the inbox they come back here, and the page shows them), `onShowInboxItem` (an inbox item of this panel's without a conversation, clicked: the page opens it by its id), `askSecret`, `registerCard`, `toast`, `useDark`, `usePhoneMenu` (on a phone, the panel's top-left button
     opens Gerdr's drawer: the rows this gives are the panel's part of it — what its header can't fit there), `<PhoneBar>` (on a phone,
     its children go into Gerdr's top bar right of ☰ instead of a second strip under it: wrap the page's header in it). `useSearchItems` (the panel's
     rows in Gerdr's ⌘K palette, listed first while the panel is shown and after the conversations anywhere else in its

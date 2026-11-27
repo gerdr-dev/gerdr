@@ -14,7 +14,7 @@
 //	badge {label}   menu {items}   dockMenu {items}   quit {}   webPid {win} → pid   engine {} → {exe, dataDir, kind}
 //	relaunch {}   focused {} → bool   close {win}
 //	openExternal {url}   openPath {path, reveal}
-//	notify {win, title, body, sessionId, space}   dialog {kind, title, detail, buttons, defaultId, cancelId} → index
+//	notify {win, title, body, sessionId, space, inboxItem}   dialog {kind, title, detail, buttons, defaultId, cancelId} → index
 //	openView {profile, url} → view id   viewCdp {view, method, params} → result   viewPlace {view, win, rect, radius}
 //	viewHide {view}   viewClose {view}
 //
@@ -22,7 +22,7 @@
 //
 //	view kinds also: focus (the page took the focus)
 //	ready {browserOnly, port}   message {win, data}   window {win, open}   menu {item, win}
-//	noteClick {win, sessionId, space}   view {view, kind: cdp | popup | closed, method, params, url}   quit {}
+//	noteClick {win, sessionId, space, inboxItem}   view {view, kind: cdp | popup | closed, method, params, url}   quit {}
 package el
 
 import (
@@ -75,7 +75,7 @@ type Options struct {
 	// OnWindowClose: a window is gone (called once it is off Windows())
 	OnWindowClose func(w *Window)
 	// OnNoteClick: a notification shown with App.Notify was clicked.
-	OnNoteClick func(w *Window, sessionID, space string)
+	OnNoteClick func(w *Window, sessionID, space, item string)
 	BrowserArgs []string
 	DataDir     string
 	Logf        func(string, ...any)
@@ -232,6 +232,7 @@ func (a *App) read(r io.Reader) {
 			Item      string          `json:"item"`
 			SessionID string          `json:"sessionId"`
 			Space     string          `json:"space"`
+			InboxItem string          `json:"inboxItem"`
 			View      string          `json:"view"`
 			Kind      string          `json:"kind"`
 			Method    string          `json:"method"`
@@ -278,7 +279,7 @@ func (a *App) read(r io.Reader) {
 			}
 		case "noteClick":
 			if a.opts.OnNoteClick != nil {
-				go a.opts.OnNoteClick(a.window(m.Win), m.SessionID, m.Space)
+				go a.opts.OnNoteClick(a.window(m.Win), m.SessionID, m.Space, m.InboxItem)
 			}
 		case "view":
 			a.mu.Lock()
@@ -441,12 +442,12 @@ func (a *App) Focused() bool {
 }
 
 // Notify shows a notification; its click comes back to Options.OnNoteClick.
-func (a *App) Notify(w *Window, title, body, sessionID, space string) {
+func (a *App) Notify(w *Window, title, body, sessionID, space, item string) {
 	win := ""
 	if w != nil {
 		win = w.id
 	}
-	_, _ = a.call(map[string]any{"op": "notify", "win": win, "title": title, "body": body, "sessionId": sessionID, "space": space})
+	_, _ = a.call(map[string]any{"op": "notify", "win": win, "title": title, "body": body, "sessionId": sessionID, "space": space, "inboxItem": item})
 }
 
 // Dialog asks with buttons and returns the index of the one picked.

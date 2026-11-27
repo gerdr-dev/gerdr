@@ -41,10 +41,10 @@ export function nativePickIconImage(title: string): Promise<PickedIconImage | nu
 }
 
 /** space: the session (layout.ts Space) the conversation is in, so clicking it brings up the window showing that one. */
-export function nativeNotify(title: string, body: string, sessionId?: string, space?: string) {
+export function nativeNotify(title: string, body: string, sessionId?: string, space?: string, item?: string) {
   const b = bridge();
   if (b) {
-    b.postMessage({ type: "notify", title, body, sessionId, space });
+    b.postMessage({ type: "notify", title, body, sessionId, space, inboxItem: item });
     return true;
   }
   return false;
@@ -53,12 +53,13 @@ export function nativeNotify(title: string, body: string, sessionId?: string, sp
 /**
  * App 里: bring up the window showing `space` and go to the conversation there, as a notification click does (the
  * App's __noteClick, internal/desktop gerdr.go noteClick; with no such window it goes to this one). false = not
- * handled (a browser, or the Windows shell with its one window): the caller goes to it here.
+ * handled (a browser, or the Windows shell with its one window): the caller goes to it here. item: an inbox item with
+ * no conversation (a panel's), opened there instead (window.gerdr.openInboxItem).
  */
-export function nativeFocusSession(sessionId: string, space: string) {
+export function nativeFocusSession(sessionId: string, space: string, item?: string) {
   const w = window as any;
   if (w.gerdrNative?.shell !== "chrome" && w.gerdrNative?.shell !== "electron") return false;
-  w.gerdrNative.postMessage({ type: "__noteClick", sessionId, space });
+  w.gerdrNative.postMessage({ type: "__noteClick", sessionId, space, inboxItem: item });
   return true;
 }
 

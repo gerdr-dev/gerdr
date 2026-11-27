@@ -98,7 +98,8 @@ function add(items: InboxItem[], quiet: boolean, notify = !quiet) {
   // judged without opening Gerdr. In a browser the session id is the tag, so a newer one from the same session replaces the older.
   for (const it of items) {
     const title = it.kind === "battery" ? it.title : `${kindLabel(it.kind)} · ${it.title}`;
-    systemNotify(title, it.body ?? "", it.sessionId);
+    // A panel's item without a conversation: the click opens the item (openInboxItemById), not just the window
+    systemNotify(title, it.body ?? "", it.sessionId, !it.sessionId && it.panel ? { id: it.id, space: itemSpace(it) } : undefined);
     toastItem(it, title);
   }
 }
@@ -246,8 +247,20 @@ function itemSpace(it: InboxItem): string | undefined {
  */
 function openFromCard(it: InboxItem) {
   const space = itemSpace(it);
-  if (it.sessionId && space && space !== currentSpace(getApp().layout) && nativeFocusSession(it.sessionId, space)) return;
+  if (
+    space &&
+    space !== currentSpace(getApp().layout) &&
+    (it.sessionId || it.panel) &&
+    nativeFocusSession(it.sessionId ?? "", space, it.sessionId ? undefined : it.id)
+  )
+    return;
   openInboxItem(it);
+}
+
+/** An item by its id (a notification clicked in the App, App.tsx window.gerdr): opened as from its card. */
+export function openInboxItemById(id: string) {
+  const it = get().items.find((x) => x.id === id);
+  if (it) openInboxItem(it);
 }
 
 /** Where an item leads: its conversation (a panel's own comes back to the panel, lib/panelRoute), else its panel. */
@@ -257,8 +270,10 @@ export function openInboxItem(it: InboxItem) {
     return void import("./actions").then((a) => a.focusSession(sid));
   }
   if (!it.panel) return;
-  const [space, name = ""] = it.panel.split("/");
-  import("./store").then((st) => (st.setWorkPanel(space, name), st.setMode("work")));
+  // The panel's project, the panel, and the item in it (core onShowInboxItem): its id is pan:<panel key>:<the panel's id>
+  const key = it.panel;
+  const own = it.id.startsWith(`pan:${key}:`) ? it.id.slice(`pan:${key}:`.length) : it.id;
+  import("./panelRoute").then((r) => r.showInboxItem(key, own));
 }
 
 function dropCards(keep?: (itemId: string) => boolean) {

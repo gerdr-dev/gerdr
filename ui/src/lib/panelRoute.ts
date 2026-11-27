@@ -57,3 +57,41 @@ export function showInPanel(key: string, session: string) {
     }, WAIT_MS),
   });
 }
+
+/**
+ * An inbox item a panel put there without a conversation (ctx.inbox.set, no `session`: a to-do the panel took in from
+ * outside, a step only the user can do). Opening it went to the panel and stopped there: the window stayed on its own
+ * project when the item was another's, and the panel never learned which item to show, so the person had to find it
+ * again (2026-11-27). Now gerdr switches to the panel and hands it the item's id (core onShowInboxItem).
+ */
+const itemHandlers = new Map<string, Handler>();
+const pendingItems = new Map<string, { id: string; timer: ReturnType<typeof setTimeout> }>();
+
+/** core onShowInboxItem: the panel `key` opens its own inbox items (by the id it gave ctx.inbox.set). */
+export function onShowInboxItem(key: string, fn: Handler): () => void {
+  itemHandlers.set(key, fn);
+  const p = pendingItems.get(key);
+  if (p) {
+    clearTimeout(p.timer);
+    pendingItems.delete(key);
+    fn(p.id);
+  }
+  return () => {
+    if (itemHandlers.get(key) === fn) itemHandlers.delete(key);
+  };
+}
+
+/** Switch to the panel `key` (its project first) and have it open its item `id`. */
+export function showInboxItem(key: string, id: string) {
+  const space = spaceOfKey(key);
+  const l = codeLayout();
+  if (currentSpace(l) !== space && spaceList(l).some((s) => s.id === space)) switchSpace(space);
+  setWorkPanel(space, panelOfKey(key));
+  setMode("work");
+  const h = itemHandlers.get(key);
+  if (h) return h(id);
+  // Not mounted yet: held a while for it. A panel without a handler just shows itself, as before
+  const prev = pendingItems.get(key);
+  if (prev) clearTimeout(prev.timer);
+  pendingItems.set(key, { id, timer: setTimeout(() => pendingItems.delete(key), 15_000) });
+}

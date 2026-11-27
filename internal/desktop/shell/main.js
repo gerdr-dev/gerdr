@@ -514,7 +514,7 @@ async function handle(m) {
       });
       n.on("click", () => {
         live.delete(n);
-        send({ ev: "noteClick", win: m.win, sessionId: m.sessionId, space: m.space });
+        send({ ev: "noteClick", win: m.win, sessionId: m.sessionId, space: m.space, inboxItem: m.inboxItem });
       });
       n.on("close", () => live.delete(n));
       n.show();

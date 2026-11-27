@@ -42,7 +42,7 @@ export {
 export { useSession, useSessions, useUnread } from "./sessions";
 // A conversation's waiting approval / question, answered in place (the inbox's buttons), here or on another computer
 export { usePending, PendingActions } from "./pending";
-export { onShowSession } from "@/lib/panelRoute";
+export { onShowSession, onShowInboxItem } from "@/lib/panelRoute";
 export { useDark } from "./theme";
 export { askSecret } from "@/lib/workSecrets";
 export { registerCard, type CardProps } from "@/lib/cards";

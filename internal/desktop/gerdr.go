@@ -167,9 +167,9 @@ func (s *shell) message(w *el.Window, raw json.RawMessage) {
 	}
 	switch typ {
 	case "notify":
-		s.notify(w, str("title"), str("body"), str("sessionId"), str("space"))
+		s.notify(w, str("title"), str("body"), str("sessionId"), str("space"), str("inboxItem"))
 	case "__noteClick":
-		s.noteClick(w, str("sessionId"), str("space"))
+		s.noteClick(w, str("sessionId"), str("space"), str("inboxItem"))
 	case "badge":
 		// The engine is the app: its Dock tile is Gerdr's (navigator.setAppBadge is for installed web apps only).
 		n, _ := m["count"].(float64)
@@ -248,8 +248,8 @@ func (s *shell) space(w *el.Window) string {
 }
 
 // notify shows a notification for the page that asked (Electron's, from the App); its click comes back as noteClick.
-func (s *shell) notify(w *el.Window, title, body, sessionID, space string) {
-	key := title + "\n" + body + "\n" + sessionID
+func (s *shell) notify(w *el.Window, title, body, sessionID, space, item string) {
+	key := title + "\n" + body + "\n" + sessionID + "\n" + item
 	s.mu.Lock()
 	for k, t := range s.notes {
 		if time.Since(t) > 5*time.Second {
@@ -265,12 +265,12 @@ func (s *shell) notify(w *el.Window, title, body, sessionID, space string) {
 	if title == "" {
 		title = appName
 	}
-	s.app.Notify(w, title, body, sessionID, space)
+	s.app.Notify(w, title, body, sessionID, space, item)
 }
 
 // noteClick: the window showing the notification's session if there is one, else the one that notified; up front,
-// on the conversation.
-func (s *shell) noteClick(from *el.Window, sessionID, space string) {
+// on the conversation, or on the inbox item when it has none (a panel's to-do: ui/src/lib/inbox.ts openInboxItemById).
+func (s *shell) noteClick(from *el.Window, sessionID, space, item string) {
 	target := from
 	if space != "" {
 		for _, w := range s.app.Windows() {
@@ -283,6 +283,9 @@ func (s *shell) noteClick(from *el.Window, sessionID, space string) {
 	if sessionID != "" {
 		b, _ := json.Marshal(sessionID)
 		_ = target.Eval("window.gerdr && window.gerdr.focusSession(" + string(b) + ")")
+	} else if item != "" {
+		b, _ := json.Marshal(item)
+		_ = target.Eval("window.gerdr && window.gerdr.openInboxItem && window.gerdr.openInboxItem(" + string(b) + ")")
 	}
 }
 

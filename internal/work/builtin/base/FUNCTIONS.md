@@ -42,7 +42,9 @@ side's workspaces), `dirs` (directories anywhere on disk, read-only), `artifacts
 What on this panel needs the user goes to Gerdr's inbox with `ctx.inbox.set([{ id, title, body?, session? }])`: on
 every device, and as a notification on the phone App. Pass the whole current list each time (from wherever the panel
 works out what waits on the user, e.g. after each change and on a schedule): an item left out is done and leaves the
-inbox, the same `id` again is the same item. `session` makes the item open that conversation.
+inbox, the same `id` again is the same item. `session` makes the item open that conversation; without it, opening
+the item shows this panel and hands its page the `id` (`onShowInboxItem` from `@gerdr/core`), which should open that
+thing (a to-do's card), not leave the person looking for it.
 
 Something new on the panel that asks nothing of the user (the board changed, new messages) is a badge on its rail
 button instead: `ctx.badge.set(n)` for a number, `ctx.badge.set(true)` for a dot, `ctx.badge.add()` for one more,

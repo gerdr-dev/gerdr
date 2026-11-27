@@ -378,7 +378,8 @@ interface Ctx {
    * What on this panel needs the user, in Gerdr's inbox (every device) and the phone's notifications: a task asking
    * something, a step only they can do. `set` takes the whole current list each time; an item no longer in it is done
    * and leaves the inbox. Same `id` = same item (notified once). `session`: the conversation it's about, opened from the
-   * item (back in this panel when the panel started it). At most 50.
+   * item (back in this panel when the panel started it). Without one, opening the item shows this panel and hands
+   * its page the `id` (@gerdr/core onShowInboxItem) to show that thing. At most 50.
    */
   inbox: {
     set(items: { id: string; title: string; body?: string; session?: string }[]): void;

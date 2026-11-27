@@ -139,6 +139,14 @@ declare module "@gerdr/core" {
   export function onShowSession(key: string, fn: (session: string) => void): () => void;
 
   /**
+   * Open this panel's own inbox items: one it put there without a `session` (ctx.inbox.set), clicked in the inbox,
+   * its card or its system notification. gerdr switches to this panel (in its project) and calls `fn` with the id
+   * the item was given, so the panel shows that thing (a board opens the to-do's card); without a handler the
+   * panel is just shown. `key`: this panel's (`project` from ./lib/gerdr). Returns an unregister function.
+   */
+  export function onShowInboxItem(key: string, fn: (id: string) => void): () => void;
+
+  /**
    * Open a file on this computer (an absolute or `~/` path) in gerdr's viewer, the way a path clicked in the chat opens:
    * images, videos, PDFs, Markdown, code. Use it for links to local files (what an agent produced): a `file://` link
    * opens nothing from gerdr's page, and nothing at all on a phone. `cwd` resolves a relative path.

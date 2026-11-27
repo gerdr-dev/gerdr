@@ -175,6 +175,8 @@ export default function App() {
       runCommand: (id: string) =>
         browserOnly ? (id === "closePane" || id === "closeTab") && window.close() : import("./lib/addons").then((p) => p.runCommand(id)),
       focusSession: (id: string) => import("./lib/actions").then((a) => a.focusSession(id)),
+      // a panel's inbox item with no conversation (lib/inbox.ts), from a notification or a card clicked in another window
+      openInboxItem: (id: string) => import("./lib/inbox").then((x) => x.openInboxItemById(id)),
       appUpdate: onAppUpdate, // desktop/main.js pushUpdate
     };
     nativeAskUpdate();
