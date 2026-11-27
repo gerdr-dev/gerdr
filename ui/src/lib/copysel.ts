@@ -14,6 +14,7 @@ import { insertSelectionQuote, offerComposerQuote, quoteSelection, type CopyPoin
 
 const HIGHLIGHT_MS = 500; // herdr 的 PANE_COPY_HIGHLIGHT_DURATION
 const BUBBLE_MS = 1000;
+const QUOTE_BUBBLE_MS = 8000;
 
 export const copyOnSelectOn = () => !!prefOf(get(), "copyOnSelect");
 
@@ -81,7 +82,9 @@ function showBubble({ x, y }: CopyPoint, quote?: SelectionQuote) {
     for (let parent: HTMLElement | null = quote.box; parent; parent = parent.parentElement) {
       observer.observe(parent, { childList: true, attributes: true, attributeFilter: ["class", "style", "hidden", "aria-hidden", "data-session"] });
     }
+    const timeout = setTimeout(close, QUOTE_BUBBLE_MS);
     detach = () => {
+      clearTimeout(timeout);
       observer.disconnect();
       window.removeEventListener("pointerdown", outside, true);
       window.removeEventListener("keydown", key, true);
