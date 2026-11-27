@@ -116,6 +116,7 @@ import { useWorkProject } from "@/lib/work";
 import { usePhone } from "@/lib/phone";
 import { usePanelPhoneMenu } from "@/core/phoneMenu";
 import { usePanelSearches } from "@/core/search";
+import { searchWorkspace } from "@/lib/workspaceSearch";
 import { PanelPhoneMenu } from "./PhoneMenu";
 
 /*
@@ -360,7 +361,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const panelMenu = usePanelPhoneMenu(roomy && mode === "work" && !hosted ? workKey : null);
   // The drawer's search: not kept, it's "what am I looking for right now" (the drawer remounts on every open)
   const [q, setQ] = useState("");
-  const panelSearch = usePanelSearches(roomy && hosted).find(([key]) => key === workKey)?.[1];
+  const panelSearch = usePanelSearches(roomy && hosted).filter(([key]) => key === workKey);
   // The "3m" column's clock: minutes are its smallest step, a tick every 15s is plenty (statuses come over the socket)
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -391,34 +392,31 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   }, [curTab?.id, curTab?.focus, gridOn]);
 
   const here = currentSpace(layout);
-  // Use the same panel entries as the command palette, including tasks whose conversations aren't open.
-  const kw = q.trim().toLowerCase();
-  const panelHits = kw
-    ? (panelSearch?.items.filter(({ label, id, detail, keywords }) => [label, id, detail, keywords].join(" ").toLowerCase().includes(kw)) ?? [])
-    : [];
-  const matchedSessions = new Set(panelHits.map((item) => item.sessionId).filter(Boolean));
-  const hits = !kw
-    ? []
-    : allLeaves(layout)
-        .filter((x) => spaceOf(x.ws) === here)
-        .filter(({ ws, tab, pane }) => {
-          if (pane.sessionId && matchedSessions.has(pane.sessionId)) return false;
-          const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
-          return [
-            s?.title,
-            s?.agent,
-            s?.cwd,
-            wsLabelOf(layout, ws),
-            tabName(tab),
-            pane.sub?.title,
-            pane.term ? `${t("unifiedSidebar.terminal")} ${pane.term.cwd}` : "",
-            pane.file?.path,
-            pane.browser?.url,
-          ]
-            .join(" ")
-            .toLowerCase()
-            .includes(kw);
-        });
+  const searching = q.trim() !== "";
+  const { panels, panes: hits } = searchWorkspace(
+    q,
+    searching ? panelSearch : [],
+    searching ? allLeaves(layout).filter((x) => spaceOf(x.ws) === here) : [],
+    ({ ws, tab, pane }) => {
+      const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
+      return {
+        sessionId: pane.sessionId,
+        text: [
+          s?.title,
+          s?.agent,
+          s?.cwd,
+          wsLabelOf(layout, ws),
+          tabName(tab),
+          pane.sub?.title,
+          pane.term ? `${t("unifiedSidebar.terminal")} ${pane.term.cwd}` : "",
+          pane.file?.path,
+          pane.browser?.url,
+          pane.sessionId,
+        ].join(" "),
+      };
+    },
+  );
+  const panelHits = panels[0]?.[1].items ?? [];
 
   return (
     <Roomy.Provider value={roomy ? { now } : null}>
@@ -442,13 +440,13 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                   {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
                   <input
                     className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
-                    placeholder={t(panelSearch ? "unifiedSidebar.panelFilterPlaceholder" : "unifiedSidebar.filterPlaceholder")}
+                    placeholder={t(panelSearch.length ? "unifiedSidebar.panelFilterPlaceholder" : "unifiedSidebar.filterPlaceholder")}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                   />
                 </div>
               )}
-              {kw ? (
+              {searching ? (
                 <div className="flex flex-col pt-1.5">
                   {panelHits.map((x) => (
                     <button
@@ -478,7 +476,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                   ))}
                   {!panelHits.length && !hits.length && (
                     <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">
-                      {t(panelSearch ? "unifiedSidebar.noPanelMatch" : "unifiedSidebar.noMatch")}
+                      {t(panelSearch.length ? "unifiedSidebar.noPanelMatch" : "unifiedSidebar.noMatch")}
                     </p>
                   )}
                 </div>
