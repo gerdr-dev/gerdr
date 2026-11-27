@@ -8,6 +8,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/repomem"
 )
 
 // projectIndexMax caps the memory index put into the prompt, like Claude Code's own MEMORY.md (it loads the first
@@ -61,6 +62,9 @@ func SessionPrompt(em *ext.Manager) func(sessionID, cwd string, meta map[string]
 		if p := strings.TrimSpace(project(id, cwd, meta)); p != "" {
 			parts = append(parts, p)
 		}
+		if em != nil && cwd != "" {
+			parts = append(parts, repoMemoryText(em.Root(), cwd))
+		}
 		if d := acpx.ArtifactsDir(meta); d != "" {
 			parts = append(parts, artifactsText(d))
 		}
@@ -107,4 +111,49 @@ This conversation belongs to the Gerdr project %q, which can span several reposi
 
 Current MEMORY.md:
 %s`, project, project, dir, index)
+}
+
+// repoMemoryMax caps one repository's notes in the prompt; repoIndexMax how many other repositories are listed.
+const (
+	repoMemoryMax = 16 << 10
+	repoIndexMax  = 40
+)
+
+// repoMemoryText is the person's notes about the repository the session works in (internal/repomem), in whole: they
+// are rules to follow (ships without an MR, who approves a release), and an agent that has to remember to look won't,
+// every time. The other repositories with notes are listed by file, read when the work goes there — a worker in one
+// repository touching another, or opening a helper session there (which then gets that one's notes itself).
+func repoMemoryText(root, cwd string) string {
+	repo := repomem.Root(cwd)
+	own := repomem.Read(root, repo)
+	text := own.Text
+	if len(text) > repoMemoryMax {
+		text = text[:repoMemoryMax] + "\n… (truncated; read the file for the rest, and tidy it)"
+	}
+	if text == "" {
+		text = "(none yet)"
+	}
+	var others []string
+	for _, n := range repomem.List(root) {
+		if n.Repo == repo {
+			continue
+		}
+		if len(others) == repoIndexMax {
+			others = append(others, "- … (more in "+repomem.Dir(root)+")")
+			break
+		}
+		others = append(others, fmt.Sprintf("- %s: %s", n.Repo, n.Path))
+	}
+	idx := "(none)"
+	if len(others) > 0 {
+		idx = strings.Join(others, "\n")
+	}
+	return fmt.Sprintf(`# Repository memory
+
+The person's notes about the repository this conversation works in (%s): what earlier conversations learned from them that isn't in the repository, such as whether it ships through an MR or straight to the branch, who merges, who approves a release, a pitfall they told you about. Follow them like their rules. Kept by Gerdr in %s, shared by every agent and Gerdr project working in this repository:
+%s
+
+- Add a note only for what the person said or confirmed about this repository, never your own guess: `+"`gerdr memory add \"<the fact in one sentence>\"`"+` (`+"`--repo <path>`"+` for another repository). To correct or remove one, edit the file (read it again first: the person edits it in Gerdr too). What holds for all repositories goes in the project memory instead; what the code or git history records goes nowhere.
+- Before working in another repository, or handing work there to another session, read that repository's notes (and pass on what matters). Other repositories with notes:
+%s`, repo, own.Path, text, idx)
 }

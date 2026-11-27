@@ -1,6 +1,6 @@
 ---
 name: gerdr-setup
-description: "Changing how Gerdr (the GUI you run in) is set up, from the command line: its settings (theme, default agent / mode / model, shortcuts, model providers: `gerdr config`); agents (roles) with their own prompt, skills and MCP servers (`gerdr agent / skill / mcp`); Gerdr projects (`gerdr project list / new / icon`) and a project's own skills and shared memory (`gerdr skill --project`); add-ons (`gerdr addon`: stores, install, settings); a project's panels (`gerdr panel`: install, new, update, icon, order, badge, remove); the layout (workspaces, tabs, splits, a moved project folder: `gerdr workspace / tab / pane`); remote access from a phone (`gerdr remote`). Changing Gerdr's UI code is gerdr-ui. Requires GERDR_ENV=1."
+description: "Changing how Gerdr (the GUI you run in) is set up, from the command line: its settings (theme, default agent / mode / model, shortcuts, model providers: `gerdr config`); agents (roles) with their own prompt, skills and MCP servers (`gerdr agent / skill / mcp`); Gerdr projects (`gerdr project list / new / icon`) and a project's own skills and shared memory (`gerdr skill --project`); per-repository memory (`gerdr memory`); add-ons (`gerdr addon`: stores, install, settings); a project's panels (`gerdr panel`: install, new, update, icon, order, badge, remove); the layout (workspaces, tabs, splits, a moved project folder: `gerdr workspace / tab / pane`); remote access from a phone (`gerdr remote`). Changing Gerdr's UI code is gerdr-ui. Requires GERDR_ENV=1."
 ---
 
 # Gerdr: settings, agents, add-ons, panels, layout
@@ -172,6 +172,20 @@ gerdr project icon lb --image ~/logo.png           # or a picture (cut square, s
 - **Memory**: `<GERDR_DIR>/projects/<id>/memory/`, one .md per fact plus the `MEMORY.md` index, the format of Claude
   Code's auto memory. Every session of the project starts with the index. Edit the files directly; keep the index in
   step.
+
+### A repository's memory
+
+What the person told agents about one repository that isn't in it (ships without an MR, who merges, who approves a
+release) is kept per repository path, shared by every project and agent: `<GERDR_DIR>/repo-memory/<name>-<hash>.md`,
+plain "- " lines. Every session started in the repository, or in a worktree of it, has its notes whole in its system
+prompt ("Repository memory"), with the other repositories' files listed. What holds for every repository belongs in the
+project memory instead.
+
+```bash
+gerdr memory                       # this directory's repository: its notes and file
+gerdr memory add "发布要找张三批"     # one sentence the person said or confirmed (--repo <path> for another one)
+gerdr memory list                  # the repositories with notes
+```
 
 ### Per project instead of per agent
 

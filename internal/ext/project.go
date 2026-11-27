@@ -39,6 +39,9 @@ func (m *Manager) projectDir(project string) (string, error) {
 	return filepath.Join(m.dir, "projects", project), nil
 }
 
+// Root is the Gerdr data directory (<GERDR_DIR>) this manager keeps its files in.
+func (m *Manager) Root() string { return m.dir }
+
 // ProjectSkillsDir / ProjectMemoryDir: where a project's skills / memory live (they may not exist yet).
 func (m *Manager) ProjectSkillsDir(project string) (string, error) {
 	d, err := m.projectDir(project)

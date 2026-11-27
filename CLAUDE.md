@@ -17,6 +17,9 @@ shells before it are in git history, why Chromium at all in docs/dev/WHY-ELECTRO
 - iOS App (ios/: a WKWebView shell, passkey through Safari via the device flow, LAN routing on iOS 17+, `make ios` / `make ios-typecheck`):
   docs/dev/IOS.md. It speaks Android's bridge format (`window.gerdrIOS`, `WebViewController.swift`), so a bridge
   message change touches `Bridge.kt`, `WebViewController.swift` and `ui/src/lib/android.ts` together.
+- Repository memory (the person's notes per repository path, shared by every project and agent, put into every session
+  working there: `internal/repomem`, `agentwire.repoMemoryText`, `gerdr memory`, `ctx.repoMemory`): why and the layout
+  in the package doc of internal/repomem. Panels write it; they don't inject it themselves.
 - Artifacts (folders under `~/Gerdr` and the records a piece of work leaves: files, links, paths, text; session
   `artifactsDir`, `gerdr artifacts`, the `<Folder>` component): docs/dev/ARTIFACTS.md.
 - Measured-and-postponed work (why, numbers, how to do it): docs/dev/todo/, one file each, listed in its README.md. Add one instead of losing the investigation.

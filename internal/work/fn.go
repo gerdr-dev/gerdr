@@ -375,6 +375,8 @@ func (r *runner) ctxObject() jsValue {
 		"sessions":   r.sessionsObject(),
 		"workspaces": r.workspacesObject(),
 		"artifacts":  r.artifactsObject(),
+		// The person's notes per repository (internal/repomem): every session in a repository gets its own (host.go)
+		"repoMemory": r.repoMemoryObject(),
 		"dirs":       r.dirsObject(),
 		// Events (trigger.go, docs/dev/EVENTS.md): what a poll found goes out as events; triggers/ subscribe to them
 		"events": r.eventsObject(),

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gerdr-dev/gerdr/acpx"
 	"github.com/gerdr-dev/gerdr/internal/ext"
+	"github.com/gerdr-dev/gerdr/internal/repomem"
 )
 
 func TestProjectPrompt(t *testing.T) {
@@ -38,5 +39,26 @@ func TestSessionPromptArtifacts(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestRepoMemoryText(t *testing.T) {
+	root := t.TempDir()
+	repo := t.TempDir()
+	other := "/src/other-repo"
+	if _, _, err := repomem.Add(root, repo, "ships straight to main"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := repomem.Add(root, other, "release approved by Zhang"); err != nil {
+		t.Fatal(err)
+	}
+	got := repoMemoryText(root, repo)
+	for _, want := range []string{"# Repository memory", "- ships straight to main", repomem.Path(root, repo), "- " + other + ": " + repomem.Path(root, other), "gerdr memory add"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "release approved by Zhang") {
+		t.Error("another repository's notes went in whole")
 	}
 }

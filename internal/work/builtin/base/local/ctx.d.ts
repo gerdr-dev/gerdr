@@ -264,6 +264,22 @@ interface Ctx {
     mute(id: string, on?: boolean): Session;
   };
 
+  /**
+   * The person's notes per repository, kept by Gerdr and shared by every project: what agents learned from them about
+   * one repository that isn't in it (ships without an MR, who merges, who approves a release). Gerdr puts a repository's
+   * notes into every session working in it (or in a worktree of it), whoever started the session, and lists the other
+   * repositories' files — so a panel writes here and doesn't inject them itself. `repo`: an absolute path; a
+   * subdirectory or a worktree counts as its repository. `text`: plain "- " lines, "" when there are none.
+   */
+  repoMemory: {
+    list(): RepoNotes[];
+    read(repo: string): RepoNotes;
+    /** Replaces them all ("" removes the file). */
+    write(repo: string, text: string): RepoNotes;
+    /** One "- " line, unless the same fact (ignoring a trailing "（…）") is already there: `added` false then. */
+    add(repo: string, line: string): RepoNotes & { added: boolean };
+  };
+
   /** The Code side's workspaces (not this panel: that's `ctx.workspace`). */
   /**
    * Artifacts: a folder per thing your panel tracks (a task) for what its work leaves that isn't committed —
@@ -584,6 +600,14 @@ interface Workspace {
   project: string;
   /** The conversations in its panes. */
   sessions: Session[];
+}
+
+/** A repository's notes (ctx.repoMemory). */
+interface RepoNotes {
+  repo: string;
+  /** The file (<GERDR_DIR>/repo-memory/…md): the person edits it there too. */
+  path: string;
+  text: string;
 }
 
 /** One record of an artifacts folder. */

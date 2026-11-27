@@ -114,7 +114,7 @@ func main() {
 		Short: i18n.S("打印版本", "Print the version"),
 		Run:   func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
 	})
-	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), hostCmd(), artifactsCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), imageCmd(), browserCmd(), projectCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
+	root.AddCommand(addProjectFlag(sessionCmd()), folderCmd(), hostCmd(), artifactsCmd(), memoryCmd(), uiCmd(), workCmd(), panelCmd(), remoteCmd(), configCmd(), agentCmd(), mcpCmd(), skillCmd(), addonCmd(), eventCmd(), waitCmd(), imageCmd(), browserCmd(), projectCmd(), addProjectFlag(workspaceCmd()), addProjectFlag(tabCmd()), addProjectFlag(paneCmd()))
 	if err := root.Execute(); err != nil {
 		if errors.Is(err, errHandover) {
 			os.Exit(exitHandover)

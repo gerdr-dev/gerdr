@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gerdr-dev/gerdr/internal/repomem"
 	"io"
 	"os"
 	"path/filepath"
@@ -462,6 +463,52 @@ func (r *runner) artifactsObject() map[string]any {
 			return out
 		},
 	}
+}
+
+// repoMemoryObject is ctx.repoMemory: the person's notes per repository (internal/repomem), the ones Gerdr puts into
+// every session working in that repository. A panel writes them when its agents learn something (the Superagent's
+// remember) and shows them for editing; it no longer injects them itself.
+func (r *runner) repoMemoryObject() map[string]any {
+	repo := func(p string) string {
+		d, err := expandPath(p)
+		if err != nil || !filepath.IsAbs(d) {
+			r.throw(fmt.Errorf("ctx.repoMemory: need a repository's absolute path: %q", p))
+		}
+		return repomem.Root(d)
+	}
+	return map[string]any{
+		// ctx.repoMemory.list() → [{ repo, path, text }]: every repository with notes
+		"list": func() []map[string]any {
+			out := []map[string]any{}
+			for _, n := range repomem.List(r.r.Root) {
+				out = append(out, notesMap(n))
+			}
+			return out
+		},
+		// ctx.repoMemory.read(repo) → { repo, path, text } (text "" when none)
+		"read": func(p string) map[string]any { return notesMap(repomem.Read(r.r.Root, repo(p))) },
+		// ctx.repoMemory.write(repo, text) → { repo, path, text }: replaces them all; "" removes them
+		"write": func(p, text string) map[string]any {
+			n, err := repomem.Write(r.r.Root, repo(p), text)
+			if err != nil {
+				r.throw(err)
+			}
+			return notesMap(n)
+		},
+		// ctx.repoMemory.add(repo, line) → { repo, path, text, added }: one "- " line, unless the same fact is there
+		"add": func(p, line string) map[string]any {
+			n, added, err := repomem.Add(r.r.Root, repo(p), line)
+			if err != nil {
+				r.throw(err)
+			}
+			return map[string]any{"repo": n.Repo, "path": n.Path, "text": n.Text, "added": added}
+		},
+	}
+}
+
+// notesMap: what the JS side gets (plain keys, as every ctx object returns).
+func notesMap(n repomem.Notes) map[string]any {
+	return map[string]any{"repo": n.Repo, "path": n.Path, "text": n.Text}
 }
 
 func (r *runner) workspacesObject() map[string]any {
