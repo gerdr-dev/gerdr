@@ -497,6 +497,8 @@ export class Transcript {
             this.pushPart(this.assistant(e.ts), { type: "data-notice", data: sk });
           }
         }
+        // A note delivered on its own leaves the person's pending questions and message queue alone.
+        if (e.steer && e.content?.length && e.content.every((c) => c.type === "text" && isNote(c.text))) break;
         const late = only !== undefined ? LATE_ANSWER.exec(only) : null;
         // Anything the user says closes the late questions; a late answer also fills its own card
         if (this.lateAsks.size) {
