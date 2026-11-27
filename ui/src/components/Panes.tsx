@@ -34,6 +34,7 @@ import {
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
+import { nativeTitleBar } from "@/lib/native";
 import { Button } from "@/components/ui/button";
 import { api, type FileStat } from "@/lib/api";
 import { FileActions, FileContent } from "./FileViewer";
@@ -575,12 +576,43 @@ function usePaneHeadHeight(_framed: boolean) {
  */
 const DIM_HEAD = "opacity-70 [&_svg]:grayscale [&_img]:grayscale";
 
-function usePaneDrag(paneId: string, ghost: TabGhost) {
+function usePaneDrag(paneId: string, ghost: TabGhost, tab: Tab) {
   const phone = usePhone();
   const dragging = useDrag()?.paneId === paneId;
   const floatMove = useContext(FloatMove);
-  if (floatMove) return { dragging: false, onPointerDown: floatMove };
-  return { dragging, onPointerDown: phone ? undefined : (e: React.PointerEvent<HTMLElement>) => startPaneDrag(e, paneId, ghost) };
+  const atTop = usePaneHeadAtTop(!phone && !floatMove, tab);
+  if (floatMove) return { dragging: false, onPointerDown: floatMove, head: atTop.ref, win: undefined };
+  return {
+    dragging,
+    onPointerDown: phone ? undefined : (e: React.PointerEvent<HTMLElement>) => startPaneDrag(e, paneId, ghost),
+    head: atTop.ref,
+    win: atTop.win,
+  };
+}
+
+const WIN_DRAG = { WebkitAppRegion: "drag" } as React.CSSProperties;
+
+/**
+ * A pane title bar at the window's top in the desktop App (no tab bar above it: the unified list, or a panel's own
+ * Code view) is all the title bar there is beside the list, and with nothing else up there the window couldn't be
+ * moved (asked for). So its quiet stretch (the path / branch, the gap before the buttons: `win`) drags the window;
+ * the title and icon keep dragging the pane (startPaneDrag), the buttons stay clickable. Measured, not guessed from
+ * the layout: whether a tab bar is above depends on App / the hosting panel. Re-measured when the tab's layout or
+ * the window changes; a pane lower down or floating never drags the window.
+ */
+function usePaneHeadAtTop(on: boolean, tab: Tab) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(false);
+  const sidebar = useStore((s) => s.sidebar);
+  const bar = on ? nativeTitleBar() : null;
+  useLayoutEffect(() => {
+    if (!bar) return setTop(false);
+    const check = () => setTop(!!ref.current && ref.current.getBoundingClientRect().top < bar.height / 2);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [bar, tab, sidebar]);
+  return { ref, win: top ? WIN_DRAG : undefined };
 }
 
 function PaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab: Tab; framed: boolean; zoomed?: boolean; count?: Count }) {
@@ -659,7 +691,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
   const headH = usePaneHeadHeight(framed);
   const task = session?.tasks?.find((t) => t.toolCallId === sub.toolCallId);
   const title = task?.description || sub.title || t("panes.subAgent");
-  const drag = usePaneDrag(pane.id, { label: title });
+  const drag = usePaneDrag(pane.id, { label: title }, tab);
   return (
     <div
       data-pane-id={pane.id}
@@ -668,6 +700,7 @@ function SubPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; tab
     >
       {/* 手机上和顶栏两头对齐：左 16px，16px 图标的中线落在 24px（= ☰：px-1.5 + 36px 按钮）；右边照旧 12px，24px 的 ⋯ 按钮中线也落在 24px（= 右上角 +）。三种 pane 的标题栏同一个边距 */}
       <div
+        ref={drag.head}
         onPointerDown={drag.onPointerDown}
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
@@ -720,7 +753,7 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
       live = false;
     };
   }, [path, pane.file!.host, rev]);
-  const drag = usePaneDrag(pane.id, { label: basename(path) });
+  const drag = usePaneDrag(pane.id, { label: basename(path) }, tab);
   return (
     <div
       data-pane-id={pane.id}
@@ -728,12 +761,17 @@ function FilePaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
+        ref={drag.head}
         onPointerDown={drag.onPointerDown}
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         <FileText className="size-4 shrink-0 text-muted-foreground" />
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{basename(path)}</FadeText>
-        <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={path}>
+        <span
+          className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block md:self-stretch md:content-center"
+          title={path}
+          style={drag.win}
+        >
           {path}
         </span>
         <div className="flex-1 md:hidden" />
@@ -767,7 +805,7 @@ function BrowserPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
   const headH = usePaneHeadHeight(framed);
   const fitDrawn = useContext(FloatFitDrawn);
   const viewOnly = useContext(FloatViewOnly);
-  const drag = usePaneDrag(pane.id, { label: t("browser.empty") });
+  const drag = usePaneDrag(pane.id, { label: t("browser.empty") }, tab);
   // the page moved to a window of its own (BrowserOut): this pane holds its card meanwhile, and stays, since a Browser
   // pane closed closes its page (server/browserpanes.go)
   const out = useBrowserWindows((w) => !!b.tab && w.tabs.includes(b.tab));
@@ -961,7 +999,7 @@ function FolderPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; 
   const focused = useContext(TabActive) && tab.focus === pane.id;
   const many = framed || zoomed;
   const headH = usePaneHeadHeight(framed);
-  const drag = usePaneDrag(pane.id, { label: basename(f.path) });
+  const drag = usePaneDrag(pane.id, { label: basename(f.path) }, tab);
   return (
     <div
       data-pane-id={pane.id}
@@ -969,12 +1007,13 @@ function FolderPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; 
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
+        ref={drag.head}
         onPointerDown={drag.onPointerDown}
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         <FolderOpen className="size-4 shrink-0 text-brand" />
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{f.session ? t("folder.open") : basename(f.path)}</FadeText>
-        <div className="flex-1" />
+        <div className="flex-1 self-stretch" style={drag.win} />
         <PaneCount count={count} />
         <Button variant="ghost" size="icon" className="size-6 shrink-0" title={t("common.close")} onClick={() => (focusPane(pane.id), closeFocusedPane())}>
           <X className="size-3.5" />
@@ -999,7 +1038,7 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
   const [osc, setOsc] = useState("");
   useStore((s) => s.addonVersion);
   const title = applyPaneTitle(pane, tab, osc || basename(cwd));
-  const drag = usePaneDrag(pane.id, { label: title, term: true });
+  const drag = usePaneDrag(pane.id, { label: title, term: true }, tab);
   return (
     <div
       data-pane-id={pane.id}
@@ -1007,13 +1046,18 @@ function TermPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf; ta
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
+        ref={drag.head}
         onPointerDown={drag.onPointerDown}
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
         <SquareTerminal className="size-4 text-muted-foreground" />
         {/* The 60% cap leaves room for the path, which a phone hides: there it only left a gap before the ⋯ */}
         <FadeText className="min-w-[3em] max-w-[60%] shrink font-medium max-md:max-w-none">{title}</FadeText>
-        <span className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block" title={cwd}>
+        <span
+          className="hidden min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground md:block md:self-stretch md:content-center"
+          title={cwd}
+          style={drag.win}
+        >
           {cwd}
         </span>
         <div className="flex-1 md:hidden" />
@@ -1140,7 +1184,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
 
   const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : t("panes.newSession");
   const title = applyPaneTitle(pane, tab, base);
-  const drag = usePaneDrag(pane.id, { label: title, agent: session?.agent });
+  const drag = usePaneDrag(pane.id, { label: title, agent: session?.agent }, tab);
   const pickAgent = async (agent: string) => {
     if (!session || switchingAgent) return;
     setSwitchingAgent(true);
@@ -1160,6 +1204,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
       onMouseDown={() => !focused && focusPane(pane.id)}
     >
       <div
+        ref={drag.head}
         onPointerDown={drag.onPointerDown}
         className={cn("flex shrink-0 items-center gap-2 border-b px-3 text-[12px] max-md:pl-4", headH, !focused && many && DIM_HEAD)}
       >
@@ -1181,7 +1226,10 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
         <PaneTag pane={pane.id} session={pane.sessionId} />
         {session?.pending ? <span className="shrink-0 whitespace-nowrap rounded-sm bg-bad/15 px-1.5 text-[11px] text-bad">{t("panes.waiting")}</span> : null}
         {session ? (
-          <span className="hidden min-w-0 flex-1 items-center gap-2 overflow-hidden font-mono text-[11px] text-muted-foreground md:flex">
+          <span
+            className="hidden min-w-0 flex-1 items-center gap-2 self-stretch overflow-hidden font-mono text-[11px] text-muted-foreground md:flex"
+            style={drag.win}
+          >
             {/* Where the agent works now (it can move itself, e.g. Claude's EnterWorktree); the branch below is that place's */}
             <span className="min-w-0 truncate" title={session.workdir ? t("panes.workdir", { cwd: session.cwd }) : session.cwd}>
               {session.workdir ?? session.cwd}
@@ -1196,7 +1244,7 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
           </span>
         ) : null}
         {/* 路径那段手机上藏了，没它撑开的话 ⋯ 会紧跟在标题后面；和终端 pane 一样补一个手机上的占位 */}
-        <div className={cn("flex-1", session && "md:hidden")} />
+        <div className={cn("flex-1 self-stretch", session && "md:hidden")} style={drag.win} />
         <AddonSlot name="paneTitle" props={{ pane: paneSnapshot(pane), tab: tabSnapshot(tab) }} />
         {/* Only a panel's task has an artifacts folder; Code's own sessions have none (docs/dev/ARTIFACTS.md) */}
         {session?.artifactsDir && (
