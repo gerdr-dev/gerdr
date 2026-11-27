@@ -47,6 +47,14 @@ var modes = []acp.SessionMode{
 	{Id: modeFull, Name: "Full access", Description: acp.Ptr(i18n.S("不问、不设沙箱", "Never asks, no sandbox"))},
 }
 
+// SessionModes is available before app-server starts. The hub uses it for an empty conversation's mode picker.
+func SessionModes(mode string) *acp.SessionModeState {
+	if mode == "" {
+		mode = modeAuto
+	}
+	return &acp.SessionModeState{AvailableModes: modes, CurrentModeId: acp.SessionModeId(mode)}
+}
+
 // commands：app-server 不报斜杠命令（那是 TUI 的东西），我们接了哪几个就报哪几个。
 // 名字和描述照 claude 的同名命令：两边都有的常用命令在界面上用起来一样（/new 是界面上 /clear 的别名）。
 var commands = []acp.AvailableCommand{
@@ -500,7 +508,7 @@ func (a *Agent) NewSession(ctx context.Context, p acp.NewSessionRequest) (acp.Ne
 	a.announceCommands(s.id)
 	return acp.NewSessionResponse{
 		SessionId:     acp.SessionId(s.id),
-		Modes:         &acp.SessionModeState{AvailableModes: modes, CurrentModeId: acp.SessionModeId(mode)},
+		Modes:         SessionModes(mode),
 		ConfigOptions: a.configOptions(ctx, s),
 	}, nil
 }

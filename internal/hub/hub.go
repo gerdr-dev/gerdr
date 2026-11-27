@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -342,6 +343,8 @@ type Hub struct {
 	bootSeq int64            // 载入完旧日志时的序号：重启前拿到的（≤ 它）都不信
 	resetAt map[string]int64 // 会话 id → 最近一次整份重推（撤回 / 回退 / 清空改写了日志）时的序号，≤ 它的都不信
 	drafts  map[string]Draft // session id → unsent composer text, shared by every device (draft.go)
+
+	indexMu sync.Mutex // serializes snapshots and their replacement of sessions/index.json
 
 	defsMu sync.RWMutex
 	defs   []AgentDef // config.json 里的 agents（变体 + 外部 agent）
@@ -821,18 +824,24 @@ func (h *Hub) load() error {
 		h.seq = max(h.seq, sc.lastSeq)
 		s.orphanSince = s.recoverAfterRestart(sc)
 		h.sessions[r.ID] = s
-		h.byAgent[r.Agent+":"+r.AgentSessionID] = s
+		if r.AgentSessionID != "" {
+			h.byAgent[r.Agent+":"+r.AgentSessionID] = s
+		}
 	}
 	h.migrateCleared()
 	return nil
 }
 
 func (h *Hub) saveIndex() {
+	h.indexMu.Lock()
+	defer h.indexMu.Unlock()
 	h.mu.Lock()
 	recs := make([]Record, 0, len(h.sessions))
 	for _, s := range h.sessions {
 		s.mu.Lock()
-		recs = append(recs, s.rec)
+		rec := s.rec
+		rec.Config = maps.Clone(rec.Config)
+		recs = append(recs, rec)
 		s.mu.Unlock()
 	}
 	h.mu.Unlock()
@@ -938,6 +947,8 @@ type CreateOptions struct {
 	// must not borrow the user's default to open an unguarded session. Not for panels: the user installed them, and a
 	// worker the user's panel starts should get the mode the user set as default (the user, 2026-11-27).
 	NoPermissiveDefault bool `json:"-"`
+	// PrepareInBackground lets a person type into a fresh Codex conversation while its agent starts.
+	PrepareInBackground bool `json:"-"`
 }
 
 // BuiltinMode: the mode a new session starts in when Settings has none for its agent (or role), by engine. The
@@ -959,7 +970,8 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 	if o.History != nil {
 		return h.continueHistory(ctx, o)
 	}
-	if _, ok := h.agentDef(o.Agent); !ok {
+	def, ok := h.agentDef(o.Agent)
+	if !ok {
 		return nil, fmt.Errorf("unknown agent %q", o.Agent)
 	}
 	tags, err := cleanTags(o.Tags)
@@ -974,10 +986,6 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		}
 	}
 	cwd, err := normCwd(o.Cwd)
-	if err != nil {
-		return nil, err
-	}
-	c, err := h.host(ctx, o.Agent)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,6 +1028,35 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		rec.SkillsSeen = rec.CreatedAt // it reads its skills from here on: an edit after this is news
 	}
 	s := newSession(h, rec)
+	// An explicit model or effort from panel code still needs validation against the engine before Create succeeds.
+	// A person's blank conversation only needs the defaults, which are applied before its first turn as usual.
+	if o.PrepareInBackground && base == "codex" && o.Import == "" && len(o.Config) == 0 {
+		if def.Bin != "" {
+			_, err = sysenv.FindBin(def.Bin)
+		} else {
+			_, err = sysenv.FindCodex()
+		}
+		if err != nil {
+			return nil, err
+		}
+		modes := codex.SessionModes(o.Mode)
+		if err := checkMode(o.Mode, modes); err != nil {
+			if explicitMode {
+				return nil, err
+			}
+			modes = codex.SessionModes("")
+		}
+		s.modes, s.rec.Mode, s.rec.Config = modes, string(modes.CurrentModeId), maps.Clone(defConfig)
+		h.register(s)
+		h.saveIndex()
+		h.broadcastSession(s)
+		go s.prepareAgent()
+		return s, nil
+	}
+	c, err := h.host(ctx, o.Agent)
+	if err != nil {
+		return nil, err
+	}
 	h.extMeta(rec, meta)
 
 	if o.Import != "" {
@@ -1065,7 +1102,7 @@ func (h *Hub) Create(ctx context.Context, o CreateOptions) (*Session, error) {
 		h.opts.set(o.Agent, res.Modes, res.ConfigOptions)
 		h.register(s)
 		s.applyMode(ctx, c, o.Mode)
-		s.applyConfig(ctx, mergeConfig(defConfig, o.Config))
+		s.applyConfig(ctx, c, mergeConfig(defConfig, o.Config))
 	}
 	s.syncRecFromState()
 	h.saveIndex()
@@ -1087,12 +1124,13 @@ func mergeConfig(def, given map[string]string) map[string]string {
 // applyConfig：建会话时要的配置项，agent 在 session/new 里没接住的补设一遍。三家能在新建时就接的不一样
 // （claude 接 model / effort，codex 只接 model，native 只接 model），统一在这儿对着它报回来的当前值补：
 // 先 model（换模型会把思考强度重置成这个模型的默认），再别的；值不在可选项里的跳过（默认值里存的模型可能已经没了）。
-func (s *Session) applyConfig(ctx context.Context, want map[string]string) {
+func (s *Session) applyConfig(ctx context.Context, c *agenthost.Host, want map[string]string) {
 	keys := make([]string, 0, len(want))
 	for k := range want {
 		keys = append(keys, k)
 	}
 	sortKeys(keys)
+	changed := false
 	for _, k := range keys {
 		v := want[k]
 		s.mu.Lock()
@@ -1101,9 +1139,14 @@ func (s *Session) applyConfig(ctx context.Context, want map[string]string) {
 		if !ok || v == "" || string(cur.CurrentValue) == v || !hasValue(cur, v) {
 			continue
 		}
-		if err := s.SetConfig(ctx, k, v); err != nil {
+		if err := s.setAgentConfig(ctx, c, k, v); err != nil {
 			s.h.log.Warn("apply default config", "session", s.rec.ID, "key", k, "err", err)
+		} else {
+			changed = true
 		}
+	}
+	if changed {
+		go s.markSynced(2 * time.Second)
 	}
 }
 
@@ -1181,9 +1224,12 @@ func (h *Hub) FindByAgent(agent, agentSessionID string) *Session {
 func (h *Hub) register(s *Session) {
 	h.mu.Lock()
 	h.sessions[s.rec.ID] = s
-	key := s.rec.Agent + ":" + s.rec.AgentSessionID
-	h.byAgent[key] = s
-	q := h.claimEarly(key)
+	var q []earlyUpdate
+	if s.rec.AgentSessionID != "" {
+		key := s.rec.Agent + ":" + s.rec.AgentSessionID
+		h.byAgent[key] = s
+		q = h.claimEarly(key)
+	}
 	h.mu.Unlock()
 	replayEarly(s, q)
 }
@@ -1282,8 +1328,13 @@ func (h *Hub) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	s.attachMu.Lock()
+	s.mu.Lock()
+	s.shut = true
+	s.mu.Unlock()
 	s.close(ctx)
 	h.unregister(s)
+	s.attachMu.Unlock()
 	_ = os.Remove(s.lf.Path)
 	_ = os.RemoveAll(s.shellDir()) // `!命令` 的完整输出（shell.go）
 	_ = os.Remove(s.handoffFile()) // the transcript handed to the agent (handoff.go)

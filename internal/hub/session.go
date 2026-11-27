@@ -616,12 +616,33 @@ func (s *Session) setStatus() {
 
 // ensureAttached：gerdr 重启后（或 agent 进程换过之后）先把会话接回 agent 那边。
 func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
+	s.attachMu.Lock()
+	defer s.attachMu.Unlock()
+	return s.attach(ctx)
+}
+
+func (s *Session) prepareAgent() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	s.attachMu.Lock()
+	defer s.attachMu.Unlock()
+	s.mu.Lock()
+	pending := !s.shut && !s.attached && s.rec.AgentSessionID == ""
+	s.mu.Unlock()
+	if pending {
+		if _, err := s.attach(ctx); err != nil {
+			// A failed warm-up leaves the empty conversation usable. Sending retries with the send's own context.
+			s.h.log.Warn("prepare agent session", "session", s.ID(), "err", err)
+		}
+	}
+}
+
+// attach is called with attachMu held, by the first send, a background start, or a reconnect.
+func (s *Session) attach(ctx context.Context) (*agenthost.Host, error) {
 	c, err := s.h.host(ctx, s.rec.Agent)
 	if err != nil {
 		return nil, err
 	}
-	s.attachMu.Lock()
-	defer s.attachMu.Unlock()
 	s.mu.Lock()
 	ok := s.attached
 	rec := s.rec
@@ -640,6 +661,24 @@ func (s *Session) ensureAttached(ctx context.Context) (*agenthost.Host, error) {
 		meta["fork"] = rec.Fork
 	}
 	s.h.extMeta(rec, meta)
+	if rec.AgentSessionID == "" {
+		res, err := c.Conn.NewSession(ctx, acp.NewSessionRequest{Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
+		if err != nil {
+			return nil, fmt.Errorf(i18n.S("启动会话失败：%s", "starting the session failed: %s"), errText(err))
+		}
+		s.h.rekey(s, string(res.SessionId))
+		s.mu.Lock()
+		s.attached, s.shut = true, false
+		s.modes, s.config = res.Modes, res.ConfigOptions
+		s.h.opts.set(rec.Agent, s.modes, s.config)
+		s.mu.Unlock()
+		s.applyMode(ctx, c, rec.Mode)
+		s.applyConfig(ctx, c, rec.Config)
+		s.syncRecFromState()
+		s.h.saveIndex()
+		s.h.broadcastSession(s)
+		return c, nil
+	}
 	s.beginLoading()
 	res, err := c.Conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: acp.SessionId(rec.AgentSessionID), Cwd: rec.Cwd, McpServers: s.h.mcpFor(rec), Meta: acpx.Meta(meta)})
 	s.endLoading()
@@ -876,8 +915,18 @@ func (s *Session) SetConfig(ctx context.Context, id, value string) error {
 	}
 	// claude 会把模式 / 模型的变化写进记录文件：是我们改的，别让下次打开时当成「别处聊过」（CatchUp）
 	defer func() { go s.markSynced(2 * time.Second) }()
+	if err := s.setAgentConfig(ctx, c, id, value); err != nil {
+		return err
+	}
+	s.syncRecFromState()
+	s.h.saveIndex()
+	s.h.broadcastSession(s)
+	return nil
+}
+
+func (s *Session) setAgentConfig(ctx context.Context, c *agenthost.Host, id, value string) error {
 	res, err := c.Conn.SetSessionConfigOption(ctx, acp.SetSessionConfigOptionRequest{ValueId: &acp.SetSessionConfigOptionValueId{
-		SessionId: acp.SessionId(s.rec.AgentSessionID), ConfigId: acp.SessionConfigId(id), Value: acp.SessionConfigValueId(value),
+		SessionId: acp.SessionId(s.agentSID()), ConfigId: acp.SessionConfigId(id), Value: acp.SessionConfigValueId(value),
 	}})
 	if err != nil {
 		return err
@@ -888,9 +937,6 @@ func (s *Session) SetConfig(ctx context.Context, id, value string) error {
 		s.h.opts.set(s.rec.Agent, s.modes, s.config)
 	}
 	s.mu.Unlock()
-	s.syncRecFromState()
-	s.h.saveIndex()
-	s.h.broadcastSession(s)
 	return nil
 }
 

@@ -133,6 +133,8 @@ type StartOptions struct {
 	// Fold / Show: the first message (prompt), as SendOptions'.
 	Fold string `json:"fold,omitempty"`
 	Show bool   `json:"show,omitempty"`
+	// Prepare a fresh conversation in the background while the person types its first message.
+	PrepareInBackground bool `json:"prepareInBackground,omitempty"`
 }
 
 var errNoHost = errors.New("not available here: ctx.sessions / ctx.workspaces need Gerdr's server")

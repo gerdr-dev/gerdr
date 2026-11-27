@@ -106,6 +106,8 @@ interface Ctx {
       /** Absolute or `~/…`. Must exist: check with `ctx.dirs.stat`. */
       cwd: string;
       prompt?: string;
+      /** For a fresh conversation opened by the person, let Codex start while they type the first message. */
+      prepareInBackground?: boolean;
       /** `claude`, `codex`, `native`, or a variant's id from settings. Default: the user's default agent. */
       agent?: string;
       /**

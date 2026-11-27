@@ -8,6 +8,7 @@ import { PanelKeyContext } from "./visible";
  */
 const counts = new Map<string, { path: string; n: number }[]>();
 const listeners = new Set<() => void>();
+const fileListeners = new Map<string, Set<(path: string | null) => void>>();
 // epoch moves every count at once: after a reconnect, when changes made meanwhile weren't heard
 let epoch = 0;
 
@@ -18,12 +19,25 @@ export function panelDataChanged(panel: string, path: string) {
   else list.push({ path, n: 1 });
   counts.set(panel, list);
   for (const f of listeners) f();
+  for (const f of fileListeners.get(panel) ?? []) f(path);
 }
 
 /** The connection came back: whatever changed while it was down wasn't heard, so every page refreshes once. */
 export function panelDataResync() {
   epoch++;
   for (const f of listeners) f();
+  for (const group of fileListeners.values()) for (const f of group) f(null);
+}
+
+/** Subscribe to paths changed in one panel. null means to reload the snapshot after a reconnect. */
+export function onPanelFiles(panel: string, fn: (path: string | null) => void): () => void {
+  const group = fileListeners.get(panel) ?? new Set();
+  group.add(fn);
+  fileListeners.set(panel, group);
+  return () => {
+    group.delete(fn);
+    if (!group.size) fileListeners.delete(panel);
+  };
 }
 
 function subscribe(f: () => void) {

@@ -128,6 +128,8 @@ declare module "@gerdr/core" {
    * seen: keep a slow fallback poll if that happens. Code outside this panel's page (src/cards.tsx) passes `panel`.
    */
   export function usePanelChange(path?: string, opts?: { panel?: string }): number;
+  /** Changed paths in this panel. A null path means to reload the snapshot after a reconnect. */
+  export function onPanelFiles(panel: string, fn: (path: string | null) => void): () => void;
 
   /**
    * Show conversations this panel owns your own way. A conversation a local function started (ctx.sessions.start) is

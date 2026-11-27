@@ -50,7 +50,7 @@ export { BuiltinCard as DefaultCard, type Card, type CardDone } from "@/componen
 export { toast } from "sonner";
 export { usePortalContainer } from "./portal";
 export { usePanelVisible } from "./visible";
-export { usePanelChange } from "./panelData";
+export { onPanelFiles, usePanelChange } from "./panelData";
 export { usePhoneMenu, type PhoneMenuItem } from "./phoneMenu";
 export { PhoneBar } from "./phoneBar";
 export { useSearchItems, type SearchItem } from "./search";
