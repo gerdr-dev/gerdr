@@ -214,6 +214,15 @@
   .native-titlebar [data-phone-titlebar] :is(button, a, input, [role="button"], [data-titlebar-no-drag]):not([data-titlebar-drag]) {
     -webkit-app-region: no-drag;
   }
+  /* A drag region takes the clicks whatever is drawn over it: a sheet / dialog / menu over a title bar (a panel's
+     settings sheet over a pane's title bar, Panes.tsx usePaneHeadAtTop) couldn't be clicked there. While a Radix modal
+     is open (it sets body's pointer-events: none) nothing drags the window, so its backdrop's click-to-close works too;
+     a non-modal popper's content never drags. !important: the drag regions are inline styles. */
+  .native-titlebar body[style*="pointer-events: none"] *,
+  .native-titlebar [data-radix-popper-content-wrapper],
+  .native-titlebar [data-radix-popper-content-wrapper] * {
+    -webkit-app-region: no-drag !important;
+  }
 
   /* The stretch of a message an add-on's action is on (ctx.highlight: the paragraph being read aloud), lib/readingHighlight.ts.
      A highlight pseudo-element takes only colors, so no padding / radius: a tint of the brand behind the words. */
