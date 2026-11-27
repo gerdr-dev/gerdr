@@ -6,9 +6,11 @@ import { get } from "./store";
 
 export type CopyPoint = { x: number; y: number };
 export type SelectionQuote = { box: HTMLTextAreaElement; id: string; text: string; anchor: CopyPoint };
+export const QUOTE_SUGGESTION_MS = 8000;
 
 // Copy suggestions are local to this page. Confirmed quotes become ordinary text in the session's draft.
 export const useQuoteSuggestion = create<Record<string, string | undefined>>(() => ({}));
+const quoteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const scrollerOf = (node: Node | null) => (node instanceof Element ? node : node?.parentElement)?.closest("[data-chat-scroller]");
 
@@ -27,10 +29,17 @@ export function quoteSelection(selection = window.getSelection()): SelectionQuot
 }
 
 export function offerComposerQuote({ id, text }: SelectionQuote) {
+  clearTimeout(quoteTimers.get(id));
+  quoteTimers.set(
+    id,
+    setTimeout(() => dismissQuote(id), QUOTE_SUGGESTION_MS),
+  );
   useQuoteSuggestion.setState({ [id]: text });
 }
 
 export function dismissQuote(id: string) {
+  clearTimeout(quoteTimers.get(id));
+  if (!quoteTimers.delete(id)) return;
   useQuoteSuggestion.setState(({ [id]: _, ...rest }) => rest, true);
 }
 
