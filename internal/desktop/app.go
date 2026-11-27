@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -16,6 +18,9 @@ import (
 
 // The shell's side of updating and of keeping the backend up: desktop/main.js's startBackend / restartBackend /
 // fetchBusy / watchUpdates / applyUpdate / pushUpdate, over backend.go and internal/selfupdate.
+
+// shellStarted: when this App process started (pushUpdate).
+var shellStarted = time.Now()
 
 type upgradeMark struct {
 	version string
@@ -235,9 +240,15 @@ func (s *shell) applyUpdate(ask, confirmed bool) {
 		s.upMu.Lock()
 		s.upgrading = upgradeMark{p.Version, time.Now()}
 		s.upMu.Unlock()
+		// The new App process has to carry on with the "now": otherwise it only attaches to the busy service, which
+		// waits for idle, and the click looked like it did nothing (user report: three taps on a phone's "Restart now").
+		if ask {
+			s.markUpgradeNow(p.Version)
+		}
 		if err := s.app.Relaunch(); err == nil {
 			return
 		}
+		s.takeUpgradeNow()
 		log.Printf("update: relaunch failed: restarting the backend only")
 	}
 	s.upMu.Lock()
@@ -251,6 +262,37 @@ func (s *shell) applyUpdate(ask, confirmed bool) {
 	s.applying = false
 	s.upMu.Unlock()
 	s.pushUpdate()
+}
+
+// upgradeNowFile: a clicked update's "now", across the App's relaunch (applyUpdate → startBackend of the next process).
+func (s *shell) upgradeNowFile() string { return filepath.Join(s.dataDir, "upgrade-now") }
+
+func (s *shell) markUpgradeNow(version string) {
+	if s.dataDir == "" {
+		return
+	}
+	if err := os.WriteFile(s.upgradeNowFile(), []byte(version), 0o600); err != nil {
+		log.Printf("update: %v", err)
+	}
+}
+
+// takeUpgradeNow: the version a relaunch was asked to update to now, "" if none; read once. Older than a couple
+// of minutes it is left over from a relaunch that didn't happen, not a click the person is waiting on.
+func (s *shell) takeUpgradeNow() string {
+	if s.dataDir == "" {
+		return ""
+	}
+	f := s.upgradeNowFile()
+	st, err := os.Stat(f)
+	if err != nil {
+		return ""
+	}
+	b, _ := os.ReadFile(f)
+	_ = os.Remove(f)
+	if time.Since(st.ModTime()) > 2*time.Minute {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // askUpdate: "now", "later" (when idle) or "" (cancelled). later: offer "when idle"; only a backend update has it, a
@@ -297,6 +339,9 @@ func (s *shell) pushUpdate() {
 	b := s.lastBusy
 	s.upMu.Unlock()
 	st := s.up.Status(b, s.upgradingNow(s.up.Pending()))
+	// Which App process this is: after a relaunch the old one's last report stays fresh on the backend for a while,
+	// and buttons pressed on a phone went to it, to nobody (server/appupdate.go better).
+	st["shellStartedAt"] = shellStarted.UnixMilli()
 	raw, _ := json.Marshal(st)
 	s.mu.Lock()
 	a := s.app

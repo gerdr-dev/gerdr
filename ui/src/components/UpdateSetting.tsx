@@ -79,19 +79,33 @@ export function UpdateSetting() {
   // Off the App, a busy computer refuses (its shell would ask in a dialog nobody at the phone can answer): ask here,
   // and a confirmed click goes through with force, which the shell takes as already answered.
   const [sending, setSending] = useState(false);
+  // The op only reaches the App's page and the computer takes a while (sometimes restarting the App first): until the
+  // running version or the pending update changes, the button keeps spinning, or the tap looked like it did nothing.
+  const [sent, setSent] = useState(false);
+  useEffect(() => setSent(false), [p?.version, running]);
+  useEffect(() => {
+    if (!sent) return;
+    const id = setTimeout(() => setSent(false), 90_000);
+    return () => clearTimeout(id);
+  }, [sent]);
   const applyRemote = async () => {
     setSending(true);
     try {
-      await api.appUpdateOp("apply").catch(async (e) => {
-        if (!(e instanceof ApiError && e.code === "busy")) throw e;
-        const ok = await askConfirm({
-          title: t("updateSetting.forceTitle", { version: p?.version ?? "" }),
-          description: t("updateSetting.forceDesc", { list: cutList(u?.busy) }),
-          action: t("updateSetting.forceAction"),
-          destructive: true,
+      const went = await api
+        .appUpdateOp("apply")
+        .then(() => true)
+        .catch(async (e) => {
+          if (!(e instanceof ApiError && e.code === "busy")) throw e;
+          const ok = await askConfirm({
+            title: t("updateSetting.forceTitle", { version: p?.version ?? "" }),
+            description: t("updateSetting.forceDesc", { list: cutList(u?.busy) }),
+            action: t("updateSetting.forceAction"),
+            destructive: true,
+          });
+          if (ok) await api.appUpdateOp("apply", false, true);
+          return ok;
         });
-        if (ok) await api.appUpdateOp("apply", false, true);
-      });
+      if (went) setSent(true);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -119,8 +133,8 @@ export function UpdateSetting() {
         </div>
         {u?.enabled &&
           (p ? (
-            <Button size="sm" disabled={u.phase === "applying" || sending} onClick={apply}>
-              {sending && <Loader2 className="size-3.5 animate-spin" />}
+            <Button size="sm" disabled={u.phase === "applying" || sending || sent} onClick={apply}>
+              {(sending || sent || u.phase === "applying") && <Loader2 className="size-3.5 animate-spin" />}
               {p.kind === "app" ? t("native.restartToUpdate") : t("systemUpdate.updateNow")}
             </Button>
           ) : (

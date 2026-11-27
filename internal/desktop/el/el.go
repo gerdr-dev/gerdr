@@ -171,11 +171,14 @@ func (a *App) send(m map[string]any) error {
 	return a.out.Encode(m)
 }
 
+// ErrQuit: the App quit before answering (a call that quits it, like Relaunch, ends this way when it worked).
+var ErrQuit = errors.New("el: the App quit")
+
 func (a *App) call(m map[string]any) (json.RawMessage, error) {
 	a.mu.Lock()
 	if a.quitted {
 		a.mu.Unlock()
-		return nil, errors.New("el: the App quit")
+		return nil, ErrQuit
 	}
 	a.next++
 	id := a.next
@@ -198,7 +201,7 @@ func (a *App) call(m map[string]any) (json.RawMessage, error) {
 		a.mu.Unlock()
 		return nil, fmt.Errorf("el: %v timed out", m["op"])
 	case <-a.quit:
-		return nil, errors.New("el: the App quit")
+		return nil, ErrQuit
 	}
 }
 
@@ -429,8 +432,12 @@ func (a *App) OpenPath(p string, reveal bool) {
 func (a *App) Quit() { _, _ = a.call(map[string]any{"op": "quit"}) }
 
 // Relaunch quits and starts the App again (a backend update with a new core or shell script: docs/dev/SHELL.md).
+// The App quits before it can answer, so ErrQuit means it worked.
 func (a *App) Relaunch() error {
 	_, err := a.call(map[string]any{"op": "relaunch"})
+	if errors.Is(err, ErrQuit) {
+		return nil
+	}
 	return err
 }
 

@@ -25,6 +25,7 @@ type shell struct {
 
 	// The backend and updates (app.go)
 	up           *selfupdate.Updater
+	dataDir      string // the App's data directory (-data-dir)
 	bin          string // the backend to run when the updater has no say (-gerdr, no bundled one)
 	backendEntry string // the backend's own login link (http://127.0.0.1:7870/auth?token=…): the shell's requests
 	beMu         sync.Mutex
@@ -59,8 +60,16 @@ func (s *shell) startBackend() (string, error) {
 	if c := s.up.Backend(); s.up.Enabled() && !c.Bundled {
 		s.bin = s.up.Place(c)
 	}
-	log.Printf("starting backend %s", s.bin)
-	be, err := startBackend(s.bin, nil)
+	// Relaunched by a clicked update (applyUpdate): restart the service onto it now instead of when it is idle
+	var env []string
+	if v := s.takeUpgradeNow(); v != "" {
+		env = []string{"GERDR_UPGRADE_NOW=1"}
+		s.upMu.Lock()
+		s.upgrading = upgradeMark{v, time.Now()}
+		s.upMu.Unlock()
+	}
+	log.Printf("starting backend %s (now=%v)", s.bin, env != nil)
+	be, err := startBackend(s.bin, env)
 	if err != nil {
 		return "", err
 	}

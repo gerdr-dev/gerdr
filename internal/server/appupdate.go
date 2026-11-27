@@ -29,7 +29,8 @@ const appUpdateFresh = 90 * time.Second
 // appUpdate keeps every App page's report, not just the last one. Several pages report at once (each window, and
 // pages the shell no longer pushes to, which keep re-sending the status they last got), and taking the last writer
 // made a phone's Settings → 版本 flip between them every few seconds, between versions and check times hours apart.
-// So the one shown is picked: the report whose running backend is this one, then the latest check.
+// So the one shown is picked: the report whose running backend is this one, then the latest App process (a relaunched
+// App's old pages leave reports that look fresh for a while; an op sent to them reached nobody), then the latest check.
 type appUpdate struct {
 	mu      sync.Mutex
 	reports map[string]appUpdateReport // by client id
@@ -41,19 +42,21 @@ type appUpdateReport struct {
 	at     time.Time
 	// from the status, for picking
 	running   string
+	started   int64 // the App process's start (shellStartedAt); 0 from an older shell
 	checkedAt int64
 }
 
 func (a *appUpdate) put(client string, status json.RawMessage, now time.Time) {
 	var st struct {
 		Running   string `json:"running"`
+		Started   int64  `json:"shellStartedAt"`
 		CheckedAt int64  `json:"checkedAt"`
 	}
 	_ = json.Unmarshal(status, &st)
 	if a.reports == nil {
 		a.reports = map[string]appUpdateReport{}
 	}
-	a.reports[client] = appUpdateReport{status: status, at: now, running: st.Running, checkedAt: st.CheckedAt}
+	a.reports[client] = appUpdateReport{status: status, at: now, running: st.Running, started: st.Started, checkedAt: st.CheckedAt}
 }
 
 // pick: the report to show, or none when no App page reported lately; drops the gone ones. Caller holds mu.
@@ -81,6 +84,9 @@ func (a *appUpdate) pick(now time.Time) (json.RawMessage, string) {
 func better(r, b appUpdateReport, c, bc string) bool {
 	if ra, ba := r.running == version.Version, b.running == version.Version; ra != ba {
 		return ra
+	}
+	if r.started != b.started {
+		return r.started > b.started
 	}
 	if r.checkedAt != b.checkedAt {
 		return r.checkedAt > b.checkedAt

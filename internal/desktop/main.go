@@ -132,6 +132,7 @@ func Main(args []string) {
 	// is running (appAttach): that is how an update, downloaded or installed with the App, reaches the service.
 	// The binary: the newer of the bundle's and a downloaded one (internal/selfupdate); -gerdr picks one, for debugging.
 	sh.up = selfupdate.New(*dataDir, bundledBin, appVersion, shellID, packaged && *gerdrBin == "")
+	sh.dataDir = *dataDir
 	switch {
 	case *gerdrBin != "":
 		sh.bin = *gerdrBin

@@ -63,3 +63,15 @@ func TestAppUpdatePicksTruest(t *testing.T) {
 		t.Fatalf("a gone page drops out: got %q", c)
 	}
 }
+
+// A relaunched App: its old process's last report is still fresh, but buttons must go to the new one.
+func TestAppUpdatePicksNewestApp(t *testing.T) {
+	var a appUpdate
+	now := time.Now()
+	v := version.Version
+	a.put("gone", json.RawMessage(`{"running":"`+v+`","shellStartedAt":1000,"checkedAt":500}`), now)
+	a.put("new", json.RawMessage(`{"running":"`+v+`","shellStartedAt":2000,"checkedAt":0}`), now)
+	if _, c := a.get(now); c != "new" {
+		t.Fatalf("want the newest App process, got %q", c)
+	}
+}
