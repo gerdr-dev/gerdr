@@ -115,6 +115,31 @@
 .is-user .gerdr-md [data-streamdown="list-item"]::marker {
   color: color-mix(in oklch, currentColor 70%, transparent);
 }
+/* The rest streamdown greys or darkens with fixed classes, unreadable on the bubble (user screenshots: a code block's
+   language and line numbers, a blocked link's "[blocked]", a table as a black slab): the text's colour, softened, and
+   tints of it for surfaces and lines. */
+.is-user .gerdr-md [data-streamdown="code-block-header"] {
+  color: color-mix(in oklch, currentColor 70%, transparent);
+  border-bottom-color: color-mix(in oklch, currentColor 20%, transparent);
+}
+.is-user .gerdr-md [data-streamdown="code-block-body"] code > span::before {
+  color: color-mix(in oklch, currentColor 50%, transparent);
+}
+.is-user .gerdr-md .text-gray-500 {
+  color: color-mix(in oklch, currentColor 70%, transparent);
+}
+.is-user .gerdr-md [data-streamdown="table-wrapper"] > div:last-child {
+  background: color-mix(in oklch, currentColor 8%, transparent);
+  border-color: color-mix(in oklch, currentColor 25%, transparent);
+}
+.is-user .gerdr-md [data-streamdown="table-header"] {
+  background: color-mix(in oklch, currentColor 12%, transparent);
+}
+.is-user .gerdr-md [data-streamdown="table"],
+.is-user .gerdr-md [data-streamdown="table"] > *,
+.is-user .gerdr-md [data-streamdown="table"] tr {
+  border-color: color-mix(in oklch, currentColor 20%, transparent);
+}
 /* 代码块：同样是两层框（外层 bg-sidebar 卡片 + 里面再一个带边框的代码区）。只留一层：外框 + 淡底，
    代码区透明无边框；没写语言时顶上那条标题栏是空的，整条去掉；复制 / 下载按钮悬停才出来。 */
 .gerdr-md [data-streamdown="code-block"] {
