@@ -63,6 +63,9 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 			} `json:"message"`
 			ToolUseResult json.RawMessage `json:"tool_use_result"`
 			Parent        *string         `json:"parent_tool_use_id"`
+			// Set on what the CLI wrote into the conversation itself, not what anyone said: a skill's text after the
+			// Skill tool ("Base directory for this skill: …"), a compact summary (isMeta in the transcript).
+			Synthetic bool `json:"isSynthetic"`
 		}
 		_ = json.Unmarshal(raw, &msg)
 		var blocks []json.RawMessage
@@ -70,8 +73,9 @@ func (s *session) onLine(pr *proc, m map[string]json.RawMessage, raw []byte) {
 			return
 		}
 		for _, b := range blocks {
-			// 子 agent 收到的任务（主 agent 写给它的 prompt）：子 agent 面板里的第一条「用户消息」。
-			if msg.Parent != nil && *msg.Parent != "" {
+			// A subagent's task (the prompt the main agent wrote for it): the first "user message" in its panel. Synthetic
+			// text is not a message from anyone: shown, a subagent's skill read as a long user bubble.
+			if msg.Parent != nil && *msg.Parent != "" && !msg.Synthetic {
 				var tb struct {
 					Type string `json:"type"`
 					Text string `json:"text"`
