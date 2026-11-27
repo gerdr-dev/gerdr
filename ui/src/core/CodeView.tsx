@@ -21,6 +21,7 @@ import {
   markRead,
   set,
   setCodeDirs,
+  setCodeNoun,
   setCodeHost,
   setCodeOrder,
   setCodeOverview,
@@ -274,6 +275,19 @@ export function useCodeDirs(dirs: CodeDir[]) {
 }
 
 export type { CodeDir } from "@/lib/store";
+
+/**
+ * What this panel calls a new one, while it hosts Code: the new-conversation page's title and an empty pane's tab
+ * say `noun` instead of "新会话" (a panel whose every conversation is a task says 新任务).
+ */
+export function useCodeNoun(noun: string) {
+  const key = useContext(PanelKeyContext);
+  useEffect(() => {
+    if (!key) return;
+    setCodeNoun(key, noun || null);
+    return () => setCodeNoun(key, null);
+  }, [key, noun]);
+}
 
 /**
  * The conversations this panel's list shows, in its order: while it hosts Code, the keys go by it, not by Code's tabs

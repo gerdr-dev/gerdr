@@ -29,6 +29,7 @@ export {
   useCodePaneTag,
   type CodePaneTag,
   useCodeDirs,
+  useCodeNoun,
   useCodeStart,
   useCodeOrder,
   useCodeOverview,

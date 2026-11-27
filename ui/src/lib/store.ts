@@ -142,6 +142,11 @@ type State = {
    */
   codeDirs: Record<string, CodeDir[]>;
   /**
+   * What a hosting panel calls a new one (core useCodeNoun), by panel key: the new-conversation page's title and an
+   * empty pane's tab say it instead of "新会话" (Superagent: everything opened there is a task, 新任务).
+   */
+  codeNouns: Record<string, string>;
+  /**
    * The conversations a hosting panel wants as the phone overview's tiles, in its order (core useCodeOverview), by
    * panel key: while it shows, the overview is these instead of Code's "active", which the panel's list doesn't show.
    * In the store, not a plain map like the keys' order: the overview's tiles are drawn from it and must follow it.
@@ -276,6 +281,7 @@ export const useStore = create<State>(() => ({
   workPanels: loadWorkPanels(),
   codeHosts: loadCodeHosts(),
   codeDirs: {},
+  codeNouns: {},
   codeOverviews: loadCodeOverviews(),
   panelUpdates: 0,
   codeSlot: null,
@@ -479,6 +485,22 @@ export function setCodeDirs(key: string, dirs: CodeDir[] | null) {
   if (dirs) next[key] = dirs;
   else delete next[key];
   set({ codeDirs: next });
+}
+
+/** core useCodeNoun: panel `key`'s word for a new one; null takes it away. */
+export function setCodeNoun(key: string, noun: string | null) {
+  const next = { ...get().codeNouns };
+  if (noun) next[key] = noun;
+  else delete next[key];
+  set({ codeNouns: next });
+}
+
+/** The hosting panel on screen's word for a new one (core useCodeNoun), when it gave one. */
+export function hostNoun(s: Pick<State, "mode" | "layout" | "workPanels" | "codeHosts" | "codeNouns"> = get()): string | undefined {
+  if (!codeHost(s)) return undefined;
+  const space = currentSpace(s.layout);
+  const panel = s.workPanels[space];
+  return s.codeNouns[panel ? `${space}/${panel}` : space] || undefined;
 }
 
 /** core useCodeOverview: panel `key`'s overview tiles; null gives the overview back to Code's "active". */

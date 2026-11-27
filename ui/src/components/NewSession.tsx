@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { browserHere, continueInPane, createInPane, focusPane, focusSession, movePaneToWorkspace, openTerminal, resumeInPane, runAction } from "@/lib/actions";
 import { api, ApiError } from "@/lib/api";
-import { get, hostDirs, hostOrder, hostStart, set, useStore, type AgentDef } from "@/lib/store";
+import { get, hostDirs, hostNoun, hostOrder, hostStart, set, useStore, type AgentDef } from "@/lib/store";
 import { keyText } from "./KeyCaps";
 import { allLeaves, locateSession, paneSpace, spaceWorkspaces, type PaneLeaf } from "@/lib/layout";
 import { cn } from "@/lib/utils";
@@ -428,7 +428,16 @@ export function NewSession({ pane, focused }: { pane: PaneLeaf; focused: boolean
   const hosted = useStore((s) => !!hostOrder(s));
   useStore((s) => s.config); // keyText reads the keys from it: follow a rebinding
   const closeKey = hosted ? keyText("closePane") : "";
-  const title = !hosted ? t("newSession.title") : closeKey ? t("newSession.titleKey", { key: closeKey }) : t("newSession.titlePlain");
+  const noun = useStore((s) => hostNoun(s)); // the panel's own word (core useCodeNoun): Superagent's 新任务
+  const title = !hosted
+    ? t("newSession.title")
+    : noun
+      ? closeKey
+        ? t("newSession.namedKey", { name: noun, key: closeKey })
+        : noun
+      : closeKey
+        ? t("newSession.titleKey", { key: closeKey })
+        : t("newSession.titlePlain");
 
   return (
     <div className="flex h-full items-start justify-center overflow-auto p-6">

@@ -104,7 +104,7 @@ import {
 import { applyPaneTitle, paneSnapshot, tabSnapshot } from "@/lib/addons";
 import { AddonSlot } from "./AddonSlot";
 import { useWindowInFront } from "@/lib/front";
-import { codeHost, get, markRead, set, setLayout, useStore } from "@/lib/store";
+import { codeHost, get, hostNoun, markRead, set, setLayout, useStore } from "@/lib/store";
 import { activeIds, addToActive, removeActive } from "@/lib/overview";
 import { usePhone } from "@/lib/phone";
 import { useCaughtUp } from "@/lib/catchup";
@@ -1182,7 +1182,8 @@ function SessionPaneView({ pane, tab, framed, zoomed, count }: { pane: PaneLeaf;
     if (front && focused && pane.sessionId && unread) markRead(pane.sessionId);
   }, [front, focused, pane.sessionId, unread]);
 
-  const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : t("panes.newSession");
+  const noun = useStore((s) => hostNoun(s)); // a hosting panel's word for a new one (core useCodeNoun)
+  const base = session ? session.title || basename(session.cwd) : starting && pane.draft?.cwd ? basename(pane.draft.cwd) : noun || t("panes.newSession");
   const title = applyPaneTitle(pane, tab, base);
   const drag = usePaneDrag(pane.id, { label: title, agent: session?.agent }, tab);
   const pickAgent = async (agent: string) => {

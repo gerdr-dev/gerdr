@@ -391,6 +391,12 @@ declare module "@gerdr/core" {
   export type CodeDir = { path: string; name?: string; color?: string };
   export function useCodeDirs(dirs: CodeDir[]): void;
   /**
+   * With CodeView: what this panel calls a new one. The new-conversation page's title and an empty pane's tab say
+   * `noun` instead of "新会话" / "New session" (e.g. "新任务" for a panel whose every conversation is a task). Older
+   * Gerdr: absent.
+   */
+  export function useCodeNoun(noun: string): void;
+  /**
    * With CodeView: every conversation started in Code while this panel shows goes through `fn` instead of becoming
    * Code's own: the new-conversation page (Cmd+T, newCodeTab), ⌘D (a copy of the focused one: same agent, folder,
    * mode), the overview's new agent, and a fork (`continueFrom`: the one forked, its chat carried along; `fork` / `forkText`: pass them on to ctx.sessions.start, so a running one can be forked and the same engine copies its session). Start one of
