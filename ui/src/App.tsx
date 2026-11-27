@@ -29,7 +29,7 @@ import { KeepDevicePrompt } from "./components/KeepDevice";
 import { systemNotify } from "./lib/notify";
 import { watchInbox } from "./lib/inbox";
 import { watchBadges } from "./lib/badges";
-import { watchCopyOnSelect } from "./lib/copysel";
+import { watchSelectionCopy } from "./lib/copysel";
 import { watchNavButtons } from "./lib/actions/nav";
 import { reloadAddons, setTabNameFn } from "./lib/addons";
 import { AddonSlot as AddonSlotView } from "./components/AddonSlot";
@@ -164,7 +164,7 @@ export default function App() {
     // alone, as iOS scrolls the document for the keyboard.
     const unscrollX = () => window.scrollX && window.scrollTo(0, window.scrollY);
     window.addEventListener("scroll", unscrollX);
-    const unwatchCopy = watchCopyOnSelect(); // 实验室「选中即复制」，没开时什么都不做
+    const unwatchCopy = watchSelectionCopy();
     const unwatchInbox = watchInbox(); // errors, questions / approvals, low battery → the inbox
     const unwatchBadges = watchBadges(); // panels' dots / numbers on their rail buttons
     const unwatchNav = watchNavButtons(); // the mouse's back / forward buttons → where focus was before

@@ -10,6 +10,7 @@
 import { dialogOver, isCoarse } from "./phone";
 import { get, prefOf } from "./store";
 import { t } from "./i18n";
+import { offerQuote, quoteSelection } from "./selectionQuote";
 
 const HIGHLIGHT_MS = 500; // herdr 的 PANE_COPY_HIGHLIGHT_DURATION
 const BUBBLE_MS = 1000;
@@ -46,12 +47,13 @@ function showBubble(x: number, y: number) {
 }
 
 /** 复制并提示；clear 是清掉选区的办法，多击时晚一点再清。at: where the mouse let go (the bubble goes there). */
-export function copySelected(text: string, multiClick: boolean, clear: () => void, at: { x: number; y: number }) {
+export function copySelected(text: string, multiClick: boolean, clear: () => void, at: { x: number; y: number }, onCopied?: () => void) {
   // Empty or whitespace-only: don't touch the clipboard or toast. Double-clicking blank space selects an invisible
   // newline / run of spaces (in the DOM and in xterm alike), which would otherwise report "copied" for nothing.
   if (!text.trim()) return;
   clearTimeout(pendingClear);
   const done = () => {
+    onCopied?.();
     showBubble(at.x, at.y);
     clearTimeout(pendingClear);
     if (multiClick) pendingClear = setTimeout(clear, HIGHLIGHT_MS);
@@ -71,9 +73,13 @@ function editable(n: Node | null): boolean {
   return !!el?.closest("input, textarea, select, [contenteditable]:not([contenteditable=false])");
 }
 
-/** 挂在 document 上，管 DOM 里的选区（终端除外）。返回卸载函数。 */
-export function watchCopyOnSelect(): () => void {
+/** Tracks manual copies from the chat, and copies DOM selections on mouseup when Copy on select is enabled. */
+export function watchSelectionCopy(): () => void {
   let seq = 0;
+  const onCopy = (e: ClipboardEvent) => {
+    if (e.defaultPrevented || editable(e.target as Node | null) || editable(document.activeElement)) return;
+    offerQuote(quoteSelection());
+  };
   const onUp = (e: MouseEvent) => {
     if (e.button !== 0 || !copyOnSelectOn()) return;
     if ((e.target as Element | null)?.closest?.(".xterm")) return; // 终端自己管
@@ -96,6 +102,7 @@ export function watchCopyOnSelect(): () => void {
       const box = pane?.querySelector<HTMLTextAreaElement>("textarea[data-composer]");
       // 三击选段时浏览器把段尾的换行也选上了，粘进输入框会多出空行
       const text = e.detail >= 3 ? sel.toString().replace(/\s+$/, "") : sel.toString();
+      const quote = quoteSelection(sel);
       copySelected(
         text,
         e.detail >= 2,
@@ -107,9 +114,14 @@ export function watchCopyOnSelect(): () => void {
           if (box?.isConnected && !isCoarse() && !dialogOver(box)) box.focus();
         },
         { x: e.clientX, y: e.clientY },
+        () => offerQuote(quote && { ...quote, text }),
       );
     });
   };
   document.addEventListener("mouseup", onUp);
-  return () => document.removeEventListener("mouseup", onUp);
+  document.addEventListener("copy", onCopy);
+  return () => {
+    document.removeEventListener("mouseup", onUp);
+    document.removeEventListener("copy", onCopy);
+  };
 }

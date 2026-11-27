@@ -23,6 +23,7 @@ import { IS_MAC } from "@/lib/keys";
 import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
 import { stripLineAnchor } from "@/lib/paths";
 import { copyText as copyToClipboard } from "@/lib/clipboard";
+import { offerQuote, quoteSelection } from "@/lib/selectionQuote";
 import { isPhone } from "@/lib/phone";
 import { t as tr } from "@/lib/i18n"; // `t` is the event target below
 
@@ -217,7 +218,8 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
         // execCommand keeps the formatting (a pasted table stays a table); writeText is the fallback
         run: () => {
           restoreSelection();
-          if (!document.execCommand("copy")) copyText(selectedText());
+          const quote = quoteSelection();
+          if (!document.execCommand("copy")) void copyToClipboard(selectedText()).then(() => offerQuote(quote), fail);
         },
       },
     ]);

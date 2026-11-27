@@ -33,6 +33,7 @@ import { UsagePanel } from "@/components/UsageMeter";
 import { RunButton } from "@/components/chat/RunButton";
 import { LoginChip } from "@/components/chat/LoginChip";
 import { ScreenChip } from "@/components/chat/ScreenChip";
+import { QuoteBar } from "@/components/chat/QuoteBar";
 import type { ContentBlock } from "./types";
 import { screenBlockFor } from "@/core/screen";
 import { timedEscape } from "./escTiming";
@@ -414,6 +415,7 @@ export function GerdrChatProvider({ children }: { children: ReactNode }) {
           <>
             <ScreenChip sessionId={session.id} />
             <LoginChip sessionId={session.id} />
+            <QuoteBar key={session.id} sessionId={session.id} />
           </>
         ),
         useTurnStat: useAddonTurnStat,
