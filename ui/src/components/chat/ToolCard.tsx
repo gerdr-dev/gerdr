@@ -105,13 +105,34 @@ export function ToolCard({ card, session }: { card: Card; session: string }) {
   );
 }
 
+/**
+ * A card type that throws draws the built-in card, and tries its own again: after a while (backing off, so a card
+ * that always throws doesn't spin) and on every hot update. It used to stay failed for good: one passing error (a
+ * hot update midway, a state it didn't expect yet) left the card drawn as the built-in one — which looks the same
+ * but lacks what the type adds, e.g. the Superagent card's ✕ — until the page was reloaded (2026-11-27).
+ */
 class CardBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
+  private fails = 0;
+  private timer?: ReturnType<typeof setTimeout>;
+  private retry = () => {
+    clearTimeout(this.timer);
+    if (this.state.failed) this.setState({ failed: false });
+  };
   static getDerivedStateFromError() {
     return { failed: true };
   }
   componentDidCatch(e: unknown) {
     console.error("[gerdr] card failed, drawing the built-in one", e);
+    clearTimeout(this.timer);
+    this.timer = setTimeout(this.retry, Math.min(60_000, 2000 * 2 ** this.fails++));
+  }
+  componentDidMount() {
+    window.addEventListener("gerdr:ui", this.retry);
+  }
+  componentWillUnmount() {
+    clearTimeout(this.timer);
+    window.removeEventListener("gerdr:ui", this.retry);
   }
   render() {
     return this.state.failed ? this.props.fallback : this.props.children;
