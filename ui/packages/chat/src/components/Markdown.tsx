@@ -255,10 +255,46 @@ const homeDest = /\]\((<?)~\//g;
 // the file: protocol outright, whatever allowedProtocols says, so each one came out as grey "a.go [blocked]". It goes
 // in as the bare path; localHref / localPath read that as a local file (a Windows one is then fixed by winDest below).
 const fileDest = /\]\((<?)file:\/\/(?=\/)/g;
+// A relative link (`](maersk-scm.md)`, `](docs/a.md)`, how a skill's SKILL.md points at the files beside it): rehype-harden
+// blocks a bare name outright, so it came out as grey "maersk-scm.md [blocked]" (user report). Only ./ and ../ pass. A
+// skill's text as Claude Code sends it begins "Base directory for this skill: <dir>": its links are files in that
+// directory, not the session's, so they become absolute there. Elsewhere a bare name becomes ./name, which the link
+// opens from the session's directory like any ./ path. Something that reads as a web address (`](example.com)`) is
+// left alone, blocked as before rather than opened as a missing file.
+const relDest = /\]\((<?)(?![a-zA-Z][\w+.-]*:|[#/~<?\s])([^)\s>]+)(>?)\)/g;
+const webHost = /^[\w-]+(\.[\w-]+)*\.(com|org|net|io|dev|cn|ai|co|app|me|so|sh)(\/|$)/i;
+const skillBase = /^\s*Base directory for this skill: (\/\S+)/;
+const joinPath = (dir: string, rel: string) => {
+  const out = dir.replace(/\/+$/, "").split("/");
+  for (const part of rel.split("/")) {
+    if (part === "..") out.length > 1 && out.pop();
+    else if (part && part !== ".") out.push(part);
+  }
+  return out.join("/");
+};
+const fixRelativeLinks = (md: string) => {
+  if (!md.includes("](")) return md;
+  const base = skillBase.exec(md)?.[1];
+  const fix = (text: string) =>
+    text.replace(relDest, (m, a: string, p: string, b: string) => {
+      if (webHost.test(p)) return m;
+      if (base) return `](${a}${joinPath(base, p)}${b})`;
+      return p.startsWith(".") ? m : `](${a}./${p}${b})`;
+    });
+  // Not inside code: a fenced block or `inline code` showing a Markdown link is shown as written (an unclosed fence,
+  // still streaming, counts as code to the end)
+  return md
+    .split(codeSpans)
+    .map((part, i) => (i % 2 ? part : fix(part)))
+    .join("");
+};
+const codeSpans = /(```[\s\S]*?(?:```|$)|`[^`\n]*`)/;
+
 export const fixWindowsPaths = (md: string) => {
   if (md.includes("](file://") || md.includes("](<file://")) md = md.replace(fileDest, "]($1");
   if (md.includes("](~/") || md.includes("](<~/")) md = md.replace(homeDest, (_m, a: string) => `](${a}/~/`);
-  return md.includes(":\\") || md.includes(":/") ? md.replace(winDest, (_m, a: string, p: string, b: string) => `](${a}/${p.replace(/\\/g, "/")}${b})`) : md;
+  md = md.includes(":\\") || md.includes(":/") ? md.replace(winDest, (_m, a: string, p: string, b: string) => `](${a}/${p.replace(/\\/g, "/")}${b})`) : md;
+  return fixRelativeLinks(md);
 };
 
 const components: Components = { a: A, img: Img, p: P, inlineCode: InlineCode, code: CodeBlock };
