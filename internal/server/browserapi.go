@@ -5,6 +5,7 @@ import (
 	"image"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/gorilla/websocket"
@@ -66,12 +67,15 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			NoWait bool `json:"noWait"`
 			// Show: the agent's pane docked beside it (the real page); else it floats in a corner (pictures)
 			Show bool `json:"show"`
+			// New: a new page even when the caller already has one on this site (see sameSitePage)
+			New bool `json:"new"`
 		}
 		if err := decode(r, &in); err != nil {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		var id int
+		reused := false
 		if in.Chrome || in.Profile != "" || s.ProjBrowser == nil {
 			t, err := b.Open(r.Context(), chromeext.OpenOptions{URL: in.URL, Profile: in.Profile, Why: in.Why, Focused: in.Focused, Width: in.Width, Height: in.Height})
 			if err != nil {
@@ -82,14 +86,24 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 			s.noteChromeScope(id, s.browserScope(in.Caller))
 		} else {
 			project := s.browserProject(in.Caller)
-			tab, err := s.ProjBrowser.Open(r.Context(), project, in.URL, in.Width, in.Height)
-			if err != nil {
-				httpError(w, http.StatusBadGateway, err.Error())
-				return
+			if !in.New {
+				if old := sameSitePage(b.Tabs(), project, in.Caller.Session, in.URL); old != 0 {
+					if _, err := b.Act(r.Context(), old, "goto", chromeext.ActArgs{URL: in.URL}); err == nil {
+						id, reused = old, true
+						b.Reopened(old)
+					}
+				}
 			}
-			id = tab
-			s.notePageOpener(id, in.Caller.Session)
-			b.SetSession(id, in.Caller.Session)
+			if id == 0 {
+				tab, err := s.ProjBrowser.Open(r.Context(), project, in.URL, in.Width, in.Height)
+				if err != nil {
+					httpError(w, http.StatusBadGateway, err.Error())
+					return
+				}
+				id = tab
+				s.notePageOpener(id, in.Caller.Session)
+				b.SetSession(id, in.Caller.Session)
+			}
 			// the UI puts the Browser pane beside the agent that opened it (ui/src/lib/actions/browser.ts), or a
 			// panel beside its conversation (ui/src/core/SessionBrowser.tsx)
 			s.Hub.Broadcast("browser_open", map[string]any{"tab": id, "project": project, "session": in.Caller.Session, "show": in.Show})
@@ -100,7 +114,10 @@ func (s *Server) browserRoutes(mux *http.ServeMux) {
 		}
 		for _, t := range b.Tabs() {
 			if t.ID == id {
-				writeJSON(w, t)
+				writeJSON(w, struct {
+					chromeext.Tab
+					Reused bool `json:"reused,omitempty"`
+				}{t, reused})
 				return
 			}
 		}
@@ -334,3 +351,27 @@ func (b browserSource) Page() *screen.Page {
 }
 
 var browserUpgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return r.Header.Get("Origin") == "" }}
+
+// sameSitePage: the caller's own open page in project's browser on the site (scheme + host + port) of target, the
+// latest; 0 for none. An agent checking its dev server runs `open` again after each change instead of reload / goto:
+// one session left 25 pages of the same localhost game open (each a whole renderer), none ever closed. So open
+// takes that page to the new address; `open --new` when a second page on the site is really wanted.
+func sameSitePage(tabs []chromeext.Tab, project, session, target string) int {
+	if session == "" {
+		return 0
+	}
+	want, err := url.Parse(target)
+	if err != nil || want.Host == "" {
+		return 0
+	}
+	for i := len(tabs) - 1; i >= 0; i-- {
+		t := tabs[i]
+		if t.Project != project || t.Session != session || t.Gone != "" {
+			continue
+		}
+		if u, err := url.Parse(t.URL); err == nil && u.Scheme == want.Scheme && u.Host == want.Host {
+			return t.ID
+		}
+	}
+	return 0
+}

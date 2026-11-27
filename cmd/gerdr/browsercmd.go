@@ -102,11 +102,20 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 	})
 
 	var why, profile, size string
-	var focus, chrome, dock bool
+	var focus, chrome, dock, fresh bool
 	open := &cobra.Command{
 		Use:   "open <url>",
 		Short: i18n.S("开一个页面（默认在项目浏览器里，显示在浏览器面板），等它加载完，打印页面号", "Open a page (in the project's browser by default, shown in the Browser pane), wait for it to load, print its number"),
-		Args:  cobra.ExactArgs(1),
+		Long: i18n.S(`开一个页面，等它加载完，打印页面号。
+
+在项目浏览器里，你已经开着同一个网站（协议 + 主机 + 端口相同）的页面时，不开新的：把那个页面跳到这个地址，打印同一个页面号。
+改完代码再看一眼用 reload（或 goto 换参数），用完 close。真要同一个网站再开一页（比如两页对比）加 --new。`,
+			`Open a page, wait for it to load, print its number.
+
+In the project's browser, when you already have a page open on the same site (scheme + host + port), no new one
+opens: that page goes to this address and its number is printed again. To look again after changing code, reload
+(or goto for other parameters), and close when done. For a second page on the same site (to compare two), --new.`),
+		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			w, h := 0, 0
 			if size != "" {
@@ -115,7 +124,7 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 					return err
 				}
 			}
-			t, err := browserOpen(args[0], why, profile, chrome, focus, dock, w, h)
+			t, err := browserOpen(args[0], why, profile, chrome, focus, dock, fresh, w, h)
 			if err != nil {
 				return err
 			}
@@ -124,6 +133,9 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 				return nil
 			}
 			fmt.Printf("tab %d\n", t.Tab)
+			if t.Reused {
+				fmt.Println(i18n.S("（用的是你已经开着的同一个网站的页面，没开新的；要另开一页加 --new）", "(your page already open on this site, taken to the address; no new page. For another one: --new)"))
+			}
 			if t.WS != "" {
 				fmt.Printf("cdp %s\n", t.WS)
 			}
@@ -138,6 +150,7 @@ in Gerdr), then carry on. The project stays signed in from then on.`),
 		},
 	}
 	open.Flags().BoolVar(&dock, "show", false, i18n.S("面板直接停在对话旁边（真页面，用户要操作时用）；默认浮在角落", "dock the pane beside the chat (the real page, for the user to act in); default: floating in a corner"))
+	open.Flags().BoolVar(&fresh, "new", false, i18n.S("另开一页，即使你已经开着这个网站的页面（默认复用那一页）", "a new page even when you already have one on this site (default: that one is reused)"))
 	open.Flags().BoolVar(&chrome, "chrome", false, i18n.S("在用户自己的 Chrome 里开（经浏览器插件，用户已登录的账号）", "open in the user's own Chrome (through the browser extension, their signed-in accounts)"))
 	open.Flags().StringVar(&why, "why", "", i18n.S("--chrome：问用户允许网站时窗口上写的理由", "--chrome: the reason shown when the user is asked to allow the site"))
 	open.Flags().StringVar(&profile, "profile", "", i18n.S("--chrome：用哪个 Chrome profile，用户在插件弹窗里起的名字（如 Work）或 status 里的 id；默认按网站选", "--chrome: which Chrome profile, the name the user gave it in the extension's popup (like Work) or an id from status; default: picked by site"))
@@ -426,12 +439,15 @@ type browserOpened struct {
 	Project string `json:"project,omitempty"`
 	URL     string `json:"url"`
 	WS      string `json:"ws,omitempty"`
+	// Reused: the caller's page already on this site, taken to the URL instead of a new one (server sameSitePage)
+	Reused bool `json:"reused,omitempty"`
 }
 
 // browserOpen: chrome / profile → the user's Chrome; else the caller's project's browser.
 // show: the pane docked beside the agent as the real page, not the floating corner it gets by default (the user is to
 // act in it: sign in, a captcha)
-func browserOpen(url, why, profile string, chrome, focus, show bool, w, h int) (*browserOpened, error) {
+// fresh: a new page even when the caller already has one on this site (else that one goes to url)
+func browserOpen(url, why, profile string, chrome, focus, show, fresh bool, w, h int) (*browserOpened, error) {
 	c, err := newAPIClient()
 	if err != nil {
 		return nil, err
@@ -439,7 +455,7 @@ func browserOpen(url, why, profile string, chrome, focus, show bool, w, h int) (
 	c.http.Timeout = 11 * time.Minute // the user may have to allow the site first
 	cl := c.caller()
 	body := map[string]any{"url": url, "why": why, "profile": profile, "chrome": chrome, "focused": focus,
-		"project": cl.Project, "from": cl.Session, "term": cl.Term, "show": show}
+		"project": cl.Project, "from": cl.Session, "term": cl.Term, "show": show, "new": fresh}
 	if w > 0 && h > 0 {
 		body["width"], body["height"] = w, h
 	}

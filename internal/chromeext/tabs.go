@@ -331,6 +331,18 @@ func (b *Bridge) inheritSession(t *Tab) {
 	}
 }
 
+// Reopened: page id was opened again (gerdr browser open, taking the caller's page on the same site to a new address:
+// server/browserapi.go sameSitePage). It counts as opened now, so the actions without -t that follow, which take the
+// caller's last opened page, act on it.
+func (b *Bridge) Reopened(id int) {
+	b.mu.Lock()
+	if t := b.tabs[id]; t != nil {
+		t.Opened = time.Now().UnixMilli()
+	}
+	b.mu.Unlock()
+	b.tabsChanged()
+}
+
 // Tabs Gerdr has open, oldest first.
 func (b *Bridge) Tabs() []Tab {
 	b.mu.Lock()

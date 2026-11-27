@@ -25,6 +25,10 @@ projbrowser (internal/projbrowser): the installed Chrome / Edge / Brave / Chromi
   server and the console / network logs work on them unchanged. Only the transport differs (`Tab.send`: the
   extension, or the project browser's pipe). Agents get them by default: `gerdr browser open` opens in the
   caller's project (`ResolveSpace`), `--chrome` / `--profile` in the user's Chrome through the extension.
+- **`open` reuses the caller's page on the same site** (scheme + host + port; `sameSitePage` in
+  server/browserapi.go): it navigates that page and counts it as opened now (`Bridge.Reopened`, so no-`-t` actions
+  hit it); `--new` opens another. Agents checking their dev server ran `open` after every change and never `close`:
+  one session left 25 pages of the same localhost game open, each a whole renderer.
 - **Projects don't see each other's pages** (asked for: separate browsers): an agent's calls say who is calling
   (`Caller`), and the page list, actions, `show` and `close` are limited to its project, the default page (no `-t`)
   being the last of its own (`internal/server/browserscope.go`). A panel's worker counts as in its panel's project

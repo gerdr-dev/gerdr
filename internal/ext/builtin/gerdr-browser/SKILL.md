@@ -35,6 +35,7 @@ Not for fetching what a plain HTTP request or your own tools can get.
 
 ```bash
 gerdr browser open http://localhost:5173/  # the project's browser; waits for the page; prints `tab <n>`
+gerdr browser reload                       # after changing code: the same page again (goto <url> for other params)
 gerdr browser show                         # dock it beside the chat for the user to act in (--show on open: at once)
 gerdr browser open https://www.doubao.com/chat/ --chrome --why "ask Doubao about X"   # the user's own Chrome
 gerdr browser snapshot                     # what's on the page, each thing with a ref: [e12] button "发送"
@@ -51,6 +52,11 @@ gerdr browser console --errors
 gerdr browser close                        # its Browser pane closes too; --keep leaves page and pane to the user
 ```
 
+- **One page per site, reused.** Checking your own dev server / page after each change: `reload` (or `goto` with new
+  parameters) the page you have, don't `open` it again. `open` on a site where you already have a page (same scheme,
+  host and port) takes that page to the new address and prints its number again (`--new` for a second page, e.g.
+  to compare two). Each page is a whole renderer, and the user sees every one in the pane's list: one session once
+  left 25 copies of its game open.
 - The user can also open pages in the Browser pane themselves; `status` lists your project's pages.
 - **Each project's browser is its own**: you see and drive only your project's pages (a panel's workers: the panel's
   project). Without `-t`, actions take the last page you opened (else your project's last); another project's page number is refused
