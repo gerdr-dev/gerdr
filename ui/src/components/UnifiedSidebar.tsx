@@ -96,7 +96,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { codeHost, get, hostOrder, markRead, set, useStore } from "@/lib/store";
+import { codeHost, focusedSession, get, hostOrder, markRead, set, useStore } from "@/lib/store";
 import { panelOwned } from "@/lib/overviewState";
 import { showInCodeView } from "@/core/CodeView";
 import { codeMenuItems } from "@/lib/codeMenu";
@@ -115,6 +115,7 @@ import { t } from "@/lib/i18n";
 import { useWorkProject } from "@/lib/work";
 import { usePhone } from "@/lib/phone";
 import { usePanelPhoneMenu } from "@/core/phoneMenu";
+import { usePanelSearches } from "@/core/search";
 import { PanelPhoneMenu } from "./PhoneMenu";
 
 /*
@@ -359,6 +360,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const panelMenu = usePanelPhoneMenu(roomy && mode === "work" && !hosted ? workKey : null);
   // The drawer's search: not kept, it's "what am I looking for right now" (the drawer remounts on every open)
   const [q, setQ] = useState("");
+  const panelSearch = usePanelSearches(roomy && hosted).find(([key]) => key === workKey)?.[1];
   // The "3m" column's clock: minutes are its smallest step, a tick every 15s is plenty (statuses come over the socket)
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -389,8 +391,11 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   }, [curTab?.id, curTab?.focus, gridOn]);
 
   const here = currentSpace(layout);
-  // Searching swaps the parts for one flat list of this project's panes that match
+  // Use the same panel entries as the command palette, including tasks whose conversations aren't open.
   const kw = q.trim().toLowerCase();
+  const panelHits = kw
+    ? (panelSearch?.items.filter(({ label, id, detail, keywords }) => [label, id, detail, keywords].join(" ").toLowerCase().includes(kw)) ?? [])
+    : [];
   const hits = !kw
     ? []
     : allLeaves(layout)
@@ -435,7 +440,7 @@ export function UnifiedSidebar({ className }: { className?: string }) {
                   {/* iOS gets 16px: a smaller input makes iOS zoom the page on focus. Not focused on open: the keyboard would cover the list */}
                   <input
                     className="h-8 w-full rounded-lg bg-muted/60 pr-2 pl-8 text-[13px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring/40 supports-[-webkit-touch-callout:none]:text-[16px]"
-                    placeholder={t("unifiedSidebar.filterPlaceholder")}
+                    placeholder={t(panelSearch ? "unifiedSidebar.panelFilterPlaceholder" : "unifiedSidebar.filterPlaceholder")}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                   />
@@ -443,10 +448,37 @@ export function UnifiedSidebar({ className }: { className?: string }) {
               )}
               {kw ? (
                 <div className="flex flex-col pt-1.5">
+                  {panelHits.map((x) => (
+                    <button
+                      key={x.id ?? x.label}
+                      type="button"
+                      className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-accent/60 focus-visible:bg-accent"
+                      // Keep a tap from moving focus and shifting the list as the keyboard closes before click.
+                      onPointerDown={(e) => e.button === 0 && e.preventDefault()}
+                      onClick={() => {
+                        const before = focusedSession(get().layout);
+                        x.onSelect();
+                        // App closes the drawer after a new conversation catches up. A pick that stays in place needs its own close.
+                        if (get().drawer && before === focusedSession(get().layout)) set({ drawer: false });
+                      }}
+                    >
+                      {x.content ?? (
+                        <>
+                          {x.icon}
+                          <span className="min-w-0 flex-1 truncate">{x.label}</span>
+                          {x.detail && <span className="shrink-0 text-[11px] text-muted-foreground">{x.detail}</span>}
+                        </>
+                      )}
+                    </button>
+                  ))}
                   {hits.map((x) => (
                     <PaneRow key={x.pane.id} pane={x.pane.id} where={wsLabelOf(layout, x.ws)} />
                   ))}
-                  {!hits.length && <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">{t("unifiedSidebar.noMatch")}</p>}
+                  {!panelHits.length && !hits.length && (
+                    <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">
+                      {t(panelSearch ? "unifiedSidebar.noPanelMatch" : "unifiedSidebar.noMatch")}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>

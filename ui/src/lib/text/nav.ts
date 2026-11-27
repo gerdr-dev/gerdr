@@ -20,6 +20,8 @@ export const zh = {
   "unifiedSidebar.newSession": "新会话",
   "unifiedSidebar.filterPlaceholder": "筛 标题 / Tab / 路径",
   "unifiedSidebar.noMatch": "没有匹配的 Pane",
+  "unifiedSidebar.panelFilterPlaceholder": "搜索列表",
+  "unifiedSidebar.noPanelMatch": "没有匹配结果",
   "unifiedSidebar.activeHint": "等你、在跑、报错的会自己进来，跑完也留着，直到你移出；也可以右键加进来。按该不该先看排",
   "unifiedSidebar.active": "进行中",
   "unifiedSidebar.allProjects": " · 所有项目",
@@ -257,6 +259,8 @@ export const en: Record<keyof typeof zh, string> = {
   "unifiedSidebar.newSession": "New session",
   "unifiedSidebar.filterPlaceholder": "Filter by title / tab / path",
   "unifiedSidebar.noMatch": "No matching panes",
+  "unifiedSidebar.panelFilterPlaceholder": "Search this list",
+  "unifiedSidebar.noPanelMatch": "No matching results",
   "unifiedSidebar.activeHint":
     "Agents that need you, are running or failed show up here on their own and stay after they finish, until you remove them. You can also add one from its right-click menu. Sorted by what to look at first",
   "unifiedSidebar.active": "Active",
