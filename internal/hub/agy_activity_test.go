@@ -3,10 +3,34 @@ package hub
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestAgyActivityReadsLocalWALIndex(t *testing.T) {
+	sqlite, err := exec.LookPath("sqlite3")
+	if err != nil {
+		t.Skip("sqlite3 unavailable")
+	}
+	home := t.TempDir()
+	root := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	const parent = "3125d54f-32ee-42e8-9f34-90297249a37b"
+	query := "PRAGMA journal_mode=WAL;" +
+		"CREATE TABLE conversation_summaries (conversation_id TEXT, parent_conversation_id TEXT, killed INTEGER, not_fully_idle INTEGER);" +
+		"INSERT INTO conversation_summaries VALUES ('child', '" + parent + "', 0, 1);"
+	if out, err := exec.Command(sqlite, "-init", os.DevNull, filepath.Join(root, "conversation_summaries.db"), query).CombinedOutput(); err != nil {
+		t.Fatalf("prepare index: %v: %s", err, out)
+	}
+	probe := agyActivityProbe(AgentDef{Env: map[string]string{"HOME": home}}, nil)
+	if !probe(parent) || probe("64a3f97c-73f9-4da4-8d2e-dde4bffce632") {
+		t.Fatal("index did not isolate the parent with active work")
+	}
+}
 
 func TestAgyChildShellWhileIndexIsIdle(t *testing.T) {
 	brain := t.TempDir()

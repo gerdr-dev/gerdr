@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,7 +73,10 @@ func agyActivityProbe(def AgentDef, disconnected <-chan struct{}) func(string) b
 		query := "SELECT EXISTS(SELECT 1 FROM conversation_summaries WHERE killed=0 AND not_fully_idle=1" +
 			" AND (conversation_id='" + sid + "' OR parent_conversation_id='" + sid + "'));"
 		db := filepath.Join(root, "conversation_summaries.db")
-		out, err := exec.CommandContext(ctx, sqlite, "-init", os.DevNull, "-readonly", "-batch", "-noheader", db, query).Output()
+		// The file URI keeps the index read-only while letting SQLite open its WAL support files. The
+		// macOS sqlite3 -readonly flag can fail with SQLITE_CANTOPEN if those files aren't there yet.
+		path := url.URL{Path: filepath.ToSlash(db)}
+		out, err := exec.CommandContext(ctx, sqlite, "-init", os.DevNull, "-batch", "-noheader", "file:"+path.EscapedPath()+"?mode=ro", query).Output()
 		return err == nil && strings.TrimSpace(string(out)) == "1"
 	}
 }
