@@ -185,7 +185,6 @@ export const zh = {
   "appContextMenu.copyImageAddress": "复制图片地址",
   "appContextMenu.copyAddress": "复制地址",
   "quoteBar.insert": "引用",
-  "quoteBar.inserted": "已引用",
   "quoteBar.dismiss": "关闭引用建议",
 
   // App
@@ -412,7 +411,6 @@ export const en: Record<keyof typeof zh, string> = {
   "appContextMenu.copyImageAddress": "Copy image address",
   "appContextMenu.copyAddress": "Copy address",
   "quoteBar.insert": "Quote",
-  "quoteBar.inserted": "Quoted",
   "quoteBar.dismiss": "Dismiss quote suggestion",
 
   "app.notifyWaiting": "Waiting on you · {name}",

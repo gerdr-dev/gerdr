@@ -291,8 +291,7 @@
   }
 }
 
-/* lib/copysel.ts: the "Copied" bubble by the mouse after copy-on-select. Plain CSS, not Tailwind classes: it is made
-   with createElement and has to look right on its first frame. pointer-events none so it never catches a click. */
+/* lib/copysel.ts: the "Copied" bubble by the mouse. Plain CSS so it is styled on its first frame. */
 .copy-bubble {
   position: fixed;
   z-index: 100;
@@ -311,6 +310,23 @@
 }
 .copy-bubble-out {
   opacity: 0;
+}
+.copy-bubble-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 3px 3px 8px;
+  pointer-events: auto;
+}
+.copy-bubble-action button {
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  color: var(--brand);
+  cursor: pointer;
+}
+.copy-bubble-action button:hover,
+.copy-bubble-action button:focus-visible {
+  background: var(--accent);
 }
 @keyframes copy-bubble-in {
   from {

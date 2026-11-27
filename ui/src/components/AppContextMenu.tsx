@@ -23,7 +23,8 @@ import { IS_MAC } from "@/lib/keys";
 import { isNative, nativeOpenPath, nativeOpenURL } from "@/lib/native";
 import { stripLineAnchor } from "@/lib/paths";
 import { copyText as copyToClipboard } from "@/lib/clipboard";
-import { offerQuote, quoteSelection } from "@/lib/selectionQuote";
+import { copyInPlace, offerQuote } from "@/lib/copysel";
+import { quoteSelection } from "@/lib/selectionQuote";
 import { isPhone } from "@/lib/phone";
 import { t as tr } from "@/lib/i18n"; // `t` is the event target below
 
@@ -219,7 +220,9 @@ function buildMenu(e: MouseEvent, touch: boolean): Item[][] {
         run: () => {
           restoreSelection();
           const quote = quoteSelection();
-          if (!document.execCommand("copy")) void copyToClipboard(selectedText()).then(() => offerQuote(quote), fail);
+          const at = { x: e.clientX, y: e.clientY };
+          if (copyInPlace()) offerQuote(quote, at);
+          else void copyToClipboard(selectedText()).then(() => offerQuote(quote, at), fail);
         },
       },
     ]);
