@@ -95,7 +95,7 @@ npm i -g @openai/codex                           # Codex，然后 codex login
   在 Finder 里右键 → 打开（或 `xattr -dr com.apple.quarantine /Applications/Gerdr.app`）。
 - **安卓**：`Gerdr-x.y.z-android.apk`，连的是你自己那台 Gerdr（要先配好[远程访问](docs/guide/remote.zh-CN.md)）。
 - **iOS**：发版里还没有，先用 Xcode 自己装到 iPhone 上（[怎么装](docs/dev/IOS.md#building-and-installing)）。和安卓一样走远程访问连你的 Gerdr。
-- **Windows**：发版里还没有，先自己 `make win` 打安装包（[从源码构建](docs/guide/development.zh-CN.md)；没签名，SmartScreen 拦的话点「更多信息 → 仍要运行」）。
+- **Windows**：`Gerdr-x.y.z-windows-x64-setup.exe`，双击安装，之后自动更新。没签名，SmartScreen 拦的话点「更多信息 → 仍要运行」。
 
 打开 App，选 agent、选目录，开始。也可以在终端里：
 

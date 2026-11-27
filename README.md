@@ -106,8 +106,8 @@ Then grab Gerdr from [releases](https://github.com/gerdr-dev/gerdr/releases/late
 - **Android** — `Gerdr-x.y.z-android.apk`. It connects to your own Gerdr through [remote access](docs/guide/remote.md).
 - **iOS** — not in releases yet; build it with Xcode and install it on your iPhone ([how](docs/dev/IOS.md#building-and-installing)).
   Like Android, it connects through remote access.
-- **Windows** — not in releases yet; build the installer with `make win` ([from source](docs/guide/development.md);
-  unsigned: on SmartScreen click More info → Run anyway).
+- **Windows** — `Gerdr-x.y.z-windows-x64-setup.exe`; run it to install, and it updates itself after that.
+  Unsigned: on SmartScreen click More info → Run anyway.
 
 Open the app, pick an agent and a directory, and start. Or from a terminal:
 
