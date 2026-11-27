@@ -249,8 +249,10 @@ interface Ctx {
      * (`fold`, else its first line) above it. For what the agent should hear but isn't worth waking it for ("the
      * user ignored your question"). Once per message: after it went, it's gone. The same `key` (your panel's own)
      * replaces a note that hasn't gone yet; `""` as the text takes it back.
+     * With `now: true`, first try an urgent interjection into the active turn. Idle sessions and agents that can't
+     * safely accept it keep the note for the next message.
      */
-    note(id: string, key: string, text: string, opts?: { fold?: string }): void;
+    note(id: string, key: string, text: string, opts?: { fold?: string; now?: boolean }): void;
     /**
      * Stops its agent and takes it off the screen, like closing its tab: the conversation is kept and `send` carries on
      * from where it was. For a worker whose task is done or parked, so it stops holding a process.

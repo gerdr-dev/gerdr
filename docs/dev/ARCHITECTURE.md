@@ -899,9 +899,10 @@ still be resumed with its own agent). Title / TitleKey / CustomTitle are copied 
   - Panels have the same ride-along for their own news: `ctx.sessions.note(id, key, text, { fold })` leaves a
     `<gerdr-note fold="…">` block that goes in front of the conversation's next message, whoever sends it (hub
     `note.go`, kept in the Record until it went; the key is scoped to the panel). The chat draws the fold as a notice
-    line above the message. Not a `send` of its own: the Superagent board said "the user ignored your question" with
-    one the moment the person typed, and it landed as a second message after theirs, starting a turn of its own when
-    the first had ended (2026-11-24).
+    line above the message. With `now: true`, the hub first tries an urgent steer on the attached host. A refusal,
+    error or idle session leaves the note pending. Only adapters advertising `steering.activeOnly` take this path:
+    Codex binds the steer to a turn ID and Gerdr Agent checks its active turn under the queue lock. Claude Code
+    can read a message from stdin after its turn ends and start another turn, so its notes ride on the next message.
   - Memory is the same format as Claude Code's auto memory (one .md per fact, MEMORY.md index). The index goes into
     the system prompt through `AppendPrompt` (claude `--append-system-prompt`, codex developerInstructions, native
     every model call), with where it lives and what belongs there; entries are read on demand. Read when the agent

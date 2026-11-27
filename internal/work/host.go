@@ -44,7 +44,7 @@ type Host interface {
 	Mute(id string, on bool) (map[string]any, error)
 	// Note leaves text to go in front of the conversation's next message, whoever sends it (hub Session.SetNote);
 	// key is the panel's own (Gerdr scopes it to the panel), "" text takes it back.
-	Note(panel, id, key, text, fold string) error
+	Note(ctx context.Context, panel, id, key, text, fold string, urgent bool) error
 	// SessionsChanged waits until one of ids moves — something new in its log (a message, the agent's text as it
 	// streams, a tool call) or its status — and returns those that moved; none when timeout passes first. Pushed by the
 	// hub, the way the chat follows a conversation: a panel follows conversations without polling them.
@@ -344,18 +344,19 @@ func (r *runner) sessionsObject() map[string]any {
 			}
 			return s
 		},
-		// ctx.sessions.note(id, key, text, { fold }): goes in front of its next message, whoever sends it; "" takes it back
+		// ctx.sessions.note(id, key, text, { fold, now }): can try the active turn, otherwise rides with the next message
 		"note": func(id, key, text string, arg jsValue) {
 			if h == nil {
 				r.throw(errNoHost)
 			}
 			var o struct {
 				Fold string `json:"fold"`
+				Now  bool   `json:"now"`
 			}
 			if err := r.opts(arg, &o); err != nil {
 				r.throw(fmt.Errorf("ctx.sessions.note: %w", err))
 			}
-			if err := h.Note(r.project, id, key, text, o.Fold); err != nil {
+			if err := h.Note(r.ctx, r.project, id, key, text, o.Fold, o.Now); err != nil {
 				r.throw(err)
 			}
 		},

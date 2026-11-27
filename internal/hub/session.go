@@ -145,6 +145,7 @@ type Session struct {
 
 	optVals map[string]any // the dropdowns' current values last handed out in a Summary (optionsLocked)
 	mu      sync.Mutex
+	noteMu  sync.Mutex // a message collecting notes waits for an in-flight delivery attempt to settle
 	escMu   sync.Mutex // Escape 一次只跑一个：连按几下 Esc 的话，并发的几次会各自把同一句话还回去（输入框里叠好几遍，踩过）
 	rec     Record
 	events  []*Event

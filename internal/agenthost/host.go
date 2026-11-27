@@ -56,6 +56,12 @@ func (h *Host) Steering() bool {
 	return ok && s["supported"] == true
 }
 
+// SteerActiveOnly reports whether a steer is guaranteed to require an active turn, even if it just ended.
+func (h *Host) SteerActiveOnly() bool {
+	s, ok := h.Info.Meta["steering"].(map[string]any)
+	return ok && s["activeOnly"] == true
+}
+
 // SteerRewind reports whether a steer can be rewound on its own. Codex can't: a steer joins the running
 // turn and thread/revert only cuts whole turns.
 func (h *Host) SteerRewind() bool {

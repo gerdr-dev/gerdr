@@ -446,7 +446,7 @@ func (a *Agent) Initialize(ctx context.Context, p acp.InitializeRequest) (acp.In
 			},
 		},
 		AuthMethods: []acp.AuthMethod{},
-		Meta:        map[string]any{"steering": map[string]any{"supported": true}},
+		Meta:        map[string]any{"steering": map[string]any{"supported": true, "activeOnly": true}},
 	}, nil
 }
 

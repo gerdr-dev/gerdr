@@ -309,12 +309,12 @@ func (h workHost) Mute(id string, on bool) (map[string]any, error) {
 
 // Note: ctx.sessions.note. The key is scoped to the panel, so two panels' notes on one conversation don't replace
 // each other.
-func (h workHost) Note(panel, id, key, text, fold string) error {
+func (h workHost) Note(ctx context.Context, panel, id, key, text, fold string, urgent bool) error {
 	sess, err := h.s.Hub.Session(id)
 	if err != nil {
 		return err
 	}
-	sess.SetNote(keyOr(panel)+":"+key, text, fold)
+	sess.DeliverNote(ctx, keyOr(panel)+":"+key, text, fold, urgent)
 	return nil
 }
 

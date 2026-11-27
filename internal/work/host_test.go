@@ -3,6 +3,7 @@ package work
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,8 +47,8 @@ func (f *fakeHost) Tag(id string, tags map[string]string) (map[string]any, error
 func (f *fakeHost) Mute(id string, on bool) (map[string]any, error) {
 	return map[string]any{"id": id, "muted": on}, nil
 }
-func (f *fakeHost) Note(panel, id, key, text, fold string) error {
-	f.noted = append(f.noted, panel+"|"+id+"|"+key+"|"+text+"|"+fold)
+func (f *fakeHost) Note(_ context.Context, panel, id, key, text, fold string, urgent bool) error {
+	f.noted = append(f.noted, fmt.Sprintf("%s|%s|%s|%s|%s|%t", panel, id, key, text, fold, urgent))
 	return nil
 }
 func (f *fakeHost) Send(_ context.Context, _, id, text string, _ SendOptions) (map[string]any, error) {
@@ -94,7 +95,7 @@ export async function go(input, ctx) {
   const s = await ctx.sessions.start({ cwd: '~/proj', prompt: 'do it', title: 'Task 1', tags: { mr: 'a!1' }, reportTo: 'work' })
   ctx.sessions.list({ tags: { mr: '' } })
   ctx.sessions.tag('s1', { mr: '', task: 't9' })
-  ctx.sessions.note('s1', 'ignored', 'they ignored q1', { fold: 'ignored' })
+  ctx.sessions.note('s1', 'ignored', 'they ignored q1', { fold: 'ignored', now: true })
   ctx.sessions.note('s1', 'ignored', '')
   await ctx.sessions.close('s1')
   let noCwd = ''
@@ -128,7 +129,7 @@ export async function go(input, ctx) {
 	if v, ok := h.tagged["mr"]; !ok || v != "" || h.tagged["task"] != "t9" {
 		t.Errorf("tag: %v", h.tagged)
 	}
-	if len(h.noted) != 2 || h.noted[0] != "default|s1|ignored|they ignored q1|ignored" || h.noted[1] != "default|s1|ignored||" {
+	if len(h.noted) != 2 || h.noted[0] != "default|s1|ignored|they ignored q1|ignored|true" || h.noted[1] != "default|s1|ignored|||false" {
 		t.Errorf("note: %q", h.noted)
 	}
 	if len(h.closed) != 1 || h.closed[0] != "s1" {

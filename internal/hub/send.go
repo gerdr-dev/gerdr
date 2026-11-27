@@ -228,43 +228,20 @@ func (s *Session) sendWith(ctx context.Context, content []acp.ContentBlock, o Se
 	}
 
 	if running && c.Steering() {
-		// 插话的「排队中」状态（command_lifecycle → steer_state）常常比 MethodSteer 的返回先到 —— 那时这条消息还没记进日志。
-		// 先登记，早到的状态暂存在这儿，记日志之后补发（见下面和 onGerdrInfo）
-		s.mu.Lock()
-		s.steering[msgID] = ""
-		s.mu.Unlock()
-		defer func() {
-			s.mu.Lock()
-			delete(s.steering, msgID)
-			s.mu.Unlock()
-		}()
 		// promptRequired 有两种可能：这一轮刚好结束了（等 running 落下来，按新一轮发），或者
 		// 这一轮还没在 agent 那边真正开始（比如 claude 进程还在启动）——那就隔一会儿再插一次。
 		for i := 0; i < 100; i++ {
-			res, err := agenthost.Call[acpx.SteerResponse](ctx, c, acpx.MethodSteer, acpx.SteerRequest{SessionId: acp.SessionId(agentSID), Prompt: content, MessageId: msgID, Now: urgent})
+			e := &Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Now: urgent, From: from, Fold: fold}
+			outcome, err := s.steer(ctx, c, agentSID, content, e, person)
 			if err != nil {
 				return SendResult{}, err
 			}
-			if res.Outcome == acpx.SteerInjected {
-				if person {
-					s.mu.Lock()
-					s.byPerson = true // a person joined this turn: they're watching it
-					s.personSaid = PersonSaid{Text: contentText(raw), At: now()}
-					s.mu.Unlock()
-				}
-				s.emit(&Event{Kind: EvUser, MessageID: msgID, Content: raw, Steer: true, Now: urgent, From: from, Fold: fold})
-				s.mu.Lock()
-				early := s.steering[msgID]
-				delete(s.steering, msgID)
-				s.mu.Unlock()
-				if early != "" {
-					s.emit(&Event{Kind: EvSteerState, MessageID: msgID, Text: early})
-				}
+			if outcome == acpx.SteerInjected {
 				s.touchTitle(content)
 				go s.autoTitle()
 				return SendResult{MessageID: msgID, Steered: true}, nil
 			}
-			if res.Outcome == acpx.SteerHold {
+			if outcome == acpx.SteerHold {
 				// This turn can't take a steer (Codex's compact turn): hold it like a mid-turn command and send it
 				// once the turn ends. It used to come back as an error and the message was gone (user report).
 				if s.deferCommand(msgID, from, fold, content, raw) {
@@ -311,6 +288,35 @@ func (s *Session) sendWith(ctx context.Context, content []acp.ContentBlock, o Se
 
 	go s.runTurn(c, agentSID, msgID, content)
 	return SendResult{MessageID: msgID}, nil
+}
+
+// steer attempts the ACP interjection once. Callers choose how to handle a turn that cannot accept it.
+func (s *Session) steer(ctx context.Context, c *agenthost.Host, agentSID string, content []acp.ContentBlock, e *Event, person bool) (string, error) {
+	id := e.MessageID
+	// The agent can report the queue state before replying to the call. Keep that state until the message is logged.
+	s.mu.Lock()
+	s.steering[id] = ""
+	s.mu.Unlock()
+	res, err := agenthost.Call[acpx.SteerResponse](ctx, c, acpx.MethodSteer, acpx.SteerRequest{
+		SessionId: acp.SessionId(agentSID), Prompt: content, MessageId: id, Now: e.Now,
+	})
+	if err == nil && res.Outcome == acpx.SteerInjected {
+		if person {
+			s.mu.Lock()
+			s.byPerson = true
+			s.personSaid = PersonSaid{Text: contentText(e.Content), At: now()}
+			s.mu.Unlock()
+		}
+		s.emit(e)
+	}
+	s.mu.Lock()
+	early := s.steering[id]
+	delete(s.steering, id)
+	s.mu.Unlock()
+	if err == nil && res.Outcome == acpx.SteerInjected && early != "" {
+		s.emit(&Event{Kind: EvSteerState, MessageID: id, Text: early})
+	}
+	return res.Outcome, err
 }
 
 var retryWaits = chatlog.RetryWaits
