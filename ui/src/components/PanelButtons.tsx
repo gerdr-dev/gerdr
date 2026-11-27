@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pencil, Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bot, Pencil, Plus, RefreshCw, SlidersHorizontal, Smile, Trash2 } from "lucide-react";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { currentSpace } from "@/lib/layout";
@@ -8,7 +8,7 @@ import { set, setMode, setWorkPanel, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { PanelIcon } from "./PanelIcon";
 import { t } from "@/lib/i18n";
-import { removePanel, updatePanel } from "@/lib/panelActions";
+import { askAgentToEditPanel, removePanel, updatePanel } from "@/lib/panelActions";
 import { useBadges } from "@/lib/badges";
 import { SpaceDropLine, startSpaceDrag } from "./SpaceDrag";
 
@@ -184,6 +184,11 @@ function PanelButton({
         {src?.git && src.remote && (
           <ContextMenuItem onClick={update} title={src.remote}>
             <RefreshCw /> {t("workSource.menuUpdate")}
+          </ContextMenuItem>
+        )}
+        {p.dir && (
+          <ContextMenuItem onSelect={() => askAgentToEditPanel(p.dir)}>
+            <Bot /> {t("panelSettings.askAgentShort")}
           </ContextMenuItem>
         )}
         <MoveItems i={i} n={n} axis={axis} move={(to) => movePanel(space, p.key, to)} />

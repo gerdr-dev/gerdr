@@ -3,6 +3,17 @@ import { api } from "@/lib/api";
 import { askConfirm } from "@/lib/confirm";
 import { t } from "@/lib/i18n";
 import { panelsChanged, type Panel } from "@/lib/panels";
+import { addTab } from "@/lib/actions/tabs";
+import { showOwner } from "@/lib/hostView";
+import { set } from "@/lib/store";
+
+/** Open a conversation draft in the panel's folder, on Code's layout. */
+export function askAgentToEditPanel(dir: string | undefined) {
+  if (!dir) return;
+  set({ dialog: null, drawer: false });
+  showOwner("");
+  addTab({ cwd: dir });
+}
 
 /**
  * Remove a panel (the rail's menu, Settings → Panels), the way deleting a project goes: confirm, move it to the trash,

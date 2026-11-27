@@ -8,12 +8,10 @@ import { api } from "@/lib/api";
 import { currentSpace, spaceList } from "@/lib/layout";
 import { panelsChanged, usePanels, type Panel } from "@/lib/panels";
 import { usePhone } from "@/lib/phone";
-import { codeLayout, closeDialog, set, useStore } from "@/lib/store";
-import { addTab } from "@/lib/actions";
-import { showCode } from "@/lib/actions/views";
+import { codeLayout, set, useStore } from "@/lib/store";
 import { copyText } from "@/lib/clipboard";
 import { t } from "@/lib/i18n";
-import { removePanel, updatePanel } from "@/lib/panelActions";
+import { askAgentToEditPanel, removePanel, updatePanel } from "@/lib/panelActions";
 import { PanelIcon, ProjectIcon } from "./PanelIcon";
 import { projectExtDialog, projectIconDialog, renameSpaceDialog } from "./SpaceSwitcher";
 import { spaceInitials, type Space } from "@/lib/layout";
@@ -171,15 +169,7 @@ function PanelRow({ p, project }: { p: Panel; project: string }) {
     setBusy("");
   };
   const remove = () => removePanel({ key: p.key, title: p.title });
-  // Changing a panel is an agent's work in its folder, started from here: nobody has to know where that folder is
-  // (the person, 2026-11-25: a panel assistant always on screen takes room, and the secretary isn't for this). A
-  // new conversation's page opens on the folder; the agent reads the gerdr-ui skill when asked to change a panel.
-  const askAgent = () => {
-    if (!p.dir) return;
-    closeDialog();
-    addTab({ cwd: p.dir });
-    showCode();
-  };
+  const askAgent = () => askAgentToEditPanel(p.dir);
   const copyPath = () => p.dir && copyText(p.dir).then(() => toast.success(t("panelSettings.copied"), { description: p.dir }));
   return (
     <div className="flex items-center gap-3 px-3 py-2.5">
