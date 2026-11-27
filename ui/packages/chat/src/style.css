@@ -106,6 +106,12 @@
 .is-user .gerdr-md a:hover {
   text-decoration-color: currentColor;
 }
+/* A quote (often what the user quotes back from a reply): grey text and bar were murky on the bubble; the text's
+   colour, softened, and a bar of it */
+.is-user .gerdr-md [data-streamdown="blockquote"] {
+  color: color-mix(in oklch, currentColor 80%, transparent);
+  border-left-color: color-mix(in oklch, currentColor 45%, transparent);
+}
 .is-user .gerdr-md [data-streamdown="list-item"]::marker {
   color: color-mix(in oklch, currentColor 70%, transparent);
 }
