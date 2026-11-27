@@ -273,10 +273,16 @@ interface Ctx {
     /**
      * The folder of the thing `key` (e.g. a task id), named `name` (its title) under `under` (e.g. "任务" / "Tasks") in
      * the project's artifacts directory. Stable: once it exists it is found by id, even after the person renamed or
-     * moved it in Finder. `exists` false until something is put there.
+     * moved it in Finder. `exists` false until something is put there. The path is reserved for `key` once returned
+     * (no other key gets it). `untitled`: the thing has no name of its own yet (e.g. a conversation named after its
+     * first message): the folder waits under a hidden name until `rename` gives it one.
      */
-    folder(opts: { key: string; name?: string; under?: string }): { path: string; exists: boolean; id?: string };
-    /** The thing was renamed: its folder follows when it exists and the new name is free. → where it is now ("" = none yet). */
+    folder(opts: { key: string; name?: string; under?: string; untitled?: boolean }): { path: string; exists: boolean; id?: string };
+    /**
+     * The thing was renamed: its folder takes the new name when it is free (created first if it doesn't exist yet),
+     * and the old path stays as a link to it, since a conversation given the old path keeps using it. → where it is
+     * now ("" = it has none).
+     */
     rename(key: string, name: string): string;
     /** The folder's records, oldest first; `superseded` ones were replaced by a later one. [] when it doesn't exist. */
     items(path: string): ArtifactItem[];

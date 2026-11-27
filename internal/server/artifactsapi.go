@@ -31,9 +31,19 @@ type ArtifactsPlace func(rec hub.Record) (dir string, owner artifacts.Owner, pro
 // SessionArtifacts: the folder whoever started the session gave it (a panel's task: ctx.sessions.start artifactsDir),
 // "" for none. Code sessions have none: an artifacts folder is a board's way of keeping a task's things together, and
 // Code stays as it was (2026-11-13, the user: "code模式下不要有任何我们新加的文件夹产物的逻辑").
-func SessionArtifacts(project func(hub.Record) string) ArtifactsPlace {
+//
+// A session a panel started for one of its tasks (tags panel + task) gets that task's own folder even when the path
+// it was started with is someone else's: before 2026-11-27 the path wasn't reserved, so dozens of a board's blank
+// tasks were all handed 新会话_3 and wrote into one folder (artifacts.Store.ForSession).
+func SessionArtifacts(st *artifacts.Store, project func(hub.Record) string) ArtifactsPlace {
 	return func(rec hub.Record) (string, artifacts.Owner, string) {
-		return rec.ArtifactsDir, artifacts.Owner{}, project(rec)
+		d := rec.ArtifactsDir
+		panel, task := rec.Tags["panel"], rec.Tags["task"]
+		if d == "" || st == nil || panel == "" || task == "" {
+			return d, artifacts.Owner{}, project(rec)
+		}
+		o := artifacts.Owner{Panel: panel, Task: task}
+		return st.ForSession(d, o, rec.Title), o, project(rec)
 	}
 }
 

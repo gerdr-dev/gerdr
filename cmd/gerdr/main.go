@@ -360,7 +360,7 @@ func runServe(open, appMode, serviceMode bool, parentPID int) error {
 	// made before the hub, whose Claude Code sessions follow the API routes they report (addons/routes.go).
 	asvc := addons.NewServices(am, log)
 	asvc.Env = func() []string { return sysenv.ChildEnv() }
-	artsOf := server.SessionArtifacts(sessionProject(env.Dir, layout))
+	artsOf := server.SessionArtifacts(arts, sessionProject(env.Dir, layout))
 	h, err := hub.New(hub.Options{Routes: asvc, Dir: env.Dir, ClaudeIdle: env.ClaudeIdle, ExtraAgents: cfgAgents(), AgentOrder: cfgAgentOrder(), LLM: cfgLLM, Defaults: cfgDefaults, Log: log, Ext: em, SkillDirs: sessionSkills(env.Dir, layout, em), MCP: workMCP(env.Dir), Project: sessionProject(env.Dir, layout),
 		Artifacts: func(rec hub.Record) string { d, _, _ := artsOf(rec); return d },
 		// config.json skillUpdates: tell sessions their skill files changed (hub skillnote.go); left out = on

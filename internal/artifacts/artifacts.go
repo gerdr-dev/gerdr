@@ -140,6 +140,14 @@ func (s *Store) rel(p string) string {
 
 // ForOwner is the folder of something a panel owns (a task: Owner{Panel, Task}), named name under the project's
 // directory's under/ ("任务/<title>"). It may not exist yet; once it does, it is found by id, wherever it went.
+// No name: the thing has none yet (a blank task, titled after its first message); the folder waits under a hidden
+// ".<task>" until Rename names it, so the user never sees placeholder folders like 新会话_3 (2026-11-27, the user:
+// "每个任务都是有自己的名字的").
+//
+// The path is reserved for the owner the moment it is handed out (an id in the index before the folder exists):
+// a panel gives it to the task's conversation right away, and the folder appears only when the agent first writes
+// there. Unreserved, two tasks with the same title (every blank task starts as "新会话") were both handed
+// 新会话_3, and whichever wrote first had its files adopted by the other.
 func (s *Store) ForOwner(projectID, projectName string, o Owner, under, name string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -153,11 +161,65 @@ func (s *Store) ForOwner(projectID, projectName string, o Owner, under, name str
 			base = filepath.Join(base, safeName(seg))
 		}
 	}
-	return s.free(filepath.Join(base, safeName(name)), o)
+	seg := safeName(name)
+	if strings.TrimSpace(name) == "" {
+		seg = "." + safeName(o.Task+o.Repo)
+	}
+	p := s.free(ix, filepath.Join(base, seg), o)
+	if f, err := Read(p); err == nil && f.Owner.key() == o.key() {
+		_ = s.register(f, projectID) // its own folder, only missing from the index
+		return p
+	}
+	id := newID()
+	ix.Owners[o.key()] = id
+	ix.Folders[id] = s.rel(p)
+	s.claimProject(&ix, projectID, p)
+	_ = s.saveIndex(ix)
+	return p
 }
 
-// Rename gives an owner's existing folder a new name in the same place (its title changed), keeping its id. Only
-// when the new name is free; otherwise it stays as it is. Returns where it is now.
+// ForSession is the folder of a conversation a panel started for owner, given the path it was started with.
+// Normally that path (or what a rename left a link at) is the owner's own. Conversations started before paths were
+// reserved (2026-11-27) were often given one another task's folder, or one shared by every blank task (新会話_3): for
+// those the owner's own folder is used, or a new one is reserved next to the given path, named title.
+func (s *Store) ForSession(given string, o Owner, title string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ix := s.loadIndex()
+	if p, ok := s.known(&ix, o); ok {
+		return p
+	}
+	g := followRenames(given)
+	if _, ro, ok := s.reservation(ix, g); ok && ro.key() == o.key() {
+		return g
+	}
+	if f, err := Read(g); err == nil && f.Owner.key() == o.key() {
+		return g
+	}
+	if _, err := os.Lstat(g); err != nil {
+		if _, _, ok := s.reservation(ix, g); !ok {
+			return given // nobody's yet: it becomes the owner's when created
+		}
+	}
+	seg := safeName(title)
+	if strings.TrimSpace(title) == "" {
+		seg = "." + safeName(o.Task+o.Repo)
+	}
+	p := s.free(ix, filepath.Join(filepath.Dir(given), seg), o)
+	id := newID()
+	ix.Owners[o.key()] = id
+	ix.Folders[id] = s.rel(p)
+	_ = s.saveIndex(ix)
+	return p
+}
+
+// Rename gives an owner's folder a new name in the same place (its title changed), keeping its id. Only when the new
+// name is free; otherwise it stays as it is. Returns where it is now ("" when the owner has none).
+//
+// The old path stays usable as a symlink to the new one: a conversation was handed the old path when it started
+// (it is in its prompt) and keeps writing there. Without the link those writes made a second, ownerless folder
+// under the old name, which the next task of that name took. A folder not created yet is created to be renamed,
+// for the same reason.
 func (s *Store) Rename(o Owner, name string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -166,19 +228,32 @@ func (s *Store) Rename(o Owner, name string) (string, error) {
 	if !ok {
 		return "", nil
 	}
-	if _, err := os.Stat(p); err != nil {
-		return p, nil // not created yet: ForOwner names it when it is
-	}
 	to := filepath.Join(filepath.Dir(p), safeName(name))
 	if to == p {
 		return p, nil
 	}
-	if _, err := os.Lstat(to); err == nil {
-		return p, nil
+	if fi, err := os.Lstat(to); err == nil {
+		// Taken, unless it is a link to this very folder left by an earlier rename (renamed back)
+		if fi.Mode()&os.ModeSymlink == 0 {
+			return p, nil
+		}
+		if t, err := Read(to); err != nil || t.Path == "" || ix.Owners[o.key()] != t.ID {
+			return p, nil
+		}
+		if err := os.Remove(to); err != nil {
+			return p, nil
+		}
+	}
+	if _, err := os.Stat(p); err != nil {
+		if _, err := s.ensure(p, o, ""); err != nil {
+			return p, err
+		}
+		ix = s.loadIndex()
 	}
 	if err := os.Rename(p, to); err != nil {
 		return p, err
 	}
+	_ = os.Symlink(filepath.Base(to), p) // relative: still right when the whole root moves
 	if f, err := Read(to); err == nil {
 		ix.Folders[f.ID] = s.rel(to)
 		_ = s.saveIndex(ix)
@@ -209,18 +284,91 @@ func (s *Store) known(ix *index, o Owner) (string, bool) {
 	return "", false
 }
 
-// free: base, or base 2, base 3… when base already is another owner's folder.
-func (s *Store) free(base string, o Owner) string {
+// free: base, or base_2, base_3… when base is someone else's: another owner's folder, a path reserved for another
+// owner (handed out, not created yet), or anything already there that isn't this owner's (a directory an agent made
+// without Gerdr knowing whose it is is not claimed by whoever comes next).
+func (s *Store) free(ix index, base string, o Owner) string {
+	reserved := map[string]string{} // path relative to the root → owner key
+	for k, id := range ix.Owners {
+		if rel, ok := ix.Folders[id]; ok {
+			reserved[rel] = k
+		}
+	}
 	for i := 1; ; i++ {
 		p := base
 		if i > 1 {
 			p = fmt.Sprintf("%s_%d", base, i)
 		}
-		f, err := Read(p)
-		if err != nil || f.Owner.key() == o.key() || f.Owner.key() == "" { // no owner yet: it is claimed (Ensure)
+		if k, ok := reserved[s.rel(p)]; ok && k != o.key() {
+			continue
+		}
+		if _, err := os.Lstat(p); err != nil {
+			return p
+		}
+		if f, err := Read(p); err == nil && f.Owner.key() == o.key() {
 			return p
 		}
 	}
+}
+
+// reservation: the id and owner the index has for path p (reserved by ForOwner, or a known folder).
+func (s *Store) reservation(ix index, p string) (id string, o Owner, ok bool) {
+	rel := s.rel(p)
+	for k, fid := range ix.Owners {
+		if ix.Folders[fid] == rel {
+			return fid, ownerOf(k), true
+		}
+	}
+	return "", Owner{}, false
+}
+
+// followRenames: the folder an old name points to (Rename leaves a link there; a chain after several renames). Only
+// the last segment is followed, so the path stays under the root as written (EvalSymlinks would also resolve, say,
+// /var → /private/var and the folder would no longer be found under the root).
+func followRenames(p string) string {
+	for range 8 {
+		fi, err := os.Lstat(p)
+		if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			return p
+		}
+		t, err := os.Readlink(p)
+		if err != nil {
+			return p
+		}
+		if !filepath.IsAbs(t) {
+			t = filepath.Join(filepath.Dir(p), t)
+		}
+		p = t
+	}
+	return p
+}
+
+// ownerOf is the Owner an Owner.key() was made from.
+func ownerOf(k string) Owner {
+	if r, ok := strings.CutPrefix(k, "repo:"); ok {
+		return Owner{Repo: r}
+	}
+	if t, ok := strings.CutPrefix(k, "task:"); ok {
+		if i := strings.LastIndex(t, "/"); i > 0 {
+			return Owner{Panel: t[:i], Task: t[i+1:]}
+		}
+	}
+	return Owner{}
+}
+
+// claimProject: the project's directory is the one p is in, when it has none yet.
+func (s *Store) claimProject(ix *index, projectID, p string) bool {
+	if projectID == "" {
+		return false
+	}
+	if _, ok := ix.Projects[projectID]; ok {
+		return false
+	}
+	if r := s.rel(p); !filepath.IsAbs(r) && strings.Contains(r, string(filepath.Separator)) {
+		ix.Projects[projectID] = strings.SplitN(r, string(filepath.Separator), 2)[0]
+		return true
+	}
+	return false
 }
 
 // projectDir: the project's folder under the root, named after the project's name the first time and kept after.
@@ -288,11 +436,23 @@ func Read(p string) (Folder, error) {
 
 // Ensure makes p a folder of owner: creates it, gives it an identity and a .gerdrignore when it has none, and
 // records it in the index (projectID: whose project directory it is in, when it is one). A directory an agent
-// created by itself is adopted the same way.
+// created by itself is adopted the same way. Without an owner (a record or a look by session, which knows only the
+// path), the folder is the one whose path was reserved there.
 func (s *Store) Ensure(p string, o Owner, projectID string) (Folder, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.ensure(p, o, projectID)
+}
+
+func (s *Store) ensure(p string, o Owner, projectID string) (Folder, error) {
+	p = followRenames(p)
+	ix := s.loadIndex()
+	rid, ro, reserved := s.reservation(ix, p)
+	if o.key() == "" && reserved {
+		o = ro
+	}
 	if f, err := Read(p); err == nil {
+		f.Path = p
 		if f.Owner.key() == "" && o.key() != "" { // made before its owner was known (a record came first): claimed now
 			f.Owner = o
 			b, _ := json.MarshalIndent(f, "", "  ")
@@ -305,7 +465,11 @@ func (s *Store) Ensure(p string, o Owner, projectID string) (Folder, error) {
 	if err := os.MkdirAll(filepath.Join(p, Meta), 0o755); err != nil {
 		return Folder{}, err
 	}
-	f := Folder{ID: newID(), Owner: o, CreatedAt: time.Now().UTC().Format(time.RFC3339), Path: p}
+	id := newID()
+	if reserved && ro.key() == o.key() {
+		id = rid
+	}
+	f := Folder{ID: id, Owner: o, CreatedAt: time.Now().UTC().Format(time.RFC3339), Path: p}
 	b, _ := json.MarshalIndent(f, "", "  ")
 	if err := writeAtomic(filepath.Join(p, Meta, "folder.json"), b); err != nil {
 		return Folder{}, err
@@ -328,13 +492,8 @@ func (s *Store) register(f Folder, projectID string) error {
 		ix.Owners[k] = f.ID
 		changed = true
 	}
-	if projectID != "" {
-		if _, ok := ix.Projects[projectID]; !ok {
-			if r := s.rel(f.Path); !filepath.IsAbs(r) && strings.Contains(r, string(filepath.Separator)) {
-				ix.Projects[projectID] = strings.SplitN(r, string(filepath.Separator), 2)[0]
-				changed = true
-			}
-		}
+	if s.claimProject(&ix, projectID, f.Path) {
+		changed = true
 	}
 	if !changed {
 		return nil

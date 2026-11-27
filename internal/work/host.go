@@ -391,13 +391,16 @@ func (r *runner) artifactsObject() map[string]any {
 		return d
 	}
 	return map[string]any{
-		// ctx.artifacts.folder({ key, name, under? }) → { path, exists, id? }
+		// ctx.artifacts.folder({ key, name, under?, untitled? }) → { path, exists, id? }
 		"folder": func(arg jsValue) map[string]any {
 			need()
 			var o struct {
 				Key   string `json:"key"`
 				Name  string `json:"name"`
 				Under string `json:"under"`
+				// Untitled: the thing has no name of its own yet (a conversation the person opened, named after its
+				// first message). Its folder waits under a hidden name until rename gives it the real one.
+				Untitled bool `json:"untitled"`
 			}
 			if err := r.opts(arg, &o); err != nil {
 				r.throw(fmt.Errorf("ctx.artifacts.folder: %w", err))
@@ -405,7 +408,9 @@ func (r *runner) artifactsObject() map[string]any {
 			if o.Key == "" {
 				r.throw(errors.New("ctx.artifacts.folder: key is required"))
 			}
-			if o.Name == "" {
+			if o.Untitled {
+				o.Name = ""
+			} else if o.Name == "" {
 				o.Name = o.Key
 			}
 			out, err := h.ArtifactsFolder(r.project, o.Key, o.Name, o.Under)

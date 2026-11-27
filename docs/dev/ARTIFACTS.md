@@ -174,6 +174,18 @@ is in `tasks/work-on-content.md`, not in code.
 - Panels: `ctx.artifacts` (`folder({ key, name, under })` → path by owner `{panel, task}`, `rename`, `items`,
   `record`; `work/host.go`, `server/workhost.go`), `ctx.sessions.start({ artifactsDir })`, `ArtifactsFolder` from
   `@gerdr/core`. A folder recorded into before its owner looked (no owner yet) is claimed by it, not given a `name_2`. Folder names keep only letters, digits and `-._` (every run of anything else, whitespace and punctuation like `？` `，` included, becomes one `_`, trimmed at the ends): a path with spaces has to be quoted in every command, and punctuation inside a path cuts the link the chat draws for it short.
+- **Paths are reserved when handed out (2026-11-27).** A panel gives a task's path to its conversation at start, but
+  the folder appears only when the agent first writes. Unreserved, every blank task of a board (titled "新会话" until
+  its first message) was handed the same `新会话_3`; a task renamed before writing left its conversation on the old
+  path, which the next "新会话" got too, and its files were adopted by that one (`free` claimed ownerless folders).
+  Dozens of Superagent tasks ended up in 新会话 / 新会话_2 / 新会话_3. Now: `ForOwner` puts the owner → id → path in
+  the index before the folder exists; `free` skips paths reserved for others and anything already there that isn't
+  the owner's; `Ensure` without an owner (a record / look by session) takes the reservation's owner. A thing with no
+  name yet (`ctx.artifacts.folder({ untitled: true })`, the Superagent's blank tasks) waits under a hidden `.<key>`,
+  so no placeholder name is ever visible. `Rename` creates the folder if needed, moves it and leaves the old path as
+  a relative symlink to the new one: the conversation's prompt still names the old path. Sessions a panel started
+  for a task (tags `panel` + `task`) resolve to that task's own folder (`Store.ForSession`), which repairs the
+  conversations started before this; it assumes the panel's folder key is its `task` tag, as Superagent's is.
 - Checked in a debug instance with playwright: records, tree, preview, rich editing (a save changes only the edited
   line: front matter, compact tables, `snake_case` kept), the "changed meanwhile" bar.
 
