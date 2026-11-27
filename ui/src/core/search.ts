@@ -9,6 +9,8 @@ import { PanelKeyContext } from "./visible";
 export type SearchItem = {
   /** Stable per item (defaults to the label). */
   id?: string;
+  /** Conversation opened by this item, so the sidebar can show the item once when its pane also matches. */
+  sessionId?: string;
   label: string;
   /** A short word at the row's end, kept whole (a status). Searched too. */
   detail?: string;
@@ -63,9 +65,7 @@ export function useSearchItems(items: SearchItem[], opts?: { heading?: string })
   // Rows the panel draws itself can't be compared: republished with every render (a fresh object never equals the last)
   const sig = items.some((x) => x.content != null)
     ? {}
-    : items
-        .map((x) => `${x.id ?? x.label}\u0000${x.label}\u0000${x.detail ?? ""}\u0000${x.tone ?? ""}\u0000${x.pill ? 1 : 0}\u0000${x.keywords ?? ""}`)
-        .join("\u0001");
+    : items.map((x) => [x.id ?? x.label, x.sessionId, x.label, x.detail, x.tone, x.pill ? 1 : 0, x.keywords].join("\u0000")).join("\u0001");
   useEffect(() => {
     if (!key) return;
     lists.set(key, {

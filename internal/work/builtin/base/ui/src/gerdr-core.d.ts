@@ -278,6 +278,8 @@ declare module "@gerdr/core" {
   export interface SearchItem {
     /** Stable per item (defaults to the label). Searched too, so a short id like "t144" finds its row. */
     id?: string;
+    /** Conversation opened by this item, so the sidebar can show the item once when its pane also matches. */
+    sessionId?: string;
     label: string;
     /** A short word at the row's end, kept whole (a status): keep it short, the label gives way to it. Searched too. */
     detail?: string;

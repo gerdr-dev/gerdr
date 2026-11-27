@@ -396,11 +396,13 @@ export function UnifiedSidebar({ className }: { className?: string }) {
   const panelHits = kw
     ? (panelSearch?.items.filter(({ label, id, detail, keywords }) => [label, id, detail, keywords].join(" ").toLowerCase().includes(kw)) ?? [])
     : [];
+  const matchedSessions = new Set(panelHits.map((item) => item.sessionId).filter(Boolean));
   const hits = !kw
     ? []
     : allLeaves(layout)
         .filter((x) => spaceOf(x.ws) === here)
         .filter(({ ws, tab, pane }) => {
+          if (pane.sessionId && matchedSessions.has(pane.sessionId)) return false;
           const s = pane.sessionId ? sessions[pane.sessionId] : undefined;
           return [
             s?.title,
