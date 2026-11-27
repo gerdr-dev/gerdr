@@ -254,29 +254,22 @@ func (h *Hub) SetAgentOrder(order []string) {
 	h.defsMu.Unlock()
 }
 
-// SetAgents：设置里改了 agents。定义变了（或被删掉）的那几个，已经起着的连接收掉 —— 下次用到时按新配置起，
-// 挂在上面的会话自动重接（resume），对话不丢。
+// SetAgents closes hosts whose effective launch settings changed. Their sessions reattach on next use.
 func (h *Hub) SetAgents(defs []AgentDef) {
 	defs = ValidAgentDefs(defs)
+	h.mu.Lock()
 	h.defsMu.Lock()
-	old := map[string]AgentDef{}
-	for _, d := range h.defs {
-		old[d.ID] = d
-	}
+	old := h.defs
 	h.defs = defs
 	h.defsMu.Unlock()
-	now := map[string]AgentDef{}
-	for _, d := range defs {
-		now[d.ID] = d
-	}
 	var stale []*agenthost.Host
-	h.mu.Lock()
-	for id, d := range old {
-		if n, ok := now[id]; !ok || !sameProcess(n, d) {
-			if c := h.hosts[id]; c != nil {
-				stale = append(stale, c)
-				delete(h.hosts, id)
-			}
+	for id, c := range h.hosts {
+		// A built-in host can already be running before its first config entry is saved.
+		before, _ := agentDefinition(old, id)
+		after, ok := agentDefinition(defs, id)
+		if !ok || !sameProcess(before, after) {
+			stale = append(stale, c)
+			delete(h.hosts, id)
 		}
 	}
 	h.mu.Unlock()
@@ -290,8 +283,9 @@ func (h *Hub) SetAgents(defs []AgentDef) {
 // ("peer disconnected before response").
 func sameProcess(a, b AgentDef) bool {
 	a.Name, b.Name = "", ""
-	a.Icon, b.Icon, a.Color, b.Color = "", "", "", "" // looks only: changing it mustn't cut off running turns
-	a.ShowThinking, b.ShowThinking = "", ""           // UI display only: must not restart the host
+	a.Icon, b.Icon, a.Color, b.Color = "", "", "", ""
+	a.ShowThinking, b.ShowThinking = "", ""
+	a.Hidden, b.Hidden = false, false
 	return reflect.DeepEqual(a, b)
 }
 
@@ -614,7 +608,11 @@ func errStr(err error) string {
 // agentDef: an agent's definition. A built-in one is always there (hidden or not: sessions on it keep working),
 // as config.json edits it.
 func (h *Hub) agentDef(id string) (AgentDef, bool) {
-	for _, a := range h.extra() {
+	return agentDefinition(h.extra(), id)
+}
+
+func agentDefinition(defs []AgentDef, id string) (AgentDef, bool) {
+	for _, a := range defs {
 		if a.ID == id {
 			return a, true
 		}
@@ -647,14 +645,28 @@ func (h *Hub) host(ctx context.Context, agent string) (*agenthost.Host, error) {
 				return nil, ctx.Err()
 			}
 		}
+		def, ok := h.agentDef(agent)
+		if !ok {
+			h.mu.Unlock()
+			return nil, fmt.Errorf("unknown agent %q", agent)
+		}
 		ch := make(chan struct{})
 		h.starting[agent] = ch
 		h.mu.Unlock()
 
-		c, err := h.startHost(ctx, agent)
+		c, err := h.startHost(ctx, def)
 		h.mu.Lock()
 		delete(h.starting, agent)
 		close(ch)
+		// Settings can change while a host starts. Only publish a host that matches the current definition.
+		current, ok := h.agentDef(agent)
+		if !ok || !sameProcess(def, current) {
+			h.mu.Unlock()
+			if c != nil {
+				c.Close()
+			}
+			continue
+		}
 		if err == nil {
 			h.hosts[agent] = c
 			// 连接换了：之前挂在旧连接上的会话都要重新接一次。
@@ -671,11 +683,8 @@ func (h *Hub) host(ctx context.Context, agent string) (*agenthost.Host, error) {
 	}
 }
 
-func (h *Hub) startHost(ctx context.Context, agent string) (*agenthost.Host, error) {
-	def, ok := h.agentDef(agent)
-	if !ok {
-		return nil, fmt.Errorf("unknown agent %q", agent)
-	}
+func (h *Hub) startHost(ctx context.Context, def AgentDef) (*agenthost.Host, error) {
+	agent := def.ID
 	log := h.log.With("agent", agent)
 	handler := &agentHandler{h: h, agent: agent}
 	sctx, cancel := context.WithTimeout(ctx, 60*time.Second)

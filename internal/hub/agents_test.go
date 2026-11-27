@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -76,6 +77,37 @@ func TestBuiltinOverride(t *testing.T) {
 	}
 	if h.Base("claude") != "claude" || h.Base("r") != "claude" {
 		t.Fatal("Base")
+	}
+}
+
+func TestFirstBuiltinOverrideRestartsRunningHost(t *testing.T) {
+	h, err := New(Options{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	ctx := context.Background()
+	original, err := h.host(ctx, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	override := AgentDef{ID: "codex", Prompt: "Use the configured prompt."}
+	h.SetAgents([]AgentDef{override})
+	updated, err := h.host(ctx, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated == original {
+		t.Fatal("the first prompt override left the host running with the default definition")
+	}
+	override.Name = "My Codex"
+	h.SetAgents([]AgentDef{override})
+	renamed, err := h.host(ctx, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed != updated {
+		t.Fatal("renaming the agent restarted the host")
 	}
 }
 
