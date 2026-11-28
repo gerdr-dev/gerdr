@@ -158,6 +158,10 @@ What was looked at against this (2026-11) and decided:
    (`custom_tool_call` / `function_call` + `*_output`): live by polling before each non-delta notification plus a ticker during
    the turn (the call line is written before the nested tools run, so the card lands above them), on replay merged with the
    turn items by timestamp. `sleep` *is* an item (`type: "sleep"`, id = call id).
+7. Manual compaction is `thread/compact/start {threadId}`. It cannot take summary instructions, so a panel sends a
+   bare `/compact` to Codex. After compaction, `thread/tokenUsage/updated` can report the estimated new size in
+   `last.totalTokens` with zero input and output tokens (measured on 0.166). Publish it as context usage immediately,
+   so the composer and panel schedules see the new size before another request.
 
 ## An agent moving itself into a worktree (acpx.WorkdirKey, package worktree)
 

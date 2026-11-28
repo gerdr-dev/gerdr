@@ -127,21 +127,30 @@ func (a *Agent) HandleNotification(method string, params json.RawMessage) {
 				Last struct {
 					OutputTokens int `json:"outputTokens"`
 					InputTokens  int `json:"inputTokens"`
+					TotalTokens  int `json:"totalTokens"`
 				} `json:"last"`
 				ModelContextWindow int `json:"modelContextWindow"`
 			} `json:"tokenUsage"`
 		}
 		_ = json.Unmarshal(params, &p)
 		if s.sub == nil {
+			last := p.TokenUsage.Last
+			window := p.TokenUsage.ModelContextWindow
+			if last.InputTokens == 0 && last.OutputTokens == 0 && last.TotalTokens > 0 {
+				// After compaction, app-server puts the estimated context size in last.totalTokens and
+				// zeroes the breakdown. This update describes the installed context, rather than a request.
+				a.send(ctx, s.id, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(last.TotalTokens, window)}})
+				return
+			}
 			s.mu.Lock()
 			key := strconv.Itoa(s.req)
 			s.req++
 			s.mu.Unlock()
-			s.tok.Exact(key, p.TokenUsage.Last.OutputTokens)
+			s.tok.Exact(key, last.OutputTokens)
 			a.send(ctx, s.id, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.Progress(s.tok.Total())}})
 			// 上下文用量：最近一次请求的输入（codex 的 inputTokens 已经含缓存命中的那部分）
-			if p.TokenUsage.Last.InputTokens > 0 {
-				a.send(ctx, s.id, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(p.TokenUsage.Last.InputTokens, p.TokenUsage.ModelContextWindow)}})
+			if last.InputTokens > 0 {
+				a.send(ctx, s.id, acp.SessionUpdate{SessionInfoUpdate: &acp.SessionSessionInfoUpdate{Meta: acpx.ContextProgress(last.InputTokens, window)}})
 			}
 		}
 	case "item/agentMessage/delta":

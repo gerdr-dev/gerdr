@@ -34,19 +34,20 @@ import (
 )
 
 type rec struct {
-	mu       sync.Mutex
-	t        *testing.T
-	text     strings.Builder
-	tools    []string
-	perms    int
-	asks     int
-	allowed  bool
-	cmds     []string
-	tasks    []acpx.Task
-	autos    []bool
-	subText  map[string]string // subagent 标记 → 它说的话
-	workdirs []string          // where the agent said it works (acpx.WorkdirKey), in order
-	cleared  string            // /clear 之后 agent 报的新会话 id（sessionId + cleared）
+	mu             sync.Mutex
+	t              *testing.T
+	text           strings.Builder
+	tools          []string
+	perms          int
+	asks           int
+	allowed        bool
+	cmds           []string
+	contextUpdates int
+	tasks          []acpx.Task
+	autos          []bool
+	subText        map[string]string // subagent 标记 → 它说的话
+	workdirs       []string          // where the agent said it works (acpx.WorkdirKey), in order
+	cleared        string            // /clear 之后 agent 报的新会话 id（sessionId + cleared）
 }
 
 func (r *rec) OnUpdate(n acp.SessionNotification) {
@@ -58,6 +59,11 @@ func (r *rec) OnUpdate(n acp.SessionNotification) {
 		r.text.WriteString(u.AgentMessageChunk.Content.Text.Text)
 	case u.SessionInfoUpdate != nil:
 		if g, ok := u.SessionInfoUpdate.Meta["gerdr"].(map[string]any); ok {
+			if p, ok := g[acpx.ProgressKey].(map[string]any); ok {
+				if n, ok := p["contextTokens"].(float64); ok && n > 0 {
+					r.contextUpdates++
+				}
+			}
 			if v, ok := g["tasks"]; ok {
 				b, _ := json.Marshal(v)
 				r.tasks = nil
@@ -349,6 +355,7 @@ func TestE2ECompactImage(t *testing.T) {
 
 	r.mu.Lock()
 	cmds := r.cmds
+	contextUpdates := r.contextUpdates
 	r.mu.Unlock()
 	if !slices.Contains(cmds, "compact") {
 		t.Errorf("compact not in advertised commands: %v", cmds)
@@ -356,6 +363,14 @@ func TestE2ECompactImage(t *testing.T) {
 
 	compactID := uuid.NewString()
 	ask(compactID, acp.TextBlock("/compact"))
+	if which == "codex" {
+		r.mu.Lock()
+		got := r.contextUpdates
+		r.mu.Unlock()
+		if got <= contextUpdates {
+			t.Fatal("Codex did not report context usage before the compact turn ended")
+		}
+	}
 
 	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
 	for x := 0; x < 64; x++ {
