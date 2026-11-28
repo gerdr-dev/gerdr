@@ -1796,29 +1796,31 @@ function ContextMeter({ c, short, active }: { c: { tokens: number; window: numbe
           {pct}%
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        ref={content}
-        side="top"
-        align="end"
-        collisionPadding={8}
-        className="w-56 max-w-[calc(100vw-1rem)] space-y-1.5 px-2.5 py-2 data-[state=closed]:animate-none"
-        aria-label={tr("composer.contextUsage", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}
-        onOpenAutoFocus={keepEditing}
-        onCloseAutoFocus={(e) => {
-          if (!active || outsideTouch.current) e.preventDefault();
-          else keepEditing(e);
-        }}
-      >
-        <div className="flex items-baseline justify-between gap-2 whitespace-nowrap" aria-hidden="true">
-          <span className="text-xs text-muted-foreground">{tr("composer.context")}</span>
-          <span className="text-[11px] text-muted-foreground tabular-nums">
-            <span className="text-popover-foreground">{contextCount.format(c.tokens).toLowerCase()}</span> / {contextCount.format(c.window).toLowerCase()}
-          </span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-          <div className={cn("h-full rounded-full", pct >= 90 ? "bg-bad" : pct >= 75 ? "bg-warn" : "bg-brand")} style={{ width: `${pct}%` }} />
-        </div>
-      </PopoverContent>
+      {open && active && (
+        <PopoverContent
+          ref={content}
+          side="top"
+          align="end"
+          collisionPadding={8}
+          className="w-48 max-w-[calc(100vw-1rem)] space-y-1.5 px-2.5 py-2"
+          aria-label={tr("composer.contextUsage", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}
+          onOpenAutoFocus={keepEditing}
+          onCloseAutoFocus={(e) => {
+            if (!active || outsideTouch.current) e.preventDefault();
+            else keepEditing(e);
+          }}
+        >
+          <div className="flex items-baseline justify-between gap-2 whitespace-nowrap" aria-hidden="true">
+            <span className="text-xs text-muted-foreground">{tr("composer.context")}</span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              <span className="text-popover-foreground">{contextCount.format(c.tokens).toLowerCase()}</span> / {contextCount.format(c.window).toLowerCase()}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+            <div className={cn("h-full rounded-full", pct >= 90 ? "bg-bad" : pct >= 75 ? "bg-warn" : "bg-brand")} style={{ width: `${pct}%` }} />
+          </div>
+        </PopoverContent>
+      )}
     </Popover>
   );
 }
