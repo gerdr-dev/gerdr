@@ -578,6 +578,7 @@ export function ChatView({
                 ref={composer}
                 session={session}
                 paneId={paneId}
+                active={active}
                 running={t.running}
                 history={composerHistory}
                 shellDone={shellDone}

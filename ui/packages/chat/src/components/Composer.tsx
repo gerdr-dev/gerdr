@@ -159,6 +159,7 @@ const ComposerImpl = forwardRef<
   {
     session: ChatSession;
     paneId: string;
+    active?: boolean;
     running: boolean;
     /** The conversation so far (↑ walks back through what was said). */
     history: () => GMessage[];
@@ -174,7 +175,7 @@ const ComposerImpl = forwardRef<
     /** The chat ends on a finished `!` command: sending with an empty box hands its output to the agent. */
     shellDone?: boolean;
   }
->(function Composer({ session, paneId, running, history, onSent, onEmptyEnter, queuedAhead, shellDone }, ref) {
+>(function Composer({ session, paneId, active = true, running, history, onSent, onEmptyEnter, queuedAhead, shellDone }, ref) {
   const host = useChatHost();
   const hooks = host.composer ?? {};
   const drafts = hooks.drafts ?? memoryDrafts;
@@ -1672,7 +1673,7 @@ const ComposerImpl = forwardRef<
             {host.composerBar?.(session, { paneId })}
           </div>
           <TasksChip session={session} short={compact && tight > 0} />
-          {session.context && <ContextMeter c={session.context} short={compact} />}
+          {session.context && <ContextMeter c={session.context} short={compact} active={active} />}
           {/* 手机上底栏放不下「打断 / 立即发 / 发送」三个圆钮（再挤下拉就又被截了）：照 ChatGPT 共用一个位置 ——
               在跑、没打字时是打断；打了字是立即发 + 插进去。电脑上地方够，三个都摆着 */}
           {running && (!compact || !hasText) && (
@@ -1746,16 +1747,43 @@ export const Composer = memo(ComposerImpl);
 const contextCount = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
 /** Show context usage on demand, with the readout above a full-width bar. */
-function ContextMeter({ c, short }: { c: { tokens: number; window: number }; short?: boolean }) {
+function ContextMeter({ c, short, active }: { c: { tokens: number; window: number }; short?: boolean; active: boolean }) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const outsideTouch = useRef(false);
+  useEffect(() => {
+    if (!active) setOpen(false);
+  }, [active]);
+  useEffect(() => {
+    if (!open || !active) return;
+    // Radix waits for the click after an outside touch. A swipe turns the page without sending that click,
+    // leaving the portaled popup visible even though its composer has moved off screen.
+    const dismiss = (e: TouchEvent) => {
+      const target = e.target;
+      if (!(target instanceof Node) || trigger.current?.contains(target) || content.current?.contains(target)) return;
+      outsideTouch.current = true;
+      setOpen(false);
+    };
+    document.addEventListener("touchstart", dismiss, { capture: true, passive: true });
+    return () => document.removeEventListener("touchstart", dismiss, true);
+  }, [open, active]);
   const pct = Math.min(100, Math.round((c.tokens / c.window) * 100));
   const tone = pct >= 90 ? "text-bad" : pct >= 75 ? "text-warn" : "text-muted-foreground";
   const keepEditing = (e: Event) => {
     if (document.activeElement instanceof HTMLTextAreaElement) e.preventDefault();
   };
   return (
-    <Popover>
+    <Popover
+      open={active && open}
+      onOpenChange={(next) => {
+        if (next) outsideTouch.current = false;
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
+          ref={trigger}
           type="button"
           aria-label={tr("composer.contextDetails", { pct })}
           className={cn(
@@ -1769,13 +1797,17 @@ function ContextMeter({ c, short }: { c: { tokens: number; window: number }; sho
         </button>
       </PopoverTrigger>
       <PopoverContent
+        ref={content}
         side="top"
         align="end"
         collisionPadding={8}
-        className="w-56 max-w-[calc(100vw-1rem)] space-y-1.5 px-2.5 py-2"
+        className="w-56 max-w-[calc(100vw-1rem)] space-y-1.5 px-2.5 py-2 data-[state=closed]:animate-none"
         aria-label={tr("composer.contextUsage", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}
         onOpenAutoFocus={keepEditing}
-        onCloseAutoFocus={keepEditing}
+        onCloseAutoFocus={(e) => {
+          if (!active || outsideTouch.current) e.preventDefault();
+          else keepEditing(e);
+        }}
       >
         <div className="flex items-baseline justify-between gap-2 whitespace-nowrap" aria-hidden="true">
           <span className="text-xs text-muted-foreground">{tr("composer.context")}</span>
