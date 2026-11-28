@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -73,7 +73,7 @@ type Props = {
   tab?: number;
   /** where the pane's page last was (opened again from here after a restart) */
   lastURL?: string;
-  /** whose the page is while shown (the App's real page is in one place: claimNative); a pane's id, or a panel's own */
+  /** The layout pane's id, or a panel's own id for this browser. */
   paneId: string;
   focused: boolean;
   /** Outside a pane (a panel beside its conversation, core/SessionBrowser.tsx): what the layout would otherwise keep.
@@ -137,6 +137,10 @@ function hostOf(u: string) {
   }
 }
 
+function browserBoxVisible(box: HTMLElement) {
+  return box.offsetParent !== null && (box.checkVisibility?.({ visibilityProperty: true }) ?? true);
+}
+
 export function BrowserScreen({
   project,
   tab,
@@ -184,20 +188,26 @@ export function BrowserScreen({
   const [streamErr, setStreamErr] = useState("");
   const gone = !!tab && loaded && (!cur || !!cur.gone);
   const live = !!tab && !gone;
-  // A page of the macOS App's own browser, shown here as the real window over the box (native.ts nativeBrowserView);
-  // the stream then only carries where the page is (pic=0) and the address bar's input
-  // One page is one window: the first pane on it owns it, another pane on the same page shows its pictures instead
+  // The App can place the real page over one docked pane. A kept tab or panel can stay mounted out of sight, so
+  // it must give up the page to the visible pane. Use the mounted view's id: two renders can share a layout pane id.
+  const nativeOwnerId = useId();
   const owner = useNativeOwners((o) => (tab ? o[tab] : undefined));
-  const canNative = live && !!cur?.native && canNativeBrowser();
+  const canNative = live && !!cur?.native && !fit && canNativeBrowser();
   useEffect(() => {
     if (!canNative || !tab) return;
-    claimNative(tab, paneId);
-    return () => releaseNative(tab, paneId);
-  }, [canNative, tab, paneId]);
-  // the owner went (its pane closed, it moved to another page): take it over
+    return () => releaseNative(tab, nativeOwnerId);
+  }, [canNative, tab, nativeOwnerId]);
   useEffect(() => {
-    if (canNative && tab && !owner) claimNative(tab, paneId);
-  }, [owner, canNative, tab, paneId]);
+    if (!canNative || !tab || owner) return;
+    const claim = () => {
+      const box = boxRef.current;
+      if (box && box.clientWidth > 20 && box.clientHeight > 20 && browserBoxVisible(box)) claimNative(tab, nativeOwnerId);
+    };
+    claim();
+    // Switching kept tabs can change visibility without resizing or remounting the pane.
+    const timer = setInterval(claim, 250);
+    return () => clearInterval(timer);
+  }, [canNative, tab, owner, nativeOwnerId]);
   // Floating: not the App's page but the stream's pictures, clicked and typed into from here as on a phone (asked for:
   // the stills it showed first couldn't be clicked). The App's page can't be drawn under our overlays or scaled down
   const floating = !!fit;
@@ -211,7 +221,7 @@ export function BrowserScreen({
   // device. A size picked for a docked pane keeps the App's real page, laid out at that size (asked for: picking a
   // phone turned the pane into pictures), as Chrome's device toolbar does: shrunk by Emulation's scale when the size is
   // wider than the box, centred, the box's background around it (nativeLayout; sized and placed together in report)
-  const nativeView = canNative && owner === paneId && !fit;
+  const nativeView = canNative && owner === nativeOwnerId;
   const sizeRef = useRef(size);
   sizeRef.current = size;
   const [boxSize, setBoxSize] = useState({ w: 0, h: 0 });
@@ -590,9 +600,12 @@ export function BrowserScreen({
     const report = () => {
       const r = box.getBoundingClientRect();
       // visibility too, not only display: the Work view stays mounted under visibility:hidden in Code mode (App.tsx),
-      // and a panel's browser there (core/SessionBrowser.tsx) kept its page over the Code side
-      const seen = box.offsetParent !== null && (box.checkVisibility?.({ visibilityProperty: true }) ?? true);
-      const shown = document.visibilityState === "visible" && r.width > 20 && r.height > 20 && seen && !failedRef.current;
+      // and its browser needs to let the visible Code pane show the page.
+      if (r.width <= 20 || r.height <= 20 || !browserBoxVisible(box)) {
+        releaseNative(tab, nativeOwnerId);
+        return;
+      }
+      const shown = document.visibilityState === "visible" && !failedRef.current;
       // the dialog this box is in isn't over it (a panel's drawer, role=dialog, holding the browser)
       const open = overlays().filter((o) => !o.contains(box));
       const over = open.some((o) => {
