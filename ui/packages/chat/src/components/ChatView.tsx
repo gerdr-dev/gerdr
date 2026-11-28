@@ -166,7 +166,7 @@ export function ChatView({
     const t = e.target as HTMLElement;
     if (
       t.closest(
-        "button,a,input,textarea,select,summary,label,[role=button],[role=menuitem],[role=checkbox],[role=radio],[contenteditable=true],[data-keep-focus]",
+        "button,a,input,textarea,select,summary,label,video,audio,[role=button],[role=menuitem],[role=checkbox],[role=radio],[contenteditable=true],[data-keep-focus]",
       )
     )
       return;

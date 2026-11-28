@@ -110,6 +110,12 @@ export function keyboardUp() {
   return vv.height < tallest - 150;
 }
 
+/** Release the mobile composer's dormant focus before a touch action can wake its keyboard. */
+export function blurComposerIfKeyboardHidden() {
+  const input = document.activeElement;
+  if (input instanceof HTMLTextAreaElement && input.hasAttribute("data-composer") && !keyboardUp()) input.blur();
+}
+
 // Is a hardware keyboard there to press shortcuts on? Decides whether key hints are drawn (menu keycaps, the ↵ on a
 // question card's submit button): on a phone without one they're dead weight, with one (a tablet on a keyboard case)
 // they're the guide.

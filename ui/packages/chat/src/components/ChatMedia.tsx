@@ -1,5 +1,6 @@
 import { AlertCircle, ExternalLink, FileText, FolderOpen, Loader2, RotateCw } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
+import { blurComposerIfKeyboardHidden } from "../device";
 import { hostFor, useChatHost } from "../host";
 import { t } from "../i18n";
 import { cn } from "../utils";
@@ -232,6 +233,7 @@ function ChatVideo({ url, ratioKey, onError, onLoad }: { url?: string; ratioKey:
       src={url}
       controls
       preload="metadata"
+      onTouchStartCapture={blurComposerIfKeyboardHidden}
       onError={onError}
       onLoadedMetadata={(e) => {
         onLoad();

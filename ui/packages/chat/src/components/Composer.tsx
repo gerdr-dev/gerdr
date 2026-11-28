@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import type { ConfigOption, ContentBlock, ChatSession } from "../types";
 import { dropShellContext, isImageLabel, videoLinkPath, type GMessage } from "../transcript";
-import { isCoarse, keyboardUp, usePhone } from "../device";
+import { blurComposerIfKeyboardHidden, isCoarse, keyboardUp, usePhone } from "../device";
 import { askKey } from "../askkeys";
 import { cn } from "../utils";
 import { useChatHost, useChatSettings, type ChatHost } from "../host";
@@ -1786,6 +1786,7 @@ function ContextMeter({ c, short, active }: { c: { tokens: number; window: numbe
           ref={trigger}
           type="button"
           aria-label={tr("composer.contextDetails", { pct })}
+          onTouchStartCapture={blurComposerIfKeyboardHidden}
           className={cn(
             "h-8 shrink-0 whitespace-nowrap rounded-md px-1.5 text-[12px] tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted",
             tone,
