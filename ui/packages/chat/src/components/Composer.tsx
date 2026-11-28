@@ -1,9 +1,10 @@
 import { ArrowUp, File as FileIcon, ImagePlus, Loader2, Paperclip, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { flushSync } from "react-dom";
-import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import type { ConfigOption, ContentBlock, ChatSession } from "../types";
 import { dropShellContext, isImageLabel, videoLinkPath, type GMessage } from "../transcript";
@@ -1742,21 +1743,55 @@ const ComposerImpl = forwardRef<
  */
 export const Composer = memo(ComposerImpl);
 
-/** 上下文用了多少（照 Claude Code 的「Context left until auto-compact」）：过半才显眼，快满变色。 */
+/** Show the exact counts on demand, including on phones where the composer only fits the percentage. */
 function ContextMeter({ c, short }: { c: { tokens: number; window: number }; short?: boolean }) {
+  const heading = useId();
   const pct = Math.min(100, Math.round((c.tokens / c.window) * 100));
   const tone = pct >= 90 ? "text-bad" : pct >= 75 ? "text-warn" : "text-muted-foreground";
+  const keepEditing = (e: Event) => {
+    if (document.activeElement instanceof HTMLTextAreaElement) e.preventDefault();
+  };
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className={cn("mr-1 shrink-0 whitespace-nowrap text-[12px] tabular-nums", tone)}>
-          {/* Compact row (phone, or a narrow box): just the percentage, the label would get squeezed to one character a line */}
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={tr("composer.contextDetails", { pct })}
+          className={cn(
+            "h-8 shrink-0 whitespace-nowrap rounded-md px-1.5 text-[12px] tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted",
+            tone,
+          )}
+          onMouseDown={(e) => e.preventDefault()}
+        >
           {!short && tr("composer.context") + " "}
           {pct}%
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{tr("composer.contextTitle", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}</TooltipContent>
-    </Tooltip>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="end"
+        collisionPadding={8}
+        className="w-56 max-w-[calc(100vw-1rem)] space-y-2 p-3 text-xs"
+        aria-labelledby={heading}
+        onOpenAutoFocus={keepEditing}
+        onCloseAutoFocus={keepEditing}
+      >
+        <h2 id={heading} className="text-sm font-medium">
+          {tr("composer.contextUsage")}
+        </h2>
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          <div className={cn("h-full rounded-full", pct >= 90 ? "bg-bad" : pct >= 75 ? "bg-warn" : "bg-brand")} style={{ width: `${pct}%` }} />
+        </div>
+        <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
+          <dt className="text-muted-foreground">{tr("composer.contextUsed")}</dt>
+          <dd className="text-right tabular-nums">{c.tokens.toLocaleString()}</dd>
+          <dt className="text-muted-foreground">{tr("composer.contextRemaining")}</dt>
+          <dd className="text-right tabular-nums">{Math.max(0, c.window - c.tokens).toLocaleString()}</dd>
+          <dt className="text-muted-foreground">{tr("composer.contextWindow")}</dt>
+          <dd className="text-right tabular-nums">{c.window.toLocaleString()}</dd>
+        </dl>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -201,7 +201,11 @@ export const zh = {
   "composer.sendQueued": "等它做完这一步再插进去",
   "composer.send": "发送",
   "composer.context": "上下文",
-  "composer.contextTitle": "已用 {used} / {window} Tokens。快满时 Agent 会自动压缩，也可以 /compact 手动压。",
+  "composer.contextDetails": "上下文 {pct}%，查看详情",
+  "composer.contextUsage": "上下文用量（tokens）",
+  "composer.contextUsed": "已用",
+  "composer.contextRemaining": "剩余",
+  "composer.contextWindow": "窗口总量",
 } as const;
 
 export type MessageKey = keyof typeof zh;
@@ -411,5 +415,9 @@ export const en: Record<MessageKey, string> = {
   "composer.sendQueued": "Add it after this step",
   "composer.send": "Send",
   "composer.context": "Context",
-  "composer.contextTitle": "{used} / {window} tokens used. The agent compacts automatically when it's nearly full; /compact does it now.",
+  "composer.contextDetails": "Context {pct}%, view details",
+  "composer.contextUsage": "Context usage (tokens)",
+  "composer.contextUsed": "Used",
+  "composer.contextRemaining": "Remaining",
+  "composer.contextWindow": "Window size",
 };
