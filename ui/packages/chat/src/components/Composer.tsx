@@ -1,10 +1,10 @@
 import { ArrowUp, File as FileIcon, ImagePlus, Loader2, Paperclip, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { flushSync } from "react-dom";
-import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import type { ConfigOption, ContentBlock, ChatSession } from "../types";
 import { dropShellContext, isImageLabel, videoLinkPath, type GMessage } from "../transcript";
@@ -207,7 +207,6 @@ const ComposerImpl = forwardRef<
   const [cmdIdx, setCmdIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
   const root = useRef<HTMLDivElement>(null);
-  const editor = useRef<HTMLDivElement>(null);
   const imgRefs = useRef<(HTMLDivElement | null)[]>([]);
   const setText = (t: string) => drafts.setText(paneId, t);
   // Images whose placeholder was deleted from the text, by number: an undo (⌘Z) that brings the placeholder back
@@ -1480,7 +1479,6 @@ const ComposerImpl = forwardRef<
       )}
       {host.composerTop?.(session)}
       <div
-        ref={editor}
         className={cn(
           // 照 Astryx ChatComposer：大圆角 + 投影托起来，描边只留一根细线（浅色底上要靠它看出边界）
           "rounded-2xl border border-border/60 bg-card shadow-md transition-colors focus-within:border-ring/60",
@@ -1675,7 +1673,7 @@ const ComposerImpl = forwardRef<
             {host.composerBar?.(session, { paneId })}
           </div>
           <TasksChip session={session} short={compact && tight > 0} />
-          {session.context && <ContextMeter c={session.context} short={compact} active={active} editor={editor} />}
+          {session.context && <ContextMeter c={session.context} short={compact} active={active} />}
           {/* 手机上底栏放不下「打断 / 立即发 / 发送」三个圆钮（再挤下拉就又被截了）：照 ChatGPT 共用一个位置 ——
               在跑、没打字时是打断；打了字是立即发 + 插进去。电脑上地方够，三个都摆着 */}
           {running && (!compact || !hasText) && (
@@ -1748,32 +1746,11 @@ export const Composer = memo(ComposerImpl);
 
 const contextCount = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
-/** Show context usage over the conversation without resizing or covering the composer. */
-function ContextMeter({
-  c,
-  short,
-  active,
-  editor,
-}: {
-  c: { tokens: number; window: number };
-  short?: boolean;
-  active: boolean;
-  editor: RefObject<HTMLDivElement | null>;
-}) {
+/** Show context details above the percentage button. */
+function ContextMeter({ c, short, active }: { c: { tokens: number; window: number }; short?: boolean; active: boolean }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
-  const anchor = useRef({
-    get contextElement() {
-      return editor.current ?? undefined;
-    },
-    getBoundingClientRect() {
-      const button = trigger.current?.getBoundingClientRect();
-      if (!button) return new DOMRect();
-      // Keep the button's horizontal alignment, but leave room for the whole editor underneath.
-      return new DOMRect(button.x, editor.current?.getBoundingClientRect().top ?? button.top, button.width, 0);
-    },
-  });
   const outsideTouch = useRef(false);
   useEffect(() => {
     if (!active) setOpen(false);
@@ -1804,7 +1781,6 @@ function ContextMeter({
         setOpen(next);
       }}
     >
-      <PopoverAnchor virtualRef={anchor} />
       <PopoverTrigger asChild>
         <button
           ref={trigger}
@@ -1825,7 +1801,7 @@ function ContextMeter({
           ref={content}
           side="top"
           align="end"
-          sideOffset={8}
+          sideOffset={6}
           collisionPadding={8}
           className="w-36 max-w-[calc(100vw-1rem)] space-y-1.5 border-border/60 px-2.5 py-2 shadow-lg dark:bg-muted"
           aria-label={tr("composer.contextUsage", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}
