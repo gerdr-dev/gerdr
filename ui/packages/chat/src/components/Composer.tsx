@@ -1745,7 +1745,7 @@ export const Composer = memo(ComposerImpl);
 
 const contextCount = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
-/** Show context usage as a compact row on demand. */
+/** Show context usage on demand, with the readout above a full-width bar. */
 function ContextMeter({ c, short }: { c: { tokens: number; window: number }; short?: boolean }) {
   const pct = Math.min(100, Math.round((c.tokens / c.window) * 100));
   const tone = pct >= 90 ? "text-bad" : pct >= 75 ? "text-warn" : "text-muted-foreground";
@@ -1772,17 +1772,20 @@ function ContextMeter({ c, short }: { c: { tokens: number; window: number }; sho
         side="top"
         align="end"
         collisionPadding={8}
-        className="flex w-56 max-w-[calc(100vw-1rem)] items-center gap-2.5 px-2.5 py-2"
+        className="w-56 max-w-[calc(100vw-1rem)] space-y-1.5 px-2.5 py-2"
         aria-label={tr("composer.contextUsage", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}
         onOpenAutoFocus={keepEditing}
         onCloseAutoFocus={keepEditing}
       >
-        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div className="flex items-baseline justify-between gap-2 whitespace-nowrap" aria-hidden="true">
+          <span className="text-xs text-muted-foreground">{tr("composer.context")}</span>
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            <span className="text-popover-foreground">{contextCount.format(c.tokens).toLowerCase()}</span> / {contextCount.format(c.window).toLowerCase()}
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
           <div className={cn("h-full rounded-full", pct >= 90 ? "bg-bad" : pct >= 75 ? "bg-warn" : "bg-brand")} style={{ width: `${pct}%` }} />
         </div>
-        <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground tabular-nums" aria-hidden="true">
-          <span className="text-popover-foreground">{contextCount.format(c.tokens).toLowerCase()}</span> / {contextCount.format(c.window).toLowerCase()}
-        </span>
       </PopoverContent>
     </Popover>
   );
