@@ -1,10 +1,10 @@
 import { ArrowUp, File as FileIcon, ImagePlus, Loader2, Paperclip, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { flushSync } from "react-dom";
-import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import type { ConfigOption, ContentBlock, ChatSession } from "../types";
 import { dropShellContext, isImageLabel, videoLinkPath, type GMessage } from "../transcript";
@@ -207,6 +207,7 @@ const ComposerImpl = forwardRef<
   const [cmdIdx, setCmdIdx] = useState(0);
   const ta = useRef<HTMLTextAreaElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  const editor = useRef<HTMLDivElement>(null);
   const imgRefs = useRef<(HTMLDivElement | null)[]>([]);
   const setText = (t: string) => drafts.setText(paneId, t);
   // Images whose placeholder was deleted from the text, by number: an undo (⌘Z) that brings the placeholder back
@@ -1479,6 +1480,7 @@ const ComposerImpl = forwardRef<
       )}
       {host.composerTop?.(session)}
       <div
+        ref={editor}
         className={cn(
           // 照 Astryx ChatComposer：大圆角 + 投影托起来，描边只留一根细线（浅色底上要靠它看出边界）
           "rounded-2xl border border-border/60 bg-card shadow-md transition-colors focus-within:border-ring/60",
@@ -1673,7 +1675,7 @@ const ComposerImpl = forwardRef<
             {host.composerBar?.(session, { paneId })}
           </div>
           <TasksChip session={session} short={compact && tight > 0} />
-          {session.context && <ContextMeter c={session.context} short={compact} active={active} />}
+          {session.context && <ContextMeter c={session.context} short={compact} active={active} editor={editor} />}
           {/* 手机上底栏放不下「打断 / 立即发 / 发送」三个圆钮（再挤下拉就又被截了）：照 ChatGPT 共用一个位置 ——
               在跑、没打字时是打断；打了字是立即发 + 插进去。电脑上地方够，三个都摆着 */}
           {running && (!compact || !hasText) && (
@@ -1746,11 +1748,32 @@ export const Composer = memo(ComposerImpl);
 
 const contextCount = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
-/** Show context usage on demand, with the readout above a full-width bar. */
-function ContextMeter({ c, short, active }: { c: { tokens: number; window: number }; short?: boolean; active: boolean }) {
+/** Show context usage over the conversation without resizing or covering the composer. */
+function ContextMeter({
+  c,
+  short,
+  active,
+  editor,
+}: {
+  c: { tokens: number; window: number };
+  short?: boolean;
+  active: boolean;
+  editor: RefObject<HTMLDivElement | null>;
+}) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
+  const anchor = useRef({
+    get contextElement() {
+      return editor.current ?? undefined;
+    },
+    getBoundingClientRect() {
+      const button = trigger.current?.getBoundingClientRect();
+      if (!button) return new DOMRect();
+      // Keep the button's horizontal alignment, but leave room for the whole editor underneath.
+      return new DOMRect(button.x, editor.current?.getBoundingClientRect().top ?? button.top, button.width, 0);
+    },
+  });
   const outsideTouch = useRef(false);
   useEffect(() => {
     if (!active) setOpen(false);
@@ -1781,6 +1804,7 @@ function ContextMeter({ c, short, active }: { c: { tokens: number; window: numbe
         setOpen(next);
       }}
     >
+      <PopoverAnchor virtualRef={anchor} />
       <PopoverTrigger asChild>
         <button
           ref={trigger}
@@ -1801,8 +1825,9 @@ function ContextMeter({ c, short, active }: { c: { tokens: number; window: numbe
           ref={content}
           side="top"
           align="end"
+          sideOffset={8}
           collisionPadding={8}
-          className="w-48 max-w-[calc(100vw-1rem)] space-y-1.5 px-2.5 py-2"
+          className="w-36 max-w-[calc(100vw-1rem)] space-y-1.5 border-border/60 px-2.5 py-2 shadow-lg dark:bg-muted"
           aria-label={tr("composer.contextUsage", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}
           onOpenAutoFocus={keepEditing}
           onCloseAutoFocus={(e) => {
@@ -1810,14 +1835,15 @@ function ContextMeter({ c, short, active }: { c: { tokens: number; window: numbe
             else keepEditing(e);
           }}
         >
-          <div className="flex items-baseline justify-between gap-2 whitespace-nowrap" aria-hidden="true">
-            <span className="text-xs text-muted-foreground">{tr("composer.context")}</span>
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              <span className="text-popover-foreground">{contextCount.format(c.tokens).toLowerCase()}</span> / {contextCount.format(c.window).toLowerCase()}
-            </span>
+          <div className="text-[11px] leading-none text-muted-foreground" aria-hidden="true">
+            {tr("composer.context")}
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-            <div className={cn("h-full rounded-full", pct >= 90 ? "bg-bad" : pct >= 75 ? "bg-warn" : "bg-brand")} style={{ width: `${pct}%` }} />
+          <div className="whitespace-nowrap text-[13px] leading-4 text-muted-foreground tabular-nums" aria-hidden="true">
+            <span className="font-medium text-popover-foreground">{contextCount.format(c.tokens).toLowerCase()}</span> /{" "}
+            {contextCount.format(c.window).toLowerCase()}
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-border/70" aria-hidden="true">
+            <div className={cn("h-full rounded-full", pct >= 90 ? "bg-bad" : pct >= 75 ? "bg-warn" : "bg-brand/70")} style={{ width: `${pct}%` }} />
           </div>
         </PopoverContent>
       )}
