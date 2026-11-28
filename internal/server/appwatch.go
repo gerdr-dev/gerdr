@@ -142,8 +142,6 @@ func (s *Server) onSession(sum hub.Summary) {
 	if !had || old.status != sum.Status {
 		st.changed = now
 	}
-	w.last[sum.ID] = st
-	w.ver++
 	var n *appNotice
 	if had {
 		switch {
@@ -164,6 +162,17 @@ func (s *Server) onSession(sum hub.Summary) {
 	if n != nil && (sum.Muted || s.Layout != nil && MutedSessions(s.LayoutAll())[sum.ID]) {
 		n = nil // do not disturb (its own, or its group's): the agents list still shows it, but no notice
 	}
+	if n != nil && n.Status == "done" && s.Hub != nil {
+		// watchLoop is the sole writer. Read the log outside the lock and publish the notice
+		// with its text in one step so a waiting phone cannot receive an empty preview first.
+		w.mu.Unlock()
+		if sess, err := s.Hub.Session(sum.ID); err == nil {
+			n.Text = lastAgentText(sess.Events())
+		}
+		w.mu.Lock()
+	}
+	w.last[sum.ID] = st
+	w.ver++
 	if n != nil {
 		w.seq++
 		n.Seq, n.Session, n.Agent, n.Title, n.At = w.seq, sum.ID, sum.Agent, sessionName(sum), now
@@ -174,20 +183,6 @@ func (s *Server) onSession(sum hub.Summary) {
 	}
 	w.ringLocked()
 	w.mu.Unlock()
-	// 「跑完了」的正文是 agent 最后那段话：要读日志，放到锁外面算，算完补进那一条（还没被取走的话就带上了）
-	if n != nil && n.Status == "done" && s.Hub != nil {
-		if sess, err := s.Hub.Session(sum.ID); err == nil {
-			if t := lastAgentText(sess.Events()); t != "" {
-				w.mu.Lock()
-				for i := range w.notices {
-					if w.notices[i].Seq == n.Seq {
-						w.notices[i].Text = t
-					}
-				}
-				w.mu.Unlock()
-			}
-		}
-	}
 }
 
 func (w *appWatch) ringLocked() {

@@ -201,25 +201,29 @@ class NoticeService : Service() {
         // 标题写「完成 · 会话标题」，不带 agent 名：通知一多，前面那串「claude 跑完了」把标题挤得只剩几个字（用户要的）。
         // 会话还没标题时才用 agent 名顶上，不然光一个「完成」不知道是谁
         val title = n.optString("title").let { if (it.isEmpty()) "$agent $head" else "$head · $it" }
-        val text = n.optString("text").ifEmpty {
+        val text = n.optString("text").ifBlank {
             when (status) {
                 "waiting" -> "要你批准或回答问题"
                 "error" -> "回来看一眼"
-                else -> "这一轮结束了"
+                else -> ""
             }
         }
         val session = n.optString("session")
         val note = NotificationCompat.Builder(this, CH_AGENT)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setWhen(n.optLong("at").takeIf { it > 0 } ?: System.currentTimeMillis())
             .setShowWhen(true)
             .setAutoCancel(true)
             .setContentIntent(openApp(this, session.ifEmpty { null }))
+            .apply {
+                if (text.isNotEmpty()) {
+                    setContentText(text)
+                    setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                }
+            }
             .build()
         nm().notify(ID_AGENT_BASE + (session.hashCode() and 0xffff), note)
     }

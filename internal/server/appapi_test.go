@@ -223,6 +223,33 @@ func TestLastAgentText(t *testing.T) {
 	}
 }
 
+func TestAppNoticeCompletionPreview(t *testing.T) {
+	h := reportHub(t)
+	s := &Server{Hub: h}
+	w := &s.appWatch
+	w.last = map[string]watchState{"w1": {status: hub.StRunning}}
+	w.bell = make(chan struct{})
+	w.once.Do(func() {})
+
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		s.onSession(hub.Summary{Record: hub.Record{ID: "w1"}, Status: hub.StIdle})
+	}()
+	defer func() { <-finished }()
+
+	r := httptest.NewRequest("GET", "/api/app/notices?since=0&wait=5", nil)
+	rw := httptest.NewRecorder()
+	s.appNotices(rw, r)
+	var got struct{ Notices []appNotice }
+	if err := json.Unmarshal(rw.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Notices) != 1 || got.Notices[0].Status != "done" || got.Notices[0].Text != "MR opened: g/api/34" {
+		t.Fatalf("first poll should receive the reply with the completion notice: %+v", got.Notices)
+	}
+}
+
 // App key through the remote guard: register on a fresh device, whoami says so, challenge + a good signature renew
 // it (challenge / verify are public: a device due for re-verification reaches nothing else), a bad one is refused,
 // a temporary (pairing-code) device can't register.
