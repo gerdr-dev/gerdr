@@ -111,10 +111,10 @@ async function start() {
     setPortDomain(h.portDomain);
     // 打开页面：服务端那份布局 + 这个端上次自己看的位置（不然一刷新就跳到别的端最后看的地方）
     // …and the mode that project was left in on this device, not the last mode of any window (they share localStorage)
-    if (validLayout(h.layout)) {
-      const l = loadedLayouts(h.layout, h.panelLayouts);
-      set({ layout: l, ...enterSpaceMode(currentSpace(l)) });
-    } else setLayout((l) => l); // 第一次：把默认布局存下去
+    // The first launch has no saved Code layout, but the server still reports panel layout support.
+    // Initialize it before the socket connects, or refreshHello reloads the page on every connection.
+    const l = loadedLayouts(validLayout(h.layout) ? h.layout : get().layout, h.panelLayouts);
+    set({ layout: l, ...enterSpaceMode(currentSpace(l)) });
     pruneLayout();
     if (wantSpace) import("./actions").then((a) => a.switchSpace(wantSpace));
     connect();
