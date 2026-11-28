@@ -11,16 +11,21 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import okhttp3.Call
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * 后台通知：App 不在前台时，agent「等你回答 / 跑完了 / 出错了」也能弹系统通知。
@@ -38,56 +43,101 @@ import java.net.URL
  * CSRF 那道（`X-Gerdr`）。每一拍都重新读，所以人在 App 里重新登录 / 重验之后这边自己就接上了。
  */
 class NoticeService : Service() {
-    @Volatile private var stop = false
-    private var worker: Thread? = null
-    private var watcher: Thread? = null
+    private val main = Handler(Looper.getMainLooper())
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(70, TimeUnit.SECONDS) // The server holds a long poll for up to 50 seconds.
+        .followRedirects(false)
+        .build()
+    private var polling: PollRun? = null
+
+    private inner class PollRun(val origin: String) {
+        private val pending = ConcurrentHashMap.newKeySet<Call>()
+        val worker = Thread({ loop(this) }, "gerdr-notices").apply { isDaemon = true }
+        val watcher = Thread({ statusLoop(this) }, "gerdr-status").apply { isDaemon = true }
+
+        fun cancel() {
+            worker.interrupt()
+            watcher.interrupt()
+            pending.forEach(Call::cancel)
+        }
+
+        fun get(path: String, token: String): Pair<Int, String> {
+            val request = Request.Builder().url(origin + path)
+                .header("Cookie", "${Login.COOKIE}=$token")
+                .header("User-Agent", ua(this@NoticeService))
+                .build()
+            val call = http.newCall(request)
+            pending.add(call)
+            try {
+                if (Thread.currentThread().isInterrupted) throw InterruptedException()
+                return call.execute().use { it.code to (it.body?.string() ?: "") }
+            } finally {
+                pending.remove(call)
+            }
+        }
+
+        fun publish(action: () -> Unit) {
+            main.post { if (polling === this && Server.load(this@NoticeService)?.let(Server::origin) == origin) action() }
+        }
+    }
     /**
      * 最后一次画好的那条常驻通知。App 每次回前台都会再 startService 一次（见 MainActivity
      * 的 onResume），onStartCommand 里的 startForeground 要用**它**，不能每次都用「正在连接」
      * 那条 —— 不然一回前台一览就被盖回去，而一览只在状态变了时才重画，就一直停在那句话上
      * （真机上撞到的）。
      */
-    @Volatile private var lastStatus: Notification? = null
+    private var lastStatus: Notification? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         channels(this)
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+        val origin = Server.load(this)?.let(Server::origin)
+        val changed = polling?.origin != origin
+        if (changed) lastStatus = null
         ServiceCompat.startForeground(this, ID_SERVICE, lastStatus ?: statusNote(null), type)
-        if (worker == null) {
-            stop = false
-            worker = Thread(::loop, "gerdr-notices").apply { isDaemon = true; start() }
-            watcher = Thread(::statusLoop, "gerdr-status").apply { isDaemon = true; start() }
+        if (origin == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (changed) {
+            polling?.cancel()
+            nm().cancel(ID_AUTH)
+            AgentsWidget.clear(this)
+            val run = PollRun(origin)
+            polling = run
+            run.worker.start()
+            run.watcher.start()
         }
         return START_STICKY // 被系统杀了还会被拉起来
     }
 
     override fun onDestroy() {
-        stop = true
-        worker?.interrupt()
-        worker = null
-        watcher?.interrupt()
-        watcher = null
+        polling?.cancel()
+        polling = null
         super.onDestroy()
     }
 
-    private fun loop() {
+    private fun loop(run: PollRun) {
         // since < 0 = 还没对过底：第一拍只取当前 seq、**不弹**，不然一开服务就把环里的旧提示
         // 全弹一遍（重启手机、App 被杀后拉起都会走这里）
         var since = -1L
         var backoff = 2_000L
         var authWarned = false
-        while (!stop) {
-            val origin = Server.load(this)?.let(Server::origin)
-            if (origin == null) { stopSelf(); return }
+        val origin = run.origin
+        while (!Thread.currentThread().isInterrupted) {
             val token = token(origin)
             if (token == null) { nap(30_000); continue } // 还没登录：安静等着，别弹「失效了」
             try {
                 val q = if (since < 0) "" else "?since=$since&wait=50"
-                val (status, body) = get("$origin/api/app/notices$q", token)
+                val (status, body) = run.get("/api/app/notices$q", token)
                 if (status == 401 || status == 403) {
-                    if (!authWarned) authNote(JSONObject(body.ifEmpty { "{}" }).optString("need") == "passkey")
+                    if (!authWarned) {
+                        val passkey = JSONObject(body.ifEmpty { "{}" }).optString("need") == "passkey"
+                        run.publish { authNote(origin, passkey) }
+                    }
                     authWarned = true
                     nap(5 * 60_000)
                     continue
@@ -95,13 +145,14 @@ class NoticeService : Service() {
                 if (status != 200) throw IOException("HTTP $status")
                 if (authWarned) {
                     authWarned = false
-                    nm().cancel(ID_AUTH)
+                    run.publish { nm().cancel(ID_AUTH) }
                 }
                 val j = JSONObject(body)
                 val seq = j.optLong("seq")
                 val list = j.optJSONArray("notices")
                 if (since >= 0 && list != null && !MainActivity.visible) {
-                    for (i in 0 until list.length()) show(list.getJSONObject(i))
+                    val notices = (0 until list.length()).map { list.getJSONObject(it) }
+                    run.publish { if (!MainActivity.visible) notices.forEach { show(origin, it) } }
                 }
                 // 服务端重启过：seq 从头数了，比我们手上的还小。不改回去的话要等它数过旧值才有新的
                 since = seq
@@ -109,6 +160,7 @@ class NoticeService : Service() {
             } catch (_: InterruptedException) {
                 return
             } catch (e: Exception) {
+                if (Thread.currentThread().isInterrupted) return
                 // 断网 / 切网 / 服务端重启：退避重连，别把错误弹给人 —— 回来了自己就接上
                 android.util.Log.w(TAG, "提示这一拍失败，${backoff}ms 后重试", e)
                 nap(backoff)
@@ -125,20 +177,20 @@ class NoticeService : Service() {
      * 「在等 agent 的消息」（用户要的「在通知栏里看到正在运行的 agent 的状态一览」）。
      * 和提示那条循环分开跑：一个挂着等提示、一个挂着等状态，谁也不耽误谁。
      */
-    private fun statusLoop() {
+    private fun statusLoop(run: PollRun) {
         var ver = 0L
         var backoff = 2_000L
-        while (!stop) {
-            val origin = Server.load(this)?.let(Server::origin) ?: return
+        val origin = run.origin
+        while (!Thread.currentThread().isInterrupted) {
             val token = token(origin)
             if (token == null) { nap(30_000); continue }
             try {
                 val t0 = System.currentTimeMillis()
-                val (status, body) = get("$origin/api/app/agents?ver=$ver&wait=50", token)
+                val (status, body) = run.get("/api/app/agents?ver=$ver&wait=50", token)
                 android.util.Log.i(TAG, "一览：HTTP $status，等了 ${System.currentTimeMillis() - t0}ms（ver=$ver）")
                 if (status == 401 || status == 403) {
                     // 登录失效的提醒归提示那条循环发，这边只把一览换成一句实话
-                    postStatus(statusNote(null, "登录失效了，打开 App 重新登录"))
+                    run.publish { postStatus(statusNote(null, "登录失效了，打开 App 重新登录")) }
                     nap(5 * 60_000)
                     continue
                 }
@@ -148,12 +200,15 @@ class NoticeService : Service() {
                 val arr = j.optJSONArray("agents") ?: org.json.JSONArray()
                 val list = (0 until arr.length()).map { arr.getJSONObject(it) }
                 android.util.Log.i(TAG, "一览：ver→$ver，在动 ${list.count { Agents.active(it.optString("status")) }} 个")
-                postStatus(statusNote(list))
-                AgentsWidget.push(this, list) // 桌面小部件跟着同一份数据刷新
+                run.publish {
+                    postStatus(statusNote(list))
+                    AgentsWidget.push(this, list) // 桌面小部件跟着同一份数据刷新
+                }
                 backoff = 2_000
             } catch (_: InterruptedException) {
                 return
             } catch (e: Exception) {
+                if (Thread.currentThread().isInterrupted) return
                 android.util.Log.w(TAG, "状态一览这一拍失败，${backoff}ms 后重试", e)
                 nap(backoff)
                 backoff = (backoff * 2).coerceAtMost(60_000)
@@ -167,29 +222,14 @@ class NoticeService : Service() {
     }
 
     private fun nap(ms: Long) {
-        try { Thread.sleep(ms) } catch (_: InterruptedException) { stop = true }
-    }
-
-    private fun get(url: String, token: String): Pair<Int, String> {
-        val c = URL(url).openConnection() as HttpURLConnection
-        try {
-            c.connectTimeout = 15_000
-            c.readTimeout = 70_000 // 服务端最多挂 50 秒，留余量
-            c.setRequestProperty("Cookie", "${Login.COOKIE}=$token")
-            c.setRequestProperty("User-Agent", ua(this))
-            val status = c.responseCode
-            val text = (if (status < 400) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
-            return status to text
-        } finally {
-            c.disconnect()
-        }
+        try { Thread.sleep(ms) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
     }
 
     /**
      * 一条提示一条通知；同一个会话的新提示**替换**旧的（id 按会话算），不在通知栏里攒一串。
      * status 是服务端报的那一档：waiting（等你批准 / 回答）、done（跑完了）、error（出错了）。
      */
-    private fun show(n: JSONObject) {
+    private fun show(origin: String, n: JSONObject) {
         if (!canNotify(this)) return
         val status = n.optString("status")
         val agent = n.optString("agent").ifEmpty { "agent" }
@@ -217,7 +257,7 @@ class NoticeService : Service() {
             .setWhen(n.optLong("at").takeIf { it > 0 } ?: System.currentTimeMillis())
             .setShowWhen(true)
             .setAutoCancel(true)
-            .setContentIntent(openApp(this, session.ifEmpty { null }))
+            .setContentIntent(openApp(this, session.ifEmpty { null }, origin))
             .apply {
                 if (text.isNotEmpty()) {
                     setContentText(text)
@@ -225,17 +265,17 @@ class NoticeService : Service() {
                 }
             }
             .build()
-        nm().notify(ID_AGENT_BASE + (session.hashCode() and 0xffff), note)
+        nm().notify(origin, ID_AGENT_BASE + (session.hashCode() and 0xffff), note)
     }
 
-    private fun authNote(passkey: Boolean) {
+    private fun authNote(origin: String, passkey: Boolean) {
         if (!canNotify(this)) return
         val note = NotificationCompat.Builder(this, CH_AGENT)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(if (passkey) "Gerdr 要你验证一次" else "Gerdr 的登录失效了")
             .setContentText(if (passkey) "打开 App 用 passkey 验证，验完接着收通知" else "打开 App 重新登录，之后才收得到通知")
             .setAutoCancel(true)
-            .setContentIntent(openApp(this, null))
+            .setContentIntent(openApp(this, null, origin))
             .build()
         nm().notify(ID_AUTH, note)
     }
@@ -316,6 +356,7 @@ class NoticeService : Service() {
         private const val PREFS = "notify"
         /** 点通知带进 MainActivity 的会话 id */
         const val EXTRA_SESSION = "session"
+        const val EXTRA_SERVER = "noticeServer"
 
         fun enabled(ctx: Context) = ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("on", true)
 
@@ -376,10 +417,14 @@ class NoticeService : Service() {
          * 去打开那个会话（Bridge.focus）。requestCode 按会话算：PendingIntent 按 requestCode
          * 区分，都用 0 的话后一条会把前一条的 extra 盖掉，点哪条都跳到最新那个会话。
          */
-        fun openApp(ctx: Context, session: String?): PendingIntent {
+        fun openApp(ctx: Context, session: String?, origin: String? = null): PendingIntent {
             val i = Intent(ctx, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             if (session != null) i.putExtra(EXTRA_SESSION, session)
+            if (origin != null) {
+                i.putExtra(EXTRA_SERVER, origin)
+                i.identifier = "$origin/$session"
+            }
             return PendingIntent.getActivity(
                 ctx, session?.hashCode() ?: 0, i,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,

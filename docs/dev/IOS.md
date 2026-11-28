@@ -11,7 +11,7 @@ ios/
   Config.xcconfig       bundle id + team, overridden by Local.xcconfig (not in git; copy Local.xcconfig.example)
   Gerdr/
     App.swift           AppDelegate / SceneDelegate / RootViewController (address form ↔ web page)
-    SetupViewController.swift   the address form
+    SetupViewController.swift   saved server picker and address form
     WebViewController.swift     WKWebView, navigation lock, bridge, loading / error covers, downloads, login overlay
     Login.swift         the device flow's HTTP (passkey through Safari)
     LanRoute.swift      LAN routing: the in-App CONNECT proxy, probing, network watching (iOS 17+)
@@ -25,6 +25,10 @@ UI side: ui/src/lib/android.ts (isIOSApp / isApp), components/AndroidSettings.ts
 
 The web UI inside the shell is WebKit, like Safari: what it does differently there (slides run frame by frame, the tile
 switches after the slide, style recalc costs) and how to measure on an iPhone is in docs/dev/WEBKIT.md.
+
+“Switch server” opens the phone's saved addresses, including the address already saved on upgrade. “Add server” takes
+an address or the link from `gerdr remote pair`. Each hostname keeps its own login in the persistent WKWebView data
+store. Independent servers need separate hostnames to keep both logins, because HTTP cookies ignore port numbers.
 
 ## Building and installing
 

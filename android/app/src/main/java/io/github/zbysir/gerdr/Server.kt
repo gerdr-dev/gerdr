@@ -2,6 +2,7 @@ package io.github.zbysir.gerdr
 
 import android.content.Context
 import android.net.Uri
+import org.json.JSONArray
 
 /**
  * 「连的是哪台 gerdr」—— 填的是它远程访问的那个地址（设置 → 远程访问里的 https://…）。
@@ -10,6 +11,7 @@ import android.net.Uri
 object Server {
     private const val PREFS = "server"
     private const val KEY = "origin"
+    private const val RECENT = "recent"
 
     /**
      * 把人填的东西解析成一个 URL。认两种：光秃秃的地址（`gerdr.example.com`、带不带 https 都行），
@@ -23,7 +25,7 @@ object Server {
         if (!s.contains("://")) s = "https://$s"
         val u = Uri.parse(s)
         if (u.scheme != "https" && u.scheme != "http") return null
-        if (u.host.isNullOrEmpty()) return null
+        if (u.host.isNullOrEmpty() || u.userInfo != null) return null
         return u
     }
 
@@ -36,8 +38,22 @@ object Server {
     fun load(ctx: Context): Uri? =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)?.let(Uri::parse)
 
+    /** Include the active address from versions that only saved a single server. */
+    fun recent(ctx: Context): List<String> {
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val saved = runCatching { JSONArray(prefs.getString(RECENT, "[]")) }.getOrNull()
+        return buildList {
+            prefs.getString(KEY, null)?.let { add(it) }
+            if (saved != null) {
+                for (i in 0 until saved.length()) add(saved.getString(i))
+            }
+        }.distinct()
+    }
+
     fun save(ctx: Context, origin: String) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, origin).apply()
+        val recent = listOf(origin) + recent(ctx).filterNot { it == origin }
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY, origin).putString(RECENT, JSONArray(recent).toString()).apply()
     }
 
     /**

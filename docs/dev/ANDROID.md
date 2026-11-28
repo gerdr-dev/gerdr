@@ -10,7 +10,7 @@
 
 ```
 android/app/src/main/java/io/github/zbysir/gerdr/
-  MainActivity.kt   填地址一屏、WebView、加载层、导航锁、返回键、音量键、passkey 退路的浮层
+  MainActivity.kt   server picker and address form, WebView, loading, navigation lock, back / volume keys, passkey overlay
   WindowActivity.kt more windows, one project each (see "Windows")
   Look.kt           原生那几屏的控件样式（照配对页 pairpage.html 的卡片画）；颜色在 res/values(-night)/colors.xml，
                     和 index.css 的 token 对齐、跟系统明暗走 —— 改 token 时一起改
@@ -205,6 +205,17 @@ version is downloaded into the cache by itself and checked against the sha256; S
   MIUI / HyperOS tend to ask anyway.
 - Android refuses an APK signed with another key, so a tampered download can't get in; the sha256 catches truncation.
 - Versions compare as numbers (`0.2.10` > `0.2.9`); a local build is `0.1.0`, behind every release.
+
+## Switching servers
+
+“Switch server” in Settings, on the pairing page, and on the loading or connection-error screen opens the phone's
+recent server list. “Add server” takes a remote address, a pairing link, or a pairing QR code. The original single
+address becomes the first entry on upgrade. Only the origins are saved, and the WebView keeps the login cookie for
+each host. Give independent servers separate hostnames if both need to stay signed in, since cookies don't use ports
+for isolation. `gerdr remote pair` on each server prints a link to paste on the phone.
+
+Background polling and the widget follow the selected server. Project windows keep the server they opened on, and
+the process-wide LAN proxy shortcut follows the selected server.
 
 ## Windows
 

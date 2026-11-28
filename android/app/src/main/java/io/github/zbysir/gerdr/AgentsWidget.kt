@@ -47,6 +47,15 @@ class AgentsWidget : AppWidgetProvider() {
                 .putString("list", JSONArray(list).toString())
                 .putLong("at", System.currentTimeMillis())
                 .apply()
+            refresh(ctx)
+        }
+
+        fun clear(ctx: Context) {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("list").remove("at").apply()
+            refresh(ctx)
+        }
+
+        private fun refresh(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, AgentsWidget::class.java))
             if (ids.isNotEmpty()) render(ctx, mgr, ids)

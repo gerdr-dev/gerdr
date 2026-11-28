@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="servers_title">服务器</string>
+    <string name="servers_switch">换服务器</string>
+    <string name="servers_current">当前服务器</string>
+    <string name="servers_add">添加服务器</string>
+    <string name="servers_connect">连接</string>
+    <string name="servers_scan">扫码配对</string>
+    <string name="servers_add_help">粘贴电脑端「设置 → 远程访问」里的地址或配对链接。</string>
+    <string name="servers_invalid_address">请输入有效的服务器地址。</string>
+    <string name="servers_require_https">请使用 HTTPS 地址。</string>
+    <string name="servers_invalid_qr">这不是 Gerdr 的配对二维码。</string>
+    <string name="servers_scan_other_window">要配对另一台服务器，请打开「换服务器」后扫码。</string>
+</resources>

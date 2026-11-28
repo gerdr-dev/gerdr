@@ -6,6 +6,7 @@ import Network
 /// Same rules as android/…/Server.kt.
 enum Server {
     private static let key = "origin"
+    private static let recentKey = "recentOrigins"
 
     /// Parse what the person typed: a bare address (`gerdr.example.com`, with or without https) or a pairing link
     /// (`https://host/?pair=CODE`, from the settings QR / `gerdr remote pair`). The latter is loaded once as is: the
@@ -15,7 +16,7 @@ enum Server {
         if s.isEmpty { return nil }
         if !s.contains("://") { s = "https://" + s }
         guard let u = URL(string: s), let sc = u.scheme?.lowercased(), sc == "https" || sc == "http",
-              let h = u.host, !h.isEmpty else { return nil }
+              let h = u.host, !h.isEmpty, u.user == nil, u.password == nil else { return nil }
         return u
     }
 
@@ -33,7 +34,21 @@ enum Server {
     }
 
     static func load() -> URL? { UserDefaults.standard.string(forKey: key).flatMap(URL.init(string:)) }
-    static func save(_ origin: String) { UserDefaults.standard.set(origin, forKey: key) }
+
+    /// Include the active address saved by earlier versions. Pairing links are used once and only the origin is saved.
+    static func recent() -> [String] {
+        let defaults = UserDefaults.standard
+        let active = defaults.string(forKey: key)
+        let saved = defaults.stringArray(forKey: recentKey) ?? []
+        guard let active else { return saved }
+        return [active] + saved.filter { $0 != active }
+    }
+
+    static func save(_ origin: String) {
+        let defaults = UserDefaults.standard
+        defaults.set([origin] + recent().filter { $0 != origin }, forKey: recentKey)
+        defaults.set(origin, forKey: key)
+    }
 
     /// Local / LAN addresses: only while debugging (a build pointed at `make dev`). The navigation lock lets these
     /// through and sends everything else to Safari, or one tap on a link in an agent's reply would replace the App

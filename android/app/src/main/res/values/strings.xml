@@ -2,4 +2,15 @@
 <resources>
     <string name="app_name">Gerdr</string>
     <string name="widget_desc">agent 状态一览：哪几个在等你、哪几个在跑</string>
+    <string name="servers_title">Servers</string>
+    <string name="servers_switch">Switch server</string>
+    <string name="servers_current">Current server</string>
+    <string name="servers_add">Add server</string>
+    <string name="servers_connect">Connect</string>
+    <string name="servers_scan">Scan pairing code</string>
+    <string name="servers_add_help">Paste the address or pairing link from Settings → Remote access on your computer.</string>
+    <string name="servers_invalid_address">Enter a valid server address.</string>
+    <string name="servers_require_https">Use an HTTPS address.</string>
+    <string name="servers_invalid_qr">This isn’t a Gerdr pairing QR code.</string>
+    <string name="servers_scan_other_window">To pair with another server, open Switch server and scan its code there.</string>
 </resources>

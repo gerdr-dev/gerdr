@@ -28,16 +28,31 @@ final class RootViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = Look.bg
-        if let u = Server.load() { showWeb(u) } else { showSetup(nil) }
+        if let u = Server.load() {
+            showWeb(u)
+        } else {
+            swap(SetupViewController { [weak self] url in self?.selectServer(url) })
+        }
     }
 
     override var childForStatusBarStyle: UIViewController? { current }
     override var childForHomeIndicatorAutoHidden: UIViewController? { current }
 
-    func showSetup(_ error: String?) {
-        // The page's theme no longer applies once it's gone: back to following the system
+    func showSetup() {
+        guard let current, current.presentedViewController == nil, presentedViewController == nil else { return }
+        let picker = ServerPickerViewController { [weak self] url in self?.selectServer(url) }
+        let sheet = UINavigationController(rootViewController: picker)
+        sheet.modalPresentationStyle = .formSheet
+        current.present(sheet, animated: true)
+    }
+
+    private func selectServer(_ url: URL) {
+        let origin = Server.origin(url)
+        guard let server = URL(string: origin) else { return }
+        Server.save(origin)
+        // The previous page may have set the window's theme; let the new server set its own.
         view.window?.overrideUserInterfaceStyle = .unspecified
-        swap(SetupViewController(root: self, prefill: Server.load()?.host, error: error))
+        showWeb(server, start: url)
     }
 
     /// start: what to load first (a pairing link keeps its `?pair=`); the saved address is only the origin.
@@ -47,6 +62,7 @@ final class RootViewController: UIViewController {
 
     private func swap(_ vc: UIViewController) {
         if let old = current {
+            (old as? WebViewController)?.disconnect()
             old.willMove(toParent: nil)
             old.view.removeFromSuperview()
             old.removeFromParent()

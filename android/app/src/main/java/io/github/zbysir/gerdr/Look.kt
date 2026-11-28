@@ -92,10 +92,4 @@ class Look(private val c: Context) {
         if (android.os.Build.VERSION.SDK_INT >= 29) textCursorDrawable?.setTint(brand)
     }
 
-    /** 分隔线以下那段小字（配对页的 .foot）用的顶边：只画上面一条线 */
-    fun topRule(): Drawable {
-        val l = android.graphics.drawable.LayerDrawable(arrayOf(shape(line, radius = 0), shape(card, radius = 0)))
-        l.setLayerInset(1, 0, dp(1).coerceAtLeast(1), 0, 0)
-        return l
-    }
 }

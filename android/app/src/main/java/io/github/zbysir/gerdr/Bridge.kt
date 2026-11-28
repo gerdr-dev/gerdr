@@ -20,7 +20,7 @@ import org.json.JSONObject
  * 渲染着 agent 的输出（不可信文本）。也只认主 frame 发来的。桥上只放无害的口：报平台、
  * 全屏、配色、开外部链接、返回键、音量键 —— 不放读文件、发任意 Intent 这类。
  */
-class Bridge(private val act: MainActivity, web: WebView, origin: String) {
+class Bridge(private val act: MainActivity, web: WebView, private val origin: String) {
     /** 页面发过 hello 才有；换页 / 重载时作废（`reset`），等新页面再来一次 hello */
     private var page: JavaScriptReplyProxy? = null
     private var backCb: ((Boolean) -> Unit)? = null
@@ -92,7 +92,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
                         .put("keepConnected", true),
                 )
                 keyboard(act.hardKeyboard()) // whether menus show their shortcut keys (ui lib/hwKeyboard.ts)
-                send(LanRoute.snapshot()) // 顶栏那个「直连 / 中继」标签的初值
+                route() // 顶栏那个「直连 / 中继」标签的初值
                 pendingFocus?.let { focus(it) }
             }
             "back" -> {
@@ -123,7 +123,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             // More windows, one project each (WindowActivity); `space` names this window's project for the recents list
             "newWindow" -> act.newWindow(m.optString("space"))
             "space" -> act.setSpace(m.optString("name"))
-            "setup" -> act.showSetup(null)
+            "setup" -> act.showSetup()
             // Pair page's scan button; the answer comes back as `scan` (scanResult)
             "scan" -> act.scanPair()
             "login" -> act.startLogin(m.optBoolean("reauth"))
@@ -135,7 +135,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
             // 局域网直连口的候选（`https://192.168.x.x:7878`），换路由壳做，不换 origin（LanRoute）
             "lan" -> {
                 val a = m.optJSONArray("origins") ?: return
-                LanRoute.setCandidates((0 until a.length()).map { a.optString(it) })
+                LanRoute.setCandidates(origin, (0 until a.length()).map { a.optString(it) })
             }
             // A video / audio in the page started or stopped playing (android.ts syncMedia)
             "media" -> mediaPlaying = m.optBoolean("playing")
@@ -196,7 +196,7 @@ class Bridge(private val act: MainActivity, web: WebView, origin: String) {
     fun key(dir: String, repeat: Boolean) = send(JSONObject().put("t", "key").put("k", dir).put("repeat", repeat))
 
     /** 「直连 / 中继」变了（LanRoute.listeners，已经节流过） */
-    fun route() = send(LanRoute.snapshot())
+    fun route() = send(LanRoute.snapshot(origin))
 
     /** 后台通知那一块的状态（开没开 / 有没有通知权限 / 是否免电池优化），设置页照它画 */
     fun notifyState(m: JSONObject) = send(m)

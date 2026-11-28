@@ -63,6 +63,7 @@ object LanRoute {
     /** 当前服务器的域名和端口（`gerdr.example.com:443`）。只有它走局域网判断，别的照常直连 */
     @Volatile private var host: String? = null
     @Volatile private var port = 443
+    private var origin: String? = null
     /** 页面报来的候选（直连口的 `ip:port`，服务端 `/api/remote/lan` 给的），每次现报 */
     @Volatile private var candidates: List<InetSocketAddress> = emptyList()
     /** 探测通过的那个；null = 走中继（照常拨域名） */
@@ -73,27 +74,37 @@ object LanRoute {
      * 不照 [lan]（新连接往哪儿拨）：切到局域网之后终端那条长连接还在中继上，按「新连接」画
      * 就会显示「直连」，而你最在意的终端其实还绕着公网。
      */
-    private val openLan = java.util.concurrent.atomic.AtomicInteger()
-    private val openRelay = java.util.concurrent.atomic.AtomicInteger()
+    private class Counts {
+        val lan = java.util.concurrent.atomic.AtomicInteger()
+        val relay = java.util.concurrent.atomic.AtomicInteger()
+    }
+    @Volatile private var counts = Counts()
     /** Called on every change (any thread); each window (MainActivity) forwards it to its page */
     val listeners: MutableSet<() -> Unit> = java.util.concurrent.CopyOnWriteArraySet()
     private fun changed() = listeners.forEach { it() }
 
     /** 给页面的那份：`{lan, relay, next}`，next = 新连接现在往哪儿拨 */
-    fun snapshot(): org.json.JSONObject = org.json.JSONObject()
-        .put("t", "route")
-        .put("lan", openLan.get())
-        .put("relay", openRelay.get())
-        .put("next", if (lan != null) "lan" else "relay")
-        .put("proxied", host != null)
+    fun snapshot(server: String): org.json.JSONObject {
+        val active = server == origin
+        return org.json.JSONObject()
+            .put("t", "route")
+            .put("lan", if (active) counts.lan.get() else 0)
+            .put("relay", if (active) counts.relay.get() else 0)
+            .put("next", if (active && lan != null) "lan" else "relay")
+            .put("proxied", active)
+    }
 
     /** Is this CONNECT for the server (the one host that has a LAN route)? */
-    internal fun isServer(h: String) = h.equals(host, ignoreCase = true)
+    internal fun isServer(h: String, p: Int) = h.equals(host, ignoreCase = true) && p == port
 
-    internal fun tunnel(h: String, isLan: Boolean, delta: Int) {
-        if (!isServer(h)) return // 不支持反向绕过时别的主机也会进代理，那些不算
-        (if (isLan) openLan else openRelay).addAndGet(delta)
+    internal fun tunnel(h: String, p: Int, isLan: Boolean): (() -> Unit)? {
+        val current = counts
+        if (!isServer(h, p)) return null
+        val counter = if (isLan) current.lan else current.relay
+        counter.incrementAndGet()
         changed()
+        // A window on the old server may keep a tunnel open after the main window switches.
+        return { counter.decrementAndGet(); changed() }
     }
 
     /** 每次网络变化 / 新候选都加一，晚到的探测结果对不上就扔掉 */
@@ -130,6 +141,7 @@ object LanRoute {
      */
     fun install(ctx: Context, server: Uri, ready: () -> Unit) {
         val h = server.host
+        val o = Server.origin(server)
         if (server.scheme != "https" || h.isNullOrEmpty() || Server.isLocalHost(h) || isIp(h) ||
             !WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)
         ) {
@@ -139,10 +151,13 @@ object LanRoute {
         }
         // Another window (WindowActivity) on the same server: the proxy is already in place and probed. Installing
         // again would drop the LAN route (lan = null) under the windows already open until the probe came back
-        if (host == h.lowercase() && proxy != null) return ready()
+        if (origin == o && proxy != null) return ready()
+        origin = o
+        lan = null
+        candidates = emptyList()
         host = h.lowercase()
         port = if (server.port > 0) server.port else 443
-        lan = null
+        counts = Counts()
         gen++
         val p = proxy ?: LocalProxy(::route).also { proxy = it; it.start() }
         val b = ProxyConfig.Builder().addProxyRule("127.0.0.1:${p.port}")
@@ -155,19 +170,20 @@ object LanRoute {
         // **加载页面之前先拿上次的候选探一次**（最多 PROBE_MS）。不这么做的话：页面先经中继
         // 加载、终端那条 WebSocket 也先在中继上建好，等页面把候选报上来、探通了，新连接才走
         // 局域网 —— 而终端是条长连接，人在家里它也一直绕着公网（顶栏那个点一直是蓝的）。
-        val cached = loadCached(h)
+        val cached = loadCached(o)
+        candidates = cached
+        changed()
         val go = {
-            if (cached.isEmpty()) ready()
+            if (origin != o || cached.isEmpty()) ready()
             else io.execute {
-                candidates = cached
-                val g = gen
                 val hit = probeAll(h, cached)
-                if (g == gen) {
-                    lan = hit
-                    if (hit != null) proxy?.closeRelay()
-                    Log.i(TAG, if (hit != null) "开页面前探到局域网：$hit" else "开页面前局域网探不通，先走中继")
+                ContextCompat.getMainExecutor(ctx).execute {
+                    if (origin == o && candidates === cached) {
+                        lan = hit
+                        if (hit != null) proxy?.closeRelay()
+                    }
+                    ready()
                 }
-                ContextCompat.getMainExecutor(ctx).execute { ready() }
             }
         }
         try {
@@ -182,10 +198,12 @@ object LanRoute {
 
     /** 换服务器 / 回到填地址那一屏：撤掉代理 */
     fun clear() {
+        origin = null
         host = null
         lan = null
         candidates = emptyList()
         gen++
+        changed()
         if (proxy != null && WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
             try {
                 ProxyController.getInstance().clearProxyOverride({ it.run() }) {}
@@ -206,8 +224,9 @@ object LanRoute {
     }
 
     /** 页面报来局域网直连口的地址（`https://192.168.1.5:7878` 这种）。 */
-    fun setCandidates(origins: List<String>) {
-        host?.let { h -> prefs?.edit()?.putString(h, origins.joinToString(","))?.apply() }
+    fun setCandidates(server: String, origins: List<String>) {
+        if (server != origin) return
+        prefs?.edit()?.putString(server, origins.joinToString(","))?.apply()
         val cs = origins.mapNotNull { parse(it) }
         // 和手上的一样、而且已经探通了：别作废重探（页面每加载一次都会报一遍，作废的那一瞬
         // 新连接会走中继）
@@ -338,10 +357,11 @@ object LanRoute {
         if (!recheckPending.compareAndSet(false, true)) return
         timer.schedule({
             recheckPending.set(false)
+            val g = gen
             val h = host
             val l = lan
             val p = proxy
-            if (h != null && l != null && p != null && p.hasRelay() && probe(h, l)) {
+            if (h != null && l != null && p != null && p.hasRelay() && probe(h, l) && g == gen) {
                 Log.i(TAG, "the LAN answers again; moving the connections that fell back to the relay")
                 p.closeRelay()
             }
@@ -374,7 +394,7 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
     private val server = ServerSocket(0, 50, InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
     private val pool = Executors.newCachedThreadPool()
     /** 开着的、走中继的上游连接。切到局域网时一起掐掉（见 LanRoute 的第 3 条） */
-    private val relayUps: MutableSet<Socket> = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
+    private val relayUps = java.util.concurrent.ConcurrentHashMap<Socket, Pair<String, Int>>()
 
     /** When [sweepFallbacks] last ran; it only sweeps once per [SWEEP_MS] */
     @Volatile private var lastSweep = 0L
@@ -385,7 +405,7 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
      * fall back again on its reconnect, and sweeping it on every LAN hit would cut it off over and over.
      */
     fun sweepFallbacks() {
-        if (relayUps.isEmpty()) return
+        if (!hasRelay()) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastSweep < SWEEP_MS) return
         lastSweep = now
@@ -393,11 +413,16 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
         closeRelay()
     }
 
-    fun hasRelay() = relayUps.isNotEmpty()
+    fun hasRelay() = relayUps.values.any { (h, p) -> LanRoute.isServer(h, p) }
 
     fun closeRelay() {
-        val n = relayUps.size
-        relayUps.forEach { runCatching { it.close() } }
+        var n = 0
+        relayUps.forEach { (socket, address) ->
+            if (LanRoute.isServer(address.first, address.second)) {
+                runCatching { socket.close() }
+                n++
+            }
+        }
         if (n > 0) Log.i("LanRoute", "切到局域网：掐掉 $n 条走中继的连接，让它们重连到局域网")
     }
     val port: Int get() = server.localPort
@@ -446,18 +471,21 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
             }
             val (up, isLan) = hit
             Log.d("LanRoute", "CONNECT $h:$p → ${up.remoteSocketAddress}${if (isLan) "（局域网）" else ""}")
-            LanRoute.tunnel(h, isLan, +1)
+            val releaseTunnel = LanRoute.tunnel(h, p, isLan)
+            val active = releaseTunnel != null
             // Only the server's own connections: without reverse bypass every host goes through this proxy,
             // and closing those (they have no LAN route to move to) would just cut them off
-            if (!isLan && LanRoute.isServer(h)) relayUps.add(up)
-            if (isLan) sweepFallbacks()
+            if (!isLan && active) relayUps[up] = h to p
+            if (isLan && active) sweepFallbacks()
             // Tried the LAN and fell back: nothing else may come along to sweep it (see LanRoute.recheckLater)
-            if (!isLan && targets.any { it.lan }) LanRoute.recheckLater()
+            if (!isLan && active && targets.any { it.lan }) LanRoute.recheckLater()
             // 拨的那一刻还没有局域网这条路（targets 里压根没有它）、连上时却已经探通了：这条是从
             // 「先作废、再探」那个空档里漏过来的，closeRelay 已经扫过去了，当场补掐。
             // 试过局域网、没拨通才退到中继的那种是正当的退路，不动
             // 补掐之后下面一取 up 的流就抛 Socket is closed —— finally 照样记账，异常由 start 里那层接住
-            if (!isLan && targets.none { it.lan } && LanRoute.lan != null) runCatching { up.close() }
+            if (!isLan && active && targets.none { it.lan } && LanRoute.isServer(h, p) && LanRoute.lan != null) {
+                runCatching { up.close() }
+            }
             try { up.use {
                 // 流**先取出来**：closeRelay 随时可能从别的线程把 up 关掉，关掉之后
                 // getInputStream / getOutputStream 直接抛（而不是返回一条读到 EOF 的流）
@@ -473,7 +501,7 @@ private class LocalProxy(private val route: (String, Int) -> List<Target>) {
                 runCatching { up.shutdownOutput() }
                 t.join()
             } } finally {
-                LanRoute.tunnel(h, isLan, -1)
+                releaseTunnel?.invoke()
                 relayUps.remove(up)
             }
         }

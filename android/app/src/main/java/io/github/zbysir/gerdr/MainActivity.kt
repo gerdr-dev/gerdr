@@ -1,6 +1,7 @@
 package io.github.zbysir.gerdr
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -32,6 +33,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -161,13 +163,11 @@ open class MainActivity : ComponentActivity() {
         val u = Server.parse(raw)
         val code = u?.getQueryParameter("pair")
         when {
-            u == null || code.isNullOrEmpty() || u.scheme != "https" -> bridge?.scanResult(null, "这不是 Gerdr 的配对二维码")
+            u == null || code.isNullOrEmpty() || u.scheme != "https" ->
+                bridge?.scanResult(null, getString(R.string.servers_invalid_qr))
             Server.origin(u) == origin -> bridge?.scanResult(code, null)
-            else -> {
-                val o = Server.origin(u)
-                Server.save(this, o)
-                showWeb(Uri.parse(o), u)
-            }
+            this is WindowActivity -> bridge?.scanResult(null, getString(R.string.servers_scan_other_window))
+            else -> selectServer(u)
         }
     }
 
@@ -244,8 +244,8 @@ open class MainActivity : ComponentActivity() {
         WebView.setWebContentsDebuggingEnabled(BuildInfo.debuggable(this))
         onBackPressedDispatcher.addCallback(this) { back() }
 
-        val saved = Server.load(this)
-        if (saved == null) showSetup(null) else showWeb(saved)
+        val saved = initialServer()
+        if (saved == null) showAddressSetup() else showWeb(saved)
         takeFocus(intent)
     }
 
@@ -262,10 +262,27 @@ open class MainActivity : ComponentActivity() {
      * 全接住了），但 Activity 真被系统回收再拉起时 intent 还在，不摘会再跳一次。
      */
     private fun takeFocus(intent: Intent?) {
-        val id = intent?.getStringExtra(NoticeService.EXTRA_SESSION)?.ifEmpty { null } ?: return
+        if (intent == null) return
+        if (intent.action == ACTION_CHOOSE_SERVER) {
+            intent.action = null
+            showSetup()
+            return
+        }
+        val from = intent.getStringExtra(NoticeService.EXTRA_SERVER)
+        val id = intent.getStringExtra(NoticeService.EXTRA_SESSION)?.ifEmpty { null }
+        intent.removeExtra(NoticeService.EXTRA_SERVER)
         intent.removeExtra(NoticeService.EXTRA_SESSION)
-        bridge?.focus(id)
+        if (from != null && from != origin) {
+            if (from !in Server.recent(this)) return
+            selectServer(Uri.parse(from))
+        } else if (from != null || id != null) {
+            serverPicker?.dismiss()
+            hideAddressSetup()
+        }
+        if (id != null) bridge?.focus(id)
     }
+
+    protected open fun initialServer(): Uri? = Server.load(this)
 
     /** Where this window's page starts: the server's root (the page picks the last project). [WindowActivity]: its project */
     protected open fun startUri(server: Uri): Uri = server
@@ -276,10 +293,12 @@ open class MainActivity : ComponentActivity() {
      * other half.
      */
     fun newWindow(space: String) {
+        val server = origin ?: return
         if (space.isEmpty()) return
         var flags = Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
         if (isInMultiWindowMode) flags = flags or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
-        startActivity(Intent(this, WindowActivity::class.java).putExtra(WindowActivity.EXTRA_SPACE, space).addFlags(flags))
+        startActivity(Intent(this, WindowActivity::class.java)
+            .putExtra(WindowActivity.EXTRA_SPACE, space).putExtra(WindowActivity.EXTRA_SERVER, server).addFlags(flags))
     }
 
     /** The project this window shows (the page's `space`): the window's name in the recents list */
@@ -393,6 +412,7 @@ open class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         AppUpdate.listeners.remove(onUpdate)
         LanRoute.listeners.remove(onRoute)
+        serverPicker?.dismiss()
         dropWeb()
         io.shutdownNow()
         super.onDestroy()
@@ -400,57 +420,76 @@ open class MainActivity : ComponentActivity() {
 
     // ---- 填地址那一屏 ----
 
-    fun showSetup(error: String?) {
-        dropWeb()
-        root.removeAllViews()
-        root.setBackgroundColor(look.bg)
+    private var addressSetup: View? = null
+    private var serverPicker: AlertDialog? = null
+
+    fun showSetup() {
+        if (this is WindowActivity) {
+            startActivity(Intent(this, MainActivity::class.java).setAction(ACTION_CHOOSE_SERVER))
+            return
+        }
+        val recent = Server.recent(this)
+        if (recent.isEmpty()) return showAddressSetup()
+        if (serverPicker?.isShowing == true) return
+        hideAddressSetup()
+        val active = recent.indexOf(origin)
+        val labels = recent.mapIndexed { i, server ->
+            if (i == active) "$server\n${getString(R.string.servers_current)}" else server
+        }.toTypedArray()
+        serverPicker = AlertDialog.Builder(this)
+            .setTitle(R.string.servers_title)
+            .setSingleChoiceItems(labels, active) { dialog, i ->
+                dialog.dismiss()
+                if (i != active) selectServer(Uri.parse(recent[i]))
+            }
+            .setPositiveButton(R.string.servers_add) { _, _ -> showAddressSetup() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showAddressSetup() {
+        if (addressSetup != null) return
         val col = page()
         logo(col)
         val card = cardBox()
         col.addView(card, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        card.addView(look.title("连接到你的 Gerdr"))
+        card.addView(look.title(getString(R.string.servers_add)))
         card.addView(
-            look.lead("填远程访问的地址，或者直接粘贴配对链接。"),
+            look.lead(getString(R.string.servers_add_help)),
             LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) },
         )
         val input = look.input("https://gerdr.example.com").apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
             setSingleLine()
-            Server.load(this@MainActivity)?.let { setText(it.toString()) }
         }
         card.addView(input, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) })
-        val err = look.text(error ?: "", 13f, look.bad).apply {
-            visibility = if (error == null) View.GONE else View.VISIBLE
-        }
+        val err = look.text("", 13f, look.bad).apply { visibility = View.GONE }
         card.addView(err, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
-        val go = look.button("连接", primary = true)
+        val go = look.button(getString(R.string.servers_connect), primary = true)
         card.addView(go, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
-        val scan = look.button("扫码配对", primary = false)
+        val scan = look.button(getString(R.string.servers_scan), primary = false)
         card.addView(scan, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
-        card.addView(
-            foot("地址在跑 Gerdr 的那台电脑上：设置 → 远程访问，就是那个 https://…。「配对新设备」给的链接（…/?pair=…）可以直接粘贴，或者点「扫码配对」扫它的二维码。"),
-            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) },
-        )
+        if (web != null) {
+            card.addView(look.button(getString(android.R.string.cancel), primary = false).apply {
+                setOnClickListener { hideAddressSetup() }
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+        }
 
         val submit = {
             val u = Server.parse(input.text.toString())
             when {
                 u == null -> {
-                    err.text = "认不出这个地址"
+                    err.setText(R.string.servers_invalid_address)
                     err.visibility = View.VISIBLE
                 }
                 // release 包在网络层就拦明文（没开 usesCleartextTraffic），这里先说清楚，
                 // 别让人看着一个「连不上」去猜
                 u.scheme == "http" && !BuildInfo.debuggable(this) && !Server.isLocalHost(u.host) -> {
-                    err.text = "要用 https 地址"
+                    err.setText(R.string.servers_require_https)
                     err.visibility = View.VISIBLE
                 }
-                else -> {
-                    val o = Server.origin(u)
-                    Server.save(this, o)
-                    showWeb(Uri.parse(o), u)
-                }
+                else -> selectServer(u)
             }
         }
         go.setOnClickListener { submit() }
@@ -458,8 +497,9 @@ open class MainActivity : ComponentActivity() {
         // would otherwise become "the server" and load some stranger's page inside the app
         scan.setOnClickListener {
             scanQR { raw ->
+                if (!card.isAttachedToWindow) return@scanQR
                 if (Server.parse(raw)?.getQueryParameter("pair").isNullOrEmpty()) {
-                    err.text = "这不是 Gerdr 的配对二维码"
+                    err.setText(R.string.servers_invalid_qr)
                     err.visibility = View.VISIBLE
                 } else {
                     input.setText(raw.trim())
@@ -470,7 +510,34 @@ open class MainActivity : ComponentActivity() {
         input.setOnEditorActionListener { _, id, _ ->
             if (id == EditorInfo.IME_ACTION_GO) { submit(); true } else false
         }
-        root.addView(scroll(col), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addressSetup = scroll(col).apply {
+            setBackgroundColor(look.bg)
+            isClickable = true
+            isFocusableInTouchMode = true
+            root.addView(this, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            requestFocus()
+        }
+        web?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        applyBars()
+    }
+
+    private fun hideAddressSetup() {
+        val view = addressSetup ?: return
+        WindowInsetsControllerCompat(window, view).hide(WindowInsetsCompat.Type.ime())
+        root.removeView(view)
+        addressSetup = null
+        web?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        applyBars()
+    }
+
+    private fun selectServer(url: Uri) {
+        val o = Server.origin(url)
+        // A device may switch immediately after pairing, without ever leaving the foreground.
+        if (web != null && origin != o) CookieManager.getInstance().flush()
+        Server.save(this, o)
+        setSpace("")
+        showWeb(Uri.parse(o), url)
+        NoticeService.start(this)
     }
 
     // ---- 原生那几屏共用的骨架（样式在 Look.kt）----
@@ -505,21 +572,19 @@ open class MainActivity : ComponentActivity() {
         setPadding(dp(22), dp(22), dp(22), dp(22))
     }
 
-    /** 卡片底部那段说明：上面一条分隔线（配对页的 .foot） */
-    private fun foot(s: String) = look.text(s, 12f, look.muted).apply {
-        background = look.topRule()
-        setPadding(0, dp(14), 0, 0)
-    }
-
     // ---- WebView ----
 
     /** [start]: the full address to open first (a pairing link carries `?pair=`); by default this window's start ([startUri]) */
     @SuppressLint("SetJavaScriptEnabled")
     private fun showWeb(server: Uri, start: Uri = startUri(server)) {
+        serverPicker?.dismiss()
+        hideAddressSetup()
         dropWeb()
         root.removeAllViews()
         val o = Server.origin(server)
         origin = o
+        pageFullscreen = false
+        applyBars()
         val w = WebView(this)
         w.setBackgroundColor(getColor(R.color.bg))
         w.settings.apply {
@@ -564,7 +629,11 @@ open class MainActivity : ComponentActivity() {
         // 十几条），攒 150ms 发一次
         LanRoute.listeners.add(onRoute)
         // 先装好局域网换路的代理再加载：装之前发出去的请求不走代理（LanRoute 的注释）
-        LanRoute.install(this, server) { if (web === w) w.loadUrl(start.toString()) }
+        if (this is WindowActivity && Server.load(this)?.let(Server::origin) != o) {
+            w.loadUrl(start.toString())
+        } else {
+            LanRoute.install(this, server) { if (web === w) w.loadUrl(start.toString()) }
+        }
     }
 
     // ---- 加载中 ----
@@ -611,6 +680,9 @@ open class MainActivity : ComponentActivity() {
             visibility = View.INVISIBLE
         }
         box.addView(slow, LinearLayout.LayoutParams(dp(260), WRAP_CONTENT).apply { topMargin = dp(16) })
+        box.addView(look.button(getString(R.string.servers_switch), primary = false).apply {
+            setOnClickListener { showSetup() }
+        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(12) })
         main.postDelayed({ if (loading === box) slow.visibility = View.VISIBLE }, 6_000)
         root.addView(box, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         loading = box
@@ -627,6 +699,8 @@ open class MainActivity : ComponentActivity() {
 
     private fun dropWeb() {
         hideLoading(fade = false)
+        errorPage?.let(root::removeView)
+        errorPage = null
         chrome.onHideCustomView() // a fullscreen video belongs to the WebView being dropped
         login?.let { endLogin(it, "cancel", null) }
         bridge?.reset()
@@ -638,10 +712,13 @@ open class MainActivity : ComponentActivity() {
         web = null
     }
 
+    private var errorPage: View? = null
+
     /** 整屏的「连不上」：[title] 一句话说是什么事，[detail] 是原因（系统给的错误码之类，等宽小字） */
     private fun showError(title: String, detail: String?) {
         hideLoading(fade = false)
-        val o = origin ?: return showSetup(listOfNotNull(title, detail).joinToString("\n"))
+        val o = origin ?: return
+        errorPage?.let(root::removeView)
         val col = page()
         logo(col)
         val card = cardBox()
@@ -669,18 +746,20 @@ open class MainActivity : ComponentActivity() {
         }
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val retry = look.button("重试", primary = true)
-        val change = look.button("换服务器", primary = false)
+        val change = look.button(getString(R.string.servers_switch), primary = false)
         row.addView(retry, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         row.addView(change, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
         card.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(18) })
         retry.setOnClickListener { showWeb(Uri.parse(o)) }
-        change.setOnClickListener { showSetup(null) }
+        change.setOnClickListener { showSetup() }
         // 实底挡住底下那个 WebView（它可能停在半张页面上）
         val box = scroll(col).apply {
             setBackgroundColor(look.bg)
             isClickable = true
         }
+        errorPage = box
         root.addView(box, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addressSetup?.bringToFront()
     }
 
     private inner class Client : WebViewClient() {
@@ -697,15 +776,21 @@ open class MainActivity : ComponentActivity() {
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
-            hideLoading() // 兜底：页面里没接桥的旧版服务端不会 hello
+            if (view === web) hideLoading() // 兜底：页面里没接桥的旧版服务端不会 hello
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-            bridge?.reset() // 新页面要重新 hello，旧的回信通道已经作废
+            if (view === web) bridge?.reset() // 新页面要重新 hello，旧的回信通道已经作废
         }
 
         override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
-            if (req.isForMainFrame) showError("连不上这台 Gerdr", err.description?.toString())
+            if (view === web && req.isForMainFrame) showError("连不上这台 Gerdr", err.description?.toString())
+        }
+
+        override fun onReceivedHttpError(view: WebView, req: WebResourceRequest, response: WebResourceResponse) {
+            if (view === web && loading != null && req.isForMainFrame && response.statusCode >= 500) {
+                showError("连不上这台 Gerdr", "HTTP ${response.statusCode}")
+            }
         }
 
         /**
@@ -717,7 +802,7 @@ open class MainActivity : ComponentActivity() {
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
             handler.cancel()
             val u = Uri.parse(error.url)
-            if (Server.origin(u) == origin) showError("证书不被这台手机信任", "App 只认正式签发的证书（比如 ACME 签的），自签的不行。")
+            if (view === web && Server.origin(u) == origin) showError("证书不被这台手机信任", "App 只认正式签发的证书（比如 ACME 签的），自签的不行。")
         }
 
         /** 系统内存吃紧时会杀掉渲染进程；不接这个，App 会跟着一起崩 */
@@ -730,7 +815,7 @@ open class MainActivity : ComponentActivity() {
 
     private inner class Chrome : WebChromeClient() {
         override fun onProgressChanged(view: WebView, newProgress: Int) {
-            loadingBar?.progress = newProgress
+            if (view === web) loadingBar?.progress = newProgress
         }
 
         override fun onShowFileChooser(
@@ -866,6 +951,7 @@ open class MainActivity : ComponentActivity() {
                 }
                 if (run.cancelled) return@execute
                 main.post {
+                    if (login !== run) return@post
                     run.start = st
                     showLoginOverlay(run, st)
                     // 批准页里一点输入框键盘就弹起来，半屏会被顶成整屏、把上面的码盖住（真机上
@@ -958,9 +1044,10 @@ open class MainActivity : ComponentActivity() {
 
     fun verifyWithAppKey() {
         val o = origin ?: return
+        val b = bridge ?: return
         val cookie = cookieToken(o)
         fun reply(state: String, msg: String?) {
-            main.post { bridge?.appKeyState(state, msg) }
+            main.post { if (bridge === b) b.appKeyState(state, msg) }
         }
         if (cookie == null || !AppKey.exists(o)) return reply("error", "这台手机上没有登记过的密钥，用浏览器批准一次")
         val api = Login(o, webUA)
@@ -973,6 +1060,7 @@ open class MainActivity : ComponentActivity() {
             // The host signed is the server's; it must be the one this App was pointed at
             if (!c.host.equals(Uri.parse(o).host, ignoreCase = true)) return@Thread reply("error", "服务器报的地址和 App 里的不一致")
             main.post {
+                if (bridge !== b) return@post
                 AppKey.sign(this, o, c.host, c.deviceId, c.nonce) { r ->
                     when (r) {
                         is AppKey.Result.Signed -> Thread {
@@ -1152,6 +1240,7 @@ open class MainActivity : ComponentActivity() {
 
 
     private fun back() {
+        if (addressSetup != null && web != null) return showSetup()
         // A fullscreen video is on top of the page: back leaves it first, like in a browser
         if (video != null) return chrome.onHideCustomView()
         val b = bridge
@@ -1173,7 +1262,7 @@ open class MainActivity : ComponentActivity() {
     }
 
     private fun applyBars() {
-        if (pageFullscreen || video != null) {
+        if (addressSetup == null && (pageFullscreen || video != null)) {
             bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             bars.hide(WindowInsetsCompat.Type.systemBars())
         } else {
@@ -1316,6 +1405,7 @@ open class MainActivity : ComponentActivity() {
 
     companion object {
         private const val REQ_APPROVE = 41
+        private const val ACTION_CHOOSE_SERVER = "io.github.zbysir.gerdr.CHOOSE_SERVER"
 
         /** Windows in front (several with split screen / more windows; onPause and onResume of two windows interleave) */
         private val resumed = java.util.concurrent.atomic.AtomicInteger()

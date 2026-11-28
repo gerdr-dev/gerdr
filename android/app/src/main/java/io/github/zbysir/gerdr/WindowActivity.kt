@@ -13,6 +13,14 @@ import android.net.Uri
  * Notifications and the launcher still go to the main window (singleTask).
  */
 class WindowActivity : MainActivity() {
+    override fun initialServer(): Uri? {
+        intent?.getStringExtra(EXTRA_SERVER)?.let { return Uri.parse(it) }
+        // Remember where a window from before the server picker was opened.
+        val server = super.initialServer() ?: return null
+        intent?.putExtra(EXTRA_SERVER, Server.origin(server))
+        return server
+    }
+
     override fun startUri(server: Uri): Uri {
         val space = intent?.getStringExtra(EXTRA_SPACE)?.ifEmpty { null } ?: return server
         return Uri.parse(Server.origin(server) + "/" + Uri.encode(space))
@@ -20,5 +28,6 @@ class WindowActivity : MainActivity() {
 
     companion object {
         const val EXTRA_SPACE = "space"
+        const val EXTRA_SERVER = "windowServer"
     }
 }

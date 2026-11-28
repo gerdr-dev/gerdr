@@ -50,10 +50,21 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     deinit {
         web?.configuration.userContentController.removeScriptMessageHandler(forName: "gerdr")
         NotificationCenter.default.removeObserver(self)
+        disconnect()
+    }
+
+    func disconnect() {
+        web?.stopLoading()
+        if let login {
+            login.task?.cancel()
+            endLogin(login, "cancel", nil)
+        }
         route?.stop()
         netMade?.shutdown() // its URLSession holds it (the session's delegate) until invalidated
         // The default data store outlives this page: don't leave the next server behind this one's proxy
         if #available(iOS 17.0, *), route != nil { web?.configuration.websiteDataStore.proxyConfigurations = [] }
+        route = nil
+        netMade = nil
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { light ? .darkContent : .lightContent }
@@ -111,8 +122,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         r.onChange = { [weak self] m in self?.routeChanged(m) }
         r.onProxy = { [weak self] port in self?.setProxy(port) }
         // The proxy has to be in place before the first request: what's sent before it doesn't go through it
-        r.start { [weak self] port in
-            guard let self else { return }
+        r.start { [weak self, weak r] port in
+            guard let self, let r, self.route === r else { return }
             if let port { self.setProxy(port) }
             self.web.load(URLRequest(url: self.start))
         }
@@ -191,7 +202,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         case "open":
             if let s = m["url"] as? String, let u = URL(string: s) { openExternal(u) }
         case "setup":
-            root?.showSetup(nil)
+            root?.showSetup()
         case "login":
             startLogin(reauth: m["reauth"] as? Bool ?? false)
         case "appkey":
@@ -281,6 +292,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ w: WKWebView, decidePolicyFor resp: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if loading != nil, resp.isForMainFrame, let http = resp.response as? HTTPURLResponse, http.statusCode >= 500 {
+            decisionHandler(.cancel)
+            showError(L("连不上这台 Gerdr", "Can't reach this Gerdr"), "HTTP \(http.statusCode)")
+            return
+        }
         // An attachment (the UI asks with ?download=1) or something WebKit can't show: download it
         let disp = (resp.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition") ?? ""
         if !resp.canShowMIMEType || disp.lowercased().hasPrefix("attachment") {
@@ -425,8 +441,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         spin.startAnimating()
         let text = Look.label(L("正在连接 \(server.host ?? origin)…", "Connecting to \(server.host ?? origin)…"), size: 13, color: Look.muted)
         text.textAlignment = .center
-        let other = Look.button(L("换服务器", "Switch server")) { [weak self] in self?.root?.showSetup(nil) }
-        other.isHidden = true
+        let other = Look.button(L("换服务器", "Switch server")) { [weak self] in self?.root?.showSetup() }
         let stack = UIStackView(arrangedSubviews: [spin, text, other])
         stack.axis = .vertical
         stack.spacing = 14
@@ -436,8 +451,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         view.addSubview(cover)
         Look.center(stack, in: cover)
         loading = cover
-        // Still loading after a while: the address may be wrong, give a way out
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak other] in other?.isHidden = false }
     }
 
     private func hideLoading() {
@@ -459,7 +472,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             self.showLoading()
             self.web.load(URLRequest(url: self.web.url.flatMap { Server.origin($0) == self.origin ? $0 : nil } ?? self.start))
         }
-        let other = Look.button(L("换服务器", "Switch server")) { [weak self] in self?.root?.showSetup(nil) }
+        let other = Look.button(L("换服务器", "Switch server")) { [weak self] in self?.root?.showSetup() }
         let card = Look.card([
             Look.label(title, size: 17, weight: .semibold),
             Look.label(detail ?? "", size: 13, color: Look.muted),
