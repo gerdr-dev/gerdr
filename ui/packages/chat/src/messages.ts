@@ -202,10 +202,7 @@ export const zh = {
   "composer.send": "发送",
   "composer.context": "上下文",
   "composer.contextDetails": "上下文 {pct}%，查看详情",
-  "composer.contextUsage": "上下文用量（tokens）",
-  "composer.contextUsed": "已用",
-  "composer.contextRemaining": "剩余",
-  "composer.contextWindow": "窗口总量",
+  "composer.contextUsage": "上下文已用 {used}，总量 {window} tokens",
 } as const;
 
 export type MessageKey = keyof typeof zh;
@@ -416,8 +413,5 @@ export const en: Record<MessageKey, string> = {
   "composer.send": "Send",
   "composer.context": "Context",
   "composer.contextDetails": "Context {pct}%, view details",
-  "composer.contextUsage": "Context usage (tokens)",
-  "composer.contextUsed": "Used",
-  "composer.contextRemaining": "Remaining",
-  "composer.contextWindow": "Window size",
+  "composer.contextUsage": "{used} of {window} context tokens used",
 };

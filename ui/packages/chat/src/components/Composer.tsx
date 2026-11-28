@@ -1,6 +1,6 @@
 import { ArrowUp, File as FileIcon, ImagePlus, Loader2, Paperclip, Square, X, CornerDownRight, Zap, Pin, PinOff } from "lucide-react";
 import { flushSync } from "react-dom";
-import { forwardRef, memo, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
@@ -1743,9 +1743,10 @@ const ComposerImpl = forwardRef<
  */
 export const Composer = memo(ComposerImpl);
 
-/** Show the exact counts on demand, including on phones where the composer only fits the percentage. */
+const contextCount = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+
+/** Show context usage as a compact row on demand. */
 function ContextMeter({ c, short }: { c: { tokens: number; window: number }; short?: boolean }) {
-  const heading = useId();
   const pct = Math.min(100, Math.round((c.tokens / c.window) * 100));
   const tone = pct >= 90 ? "text-bad" : pct >= 75 ? "text-warn" : "text-muted-foreground";
   const keepEditing = (e: Event) => {
@@ -1771,25 +1772,17 @@ function ContextMeter({ c, short }: { c: { tokens: number; window: number }; sho
         side="top"
         align="end"
         collisionPadding={8}
-        className="w-56 max-w-[calc(100vw-1rem)] space-y-2 p-3 text-xs"
-        aria-labelledby={heading}
+        className="flex w-56 max-w-[calc(100vw-1rem)] items-center gap-2.5 px-2.5 py-2"
+        aria-label={tr("composer.contextUsage", { used: c.tokens.toLocaleString(), window: c.window.toLocaleString() })}
         onOpenAutoFocus={keepEditing}
         onCloseAutoFocus={keepEditing}
       >
-        <h2 id={heading} className="text-sm font-medium">
-          {tr("composer.contextUsage")}
-        </h2>
-        <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
           <div className={cn("h-full rounded-full", pct >= 90 ? "bg-bad" : pct >= 75 ? "bg-warn" : "bg-brand")} style={{ width: `${pct}%` }} />
         </div>
-        <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-          <dt className="text-muted-foreground">{tr("composer.contextUsed")}</dt>
-          <dd className="text-right tabular-nums">{c.tokens.toLocaleString()}</dd>
-          <dt className="text-muted-foreground">{tr("composer.contextRemaining")}</dt>
-          <dd className="text-right tabular-nums">{Math.max(0, c.window - c.tokens).toLocaleString()}</dd>
-          <dt className="text-muted-foreground">{tr("composer.contextWindow")}</dt>
-          <dd className="text-right tabular-nums">{c.window.toLocaleString()}</dd>
-        </dl>
+        <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground tabular-nums" aria-hidden="true">
+          <span className="text-popover-foreground">{contextCount.format(c.tokens).toLowerCase()}</span> / {contextCount.format(c.window).toLowerCase()}
+        </span>
       </PopoverContent>
     </Popover>
   );
