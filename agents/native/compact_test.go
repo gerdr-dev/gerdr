@@ -157,6 +157,52 @@ func TestManualCompactFailureReported(t *testing.T) {
 	}
 }
 
+func TestManualCompactReportsContext(t *testing.T) {
+	const window = 100_000
+	e := setupModel(t, Model{ID: "fake-model", API: "chat", Window: window}, func(n int, msgs []any) reply {
+		switch n {
+		case 0:
+			return reply{text: "OK", input: 73_000}
+		case 1:
+			if got := lastUser(msgs); !strings.Contains(got, "Additional instructions from the user: Keep the task ID.") {
+				t.Errorf("compaction instructions missing: %s", got)
+			}
+			return reply{text: "Task ID: t189"}
+		default:
+			history, _ := json.Marshal(msgs)
+			if !strings.Contains(string(history), "Task ID: t189") || strings.Contains(string(history), "Remember t189") {
+				t.Errorf("unexpected history after compaction: %s", history)
+			}
+			return reply{text: "Continuing", input: 300}
+		}
+	})
+	sid := e.newSession(modeBypass)
+	if _, err := e.prompt(sid, uuid.NewString(), "Remember t189"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.prompt(sid, uuid.NewString(), "/compact Keep the task ID."); err != nil {
+		t.Fatal(err)
+	}
+	e.h.mu.Lock()
+	var contextTokens float64
+	for _, n := range e.h.updates {
+		if u := n.Update.SessionInfoUpdate; u != nil {
+			value, _ := acpx.GetMeta(u.Meta, acpx.ProgressKey)
+			progress, _ := value.(map[string]any)
+			if tokens, ok := progress["contextTokens"].(float64); ok {
+				contextTokens = tokens
+			}
+		}
+	}
+	e.h.mu.Unlock()
+	if contextTokens != 10 {
+		t.Fatalf("context after /compact: got %v tokens, want the summary's 10 tokens", contextTokens)
+	}
+	if _, err := e.prompt(sid, uuid.NewString(), "Continue."); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBuildContextKeep(t *testing.T) {
 	msg := func(role, text string) entry {
 		return entry{T: "msg", Msg: &llm.Message{Role: role, Content: []llm.Part{llm.TextPart(text)}}}

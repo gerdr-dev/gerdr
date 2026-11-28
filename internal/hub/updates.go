@@ -119,6 +119,13 @@ func (s *Session) onUpdate(u acp.SessionUpdate) {
 		}
 		return
 	case u.UsageUpdate != nil:
+		// External ACP engines can report the current context size directly.
+		if usage := u.UsageUpdate; usage.Size > 0 && usage.Used >= 0 {
+			s.mu.Lock()
+			s.rec.CtxTokens, s.rec.CtxWindow = usage.Used, usage.Size
+			s.mu.Unlock()
+			s.h.broadcastSession(s)
+		}
 		return
 	}
 	if s.infersTurns() {
