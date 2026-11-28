@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 一览里的一行：彩色状态字 + 「项目 · 标题」 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/agent_row"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="top"

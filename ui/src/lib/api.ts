@@ -491,6 +491,7 @@ export const api = {
   answer: (id: string, reqId: string, response: unknown) => req("POST", `/api/sessions/${id}/answer`, { reqId, response }),
   /** The agent's reply to the last user message as text; final: its last stretch (internal/server/sessionapi.go) */
   sessionReply: (id: string) => req<{ text: string; final: string; stopReason: string }>("GET", `/api/sessions/${id}/reply`),
+  sessionSummary: (id: string) => req<SessionSummary>("GET", `/api/sessions/${encodeURIComponent(id)}`),
   /** g.sessions.pending / answer: only for an add-on whose addon.json says "pending": true (internal/server/addonpending.go) */
   addonPending: (id: string, session?: string) =>
     req<unknown[]>("GET", `/api/addons/${encodeURIComponent(id)}/pending${session ? `?session=${encodeURIComponent(session)}` : ""}`),

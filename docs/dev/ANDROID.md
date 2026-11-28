@@ -146,7 +146,9 @@ App 关着 / 锁屏时，一个前台服务（`NoticeService`）挂在两个长�
 - `GET /api/app/agents?ver=&wait=50`：所有会话的状态一览，常驻通知和桌面小部件照它画。
 - 为什么不用 /ws：/ws 推的东西多（一帧几 KB），后台走中继一直收白费流量和电；而且 /ws 算「远程界面开着」，会让 Mac 不休眠。
 - 凭据就是 WebView 里那份 `gerdr_dev` cookie，后台请求自己带 `Cookie:` 头（远程那条路不认 Bearer）。
-- 点通知带着会话 id，页面 hello 之后壳发 `focus`，页面切到那个会话。App 在前台时不弹（网页自己有提示）。
+- Tapping an agent row opens that conversation. A tap on the ongoing card itself opens the first visible agent.
+  The shell keeps the notification's target through pairing and sends `focus` once the main UI can open it.
+  One-off alerts stay quiet in the foreground, where the page already shows them.
 - 小米 HyperOS 那几个坑（频道级别、RemoteViews 按 view id 认控件）见 NoticeService.kt / widget 布局里的注释。
 
 ## Staying connected in the background (Labs)

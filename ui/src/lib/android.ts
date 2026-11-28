@@ -178,6 +178,22 @@ export async function enrollAppKey(): Promise<void> {
   });
 }
 
+let noticeFocus = 0;
+
+async function focusFromNotice(m: AndroidMsg) {
+  const id = m.session;
+  if (typeof id !== "string" || !id) return;
+  const request = ++noticeFocus;
+  // The phone may have been asleep when the task started. Read its owner before deciding which panel should open.
+  if (!get().sessions[id]) {
+    const session = await api.sessionSummary(id).catch(() => null);
+    if (request !== noticeFocus || !session) return;
+    if (!get().sessions[id]) set((s) => ({ sessions: { ...s.sessions, [id]: session } }));
+  }
+  set({ dialog: null, drawer: false, workPeek: null });
+  focusSession(id);
+}
+
 /**
  * 页面起来之后接上壳：hello（壳收到它才有往回发的通道）、局域网候选、返回键、通知点开、音量键。
  * App.tsx 在 boot 之后调一次。
@@ -188,6 +204,7 @@ export function initAndroid() {
   // 就多一份 —— 按一下音量键跳两格、返回键回两次。挂在 globalThis 上，模块重新执行了也找得到上一次的
   const g = globalThis as unknown as { __gerdrAndroidOff?: () => void };
   g.__gerdrAndroidOff?.();
+  const focusOff = onAndroid("focus", focusFromNotice, false);
   if (isIOSApp()) {
     // iOS: hello, the colour around the safe area, a notification tap (once the shell has them). No back / volume
     // keys, no LAN routing, and WebKit doesn't stretch the page like Android's WebView (gateStretch)
@@ -198,10 +215,9 @@ export function initAndroid() {
     sendLan();
     const onVis = () => document.visibilityState === "visible" && sendLan();
     document.addEventListener("visibilitychange", onVis);
-    const off = onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session), false);
     g.__gerdrAndroidOff = () => {
       document.removeEventListener("visibilitychange", onVis);
-      off();
+      focusOff();
     };
     return;
   }
@@ -216,7 +232,7 @@ export function initAndroid() {
   document.addEventListener("visibilitychange", onVisible);
   const offs = [
     onAndroid("back", () => postAndroid({ t: "back", handled: closeTop() }), false),
-    onAndroid("focus", (m) => typeof m.session === "string" && focusSession(m.session), false),
+    focusOff,
     onAndroid("key", (m) => (volumeKey(m.k === "up" ? "ArrowUp" : "ArrowDown"), syncMedia()), false),
     onAndroid("update", updateReady),
     watchImeLift(),

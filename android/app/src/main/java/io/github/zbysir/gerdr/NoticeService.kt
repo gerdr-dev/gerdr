@@ -201,7 +201,7 @@ class NoticeService : Service() {
                 val list = (0 until arr.length()).map { arr.getJSONObject(it) }
                 android.util.Log.i(TAG, "一览：ver→$ver，在动 ${list.count { Agents.active(it.optString("status")) }} 个")
                 run.publish {
-                    postStatus(statusNote(list))
+                    postStatus(statusNote(list, origin = origin))
                     AgentsWidget.push(this, list) // 桌面小部件跟着同一份数据刷新
                 }
                 backoff = 2_000
@@ -284,7 +284,7 @@ class NoticeService : Service() {
      * 常驻那条：标题是「几个等你 · 几个在跑」，展开是每个 agent 一行，**等你的排最前**
      * （那是要你动手的），然后在跑的、跑完的、空闲的。[list] 为 null = 还没拿到（刚起 / 连不上）。
      */
-    private fun statusNote(list: List<JSONObject>?, note: String? = null): Notification {
+    private fun statusNote(list: List<JSONObject>?, note: String? = null, origin: String? = null): Notification {
         val b = NotificationCompat.Builder(this, CH_STATUS)
             .setSmallIcon(R.drawable.ic_notify)
             .setOngoing(true)
@@ -292,9 +292,9 @@ class NoticeService : Service() {
             .setSilent(true)
             .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(openApp(this, null))
         if (list == null) {
-            return b.setContentTitle(note ?: "正在连接 ${Server.load(this)?.host ?: ""}…").build()
+            return b.setContentIntent(openApp(this, null))
+                .setContentTitle(note ?: "正在连接 ${Server.load(this)?.host ?: ""}…").build()
         }
         val sum = Agents.summarize(list)
         /*
@@ -303,13 +303,16 @@ class NoticeService : Service() {
          * 收起那一版高度有限（真机小米上大约四行多字），三条两行的放不下、第三条会被拦腰
          * 截掉 —— 所以收起时最多 2 条，多出来的用一行小字说「还有几个」；展开版全列。
          */
-        val small = rows(sum.shown.take(2), null, more = sum.shown.size - 2)
-        val big = rows(sum.shown.take(MAX_LINES), listOfNotNull(
+        val small = rows(sum.shown.take(2), origin, null, more = sum.shown.size - 2)
+        val big = rows(sum.shown.take(MAX_LINES), origin, listOfNotNull(
             if (sum.shown.size > MAX_LINES) "还有 ${sum.shown.size - MAX_LINES} 个在动" else null,
             sum.foot,
         ).joinToString("，").ifEmpty { null })
+        // Some Android skins use the whole card's action, even when the visible row has its own action.
+        val first = sum.shown.firstOrNull()?.optString("session")?.ifEmpty { null }
         return b.setContentTitle(sum.title)
             .setContentText(sum.shown.firstOrNull()?.let(Agents::line) ?: (sum.foot ?: ""))
+            .setContentIntent(openApp(this, first, origin))
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(small)
             .setCustomBigContentView(big)
@@ -317,7 +320,7 @@ class NoticeService : Service() {
     }
 
     /** [more] > 0 时在最后一行右边挂一个「+N」（收起版用：放不下的那几个，下拉能看到） */
-    private fun rows(items: List<JSONObject>, foot: String?, more: Int = 0): android.widget.RemoteViews {
+    private fun rows(items: List<JSONObject>, origin: String?, foot: String?, more: Int = 0): android.widget.RemoteViews {
         val v = android.widget.RemoteViews(packageName, R.layout.notif_status)
         v.removeAllViews(R.id.rows)
         for ((i, a) in items.withIndex()) {
@@ -326,6 +329,9 @@ class NoticeService : Service() {
             r.setTextViewText(R.id.st, Agents.label(st))
             r.setTextColor(R.id.st, Agents.color(st))
             r.setTextViewText(R.id.what, Agents.what(a))
+            a.optString("session").takeIf { it.isNotEmpty() }?.let { session ->
+                r.setOnClickPendingIntent(R.id.agent_row, openApp(this, session, origin))
+            }
             if (more > 0 && i == items.lastIndex) {
                 r.setTextViewText(R.id.tail, "+$more")
                 r.setViewVisibility(R.id.tail, android.view.View.VISIBLE)

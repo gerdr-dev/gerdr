@@ -1,7 +1,7 @@
 package io.github.zbysir.gerdr
 
 import android.annotation.SuppressLint
-import android.app.AlertDialog
+import android.app.Dialog
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -18,6 +18,9 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Message
 import android.text.InputType
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -47,6 +50,8 @@ import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.text.buildSpannedString
+import androidx.core.text.inSpans
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import android.graphics.Typeface
@@ -278,6 +283,7 @@ open class MainActivity : ComponentActivity() {
         } else if (from != null || id != null) {
             serverPicker?.dismiss()
             hideAddressSetup()
+            if (id != null && errorPage != null) origin?.let { showWeb(Uri.parse(it)) }
         }
         if (id != null) bridge?.focus(id)
     }
@@ -421,7 +427,7 @@ open class MainActivity : ComponentActivity() {
     // ---- 填地址那一屏 ----
 
     private var addressSetup: View? = null
-    private var serverPicker: AlertDialog? = null
+    private var serverPicker: Dialog? = null
 
     fun showSetup() {
         if (this is WindowActivity) {
@@ -432,19 +438,46 @@ open class MainActivity : ComponentActivity() {
         if (recent.isEmpty()) return showAddressSetup()
         if (serverPicker?.isShowing == true) return
         hideAddressSetup()
-        val active = recent.indexOf(origin)
-        val labels = recent.mapIndexed { i, server ->
-            if (i == active) "$server\n${getString(R.string.servers_current)}" else server
-        }.toTypedArray()
-        serverPicker = AlertDialog.Builder(this)
-            .setTitle(R.string.servers_title)
-            .setSingleChoiceItems(labels, active) { dialog, i ->
-                dialog.dismiss()
-                if (i != active) selectServer(Uri.parse(recent[i]))
+        val context = pageLight?.let { light ->
+            val night = if (light) Configuration.UI_MODE_NIGHT_NO else Configuration.UI_MODE_NIGHT_YES
+            val themeConfig = Configuration(resources.configuration).apply {
+                uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
             }
-            .setPositiveButton(R.string.servers_add) { _, _ -> showAddressSetup() }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            ContextThemeWrapper(this, R.style.Theme_Gerdr).apply {
+                applyOverrideConfiguration(themeConfig)
+            }
+        } ?: this
+        val style = Look(context)
+        val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        for (server in recent) {
+            val current = server == origin
+            val label = buildSpannedString {
+                append(server)
+                if (current) {
+                    append('\n')
+                    inSpans(ForegroundColorSpan(style.muted), RelativeSizeSpan(0.85f)) {
+                        append(getString(R.string.servers_current))
+                    }
+                }
+            }
+            val row = style.button(label, primary = false, selected = current).apply {
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                minimumHeight = dp(48)
+                setOnClickListener {
+                    serverPicker?.dismiss()
+                    if (!current) selectServer(Uri.parse(server))
+                }
+            }
+            list.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+                if (list.childCount > 0) topMargin = dp(8)
+            })
+        }
+        serverPicker = style.dialog(this, getString(R.string.servers_title), list, getString(R.string.servers_add)) {
+            showAddressSetup()
+        }.apply {
+            setOnDismissListener { if (serverPicker === this) serverPicker = null }
+            show()
+        }
     }
 
     private fun showAddressSetup() {
@@ -583,6 +616,7 @@ open class MainActivity : ComponentActivity() {
         root.removeAllViews()
         val o = Server.origin(server)
         origin = o
+        pageLight = null
         pageFullscreen = false
         applyBars()
         val w = WebView(this)
@@ -1255,6 +1289,7 @@ open class MainActivity : ComponentActivity() {
 
     /** What the page asked for through the bridge; a fullscreen video hides the bars regardless, and leaving it restores this */
     private var pageFullscreen = false
+    private var pageLight: Boolean? = null
 
     fun setFullscreen(on: Boolean) {
         pageFullscreen = on
@@ -1273,6 +1308,7 @@ open class MainActivity : ComponentActivity() {
     /** 页面换了明暗 / 主题：系统栏那一条的底色和图标深浅跟着走，不然亮色主题顶上一条黑 */
     fun applyTheme(bg: String, light: Boolean) {
         val c = Css.color(bg) ?: return
+        pageLight = light
         root.setBackgroundColor(c)
         window.setBackgroundDrawable(ColorDrawable(c))
         bars.isAppearanceLightStatusBars = light

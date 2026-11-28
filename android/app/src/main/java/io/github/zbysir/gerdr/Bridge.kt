@@ -24,6 +24,7 @@ class Bridge(private val act: MainActivity, web: WebView, private val origin: St
     /** 页面发过 hello 才有；换页 / 重载时作废（`reset`），等新页面再来一次 hello */
     private var page: JavaScriptReplyProxy? = null
     private var backCb: ((Boolean) -> Unit)? = null
+    private var focusReady = false
     /**
      * 点通知进来要打开的会话。页面还没 hello（冷启动、或者正在重载）时先记着，hello 之后补发 ——
      * 直接丢掉的话表现是「点了通知，App 开了，停在上次那个会话」。
@@ -59,6 +60,7 @@ class Bridge(private val act: MainActivity, web: WebView, private val origin: St
 
     fun reset() {
         page = null
+        focusReady = false
         net.closeAll()
         mediaPlaying = false
         arrows = null
@@ -73,6 +75,8 @@ class Bridge(private val act: MainActivity, web: WebView, private val origin: St
             "hello" -> {
                 page = reply
                 imeLift = m.optBoolean("ime")
+                // Pairing also says hello, but only the app UI can open a conversation.
+                focusReady = imeLift
                 act.hideLoading()
                 // webauthn：WebView 自己能不能做 passkey（MainActivity.webAuthn）。能的话页面直接用
                 // navigator.credentials；不能才发 login 走 device flow（Login.kt）
@@ -118,7 +122,12 @@ class Bridge(private val act: MainActivity, web: WebView, private val origin: St
             }
             // Labs: keep the page running and connected in the background (MainActivity.setKeepConnected)
             "keepConnected" -> act.setKeepConnected(m.optBoolean("on"))
-            "theme" -> act.applyTheme(m.optString("bg"), m.optBoolean("light"))
+            "theme" -> {
+                act.applyTheme(m.optString("bg"), m.optBoolean("light"))
+                // The app UI also sends its theme on older servers that predate IME support.
+                focusReady = true
+                pendingFocus?.let { focus(it) }
+            }
             "open" -> act.openExternal(m.optString("url"))
             // More windows, one project each (WindowActivity); `space` names this window's project for the recents list
             "newWindow" -> act.newWindow(m.optString("space"))
@@ -163,7 +172,7 @@ class Bridge(private val act: MainActivity, web: WebView, private val origin: St
 
     /** 打开某个会话（点了后台通知进来的）。页面还没接上就等 hello 再发 */
     fun focus(session: String) {
-        if (page == null) {
+        if (page == null || !focusReady) {
             pendingFocus = session
             return
         }

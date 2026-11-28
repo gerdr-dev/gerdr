@@ -1,16 +1,27 @@
 package io.github.zbysir.gerdr
 
+import android.app.Activity
+import android.app.Dialog
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.Window
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 /**
@@ -54,7 +65,7 @@ class Look(private val c: Context) {
     fun lead(s: String) = text(s, 13f, muted)
 
     /** [primary] = 品牌色实心（配对页的 button.primary）；否则是 secondary 底 + 描边 */
-    fun button(label: String, primary: Boolean) = Button(c).apply {
+    fun button(label: CharSequence, primary: Boolean, selected: Boolean = false) = Button(c).apply {
         text = label
         isAllCaps = false
         textSize = 14f
@@ -66,7 +77,7 @@ class Look(private val c: Context) {
         setPadding(dp(16), dp(10), dp(16), dp(10))
         if (primary) typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         setTextColor(if (primary) c.getColor(R.color.brand_fg) else fg)
-        val face = if (primary) shape(brand, radius = 8) else shape(ctl, line, 8)
+        val face = if (primary) shape(brand, radius = 8) else shape(ctl, if (selected) brand else line, 8)
         background = ripple(face, primary)
     }
 
@@ -92,4 +103,36 @@ class Look(private val c: Context) {
         if (android.os.Build.VERSION.SDK_INT >= 29) textCursorDrawable?.setTint(brand)
     }
 
+    /** An app-styled modal that also works before the remote page has loaded. */
+    fun dialog(owner: Activity, heading: String, body: View, actionLabel: String, onAction: () -> Unit): Dialog {
+        val modal = Dialog(owner)
+        modal.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val content = LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL
+            background = card()
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+            addView(title(heading).apply { isAccessibilityHeading = true })
+            addView(body, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) })
+            addView(button(actionLabel, primary = true).apply {
+                minimumHeight = dp(44)
+                setOnClickListener { modal.dismiss(); onAction() }
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(16) })
+            addView(button(c.getString(android.R.string.cancel), primary = false).apply {
+                minimumHeight = dp(44)
+                setOnClickListener { modal.dismiss() }
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+        }
+        modal.setContentView(ScrollView(c).apply {
+            addView(content, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        })
+        modal.setCanceledOnTouchOutside(true)
+        modal.window?.apply {
+            setTitle(heading)
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(0.5f)
+            val width = (c.resources.configuration.screenWidthDp - 32).coerceIn(1, 400)
+            setLayout(dp(width), WRAP_CONTENT)
+        }
+        return modal
+    }
 }
