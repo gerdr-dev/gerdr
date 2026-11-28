@@ -132,7 +132,18 @@ func (h workHost) Session(id string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return h.view(sess.Summary(), sess.Events()), nil
+	summary := sess.Summary()
+	view := h.view(summary, sess.Events())
+	var commands []string
+	for _, c := range summary.Commands {
+		if skill, _ := c.Meta["skill"].(bool); !skill {
+			commands = append(commands, c.Name)
+		}
+	}
+	if len(commands) > 0 {
+		view["commands"] = commands
+	}
+	return view, nil
 }
 
 func (h workHost) Conversation(id string, last int) ([]map[string]any, error) {

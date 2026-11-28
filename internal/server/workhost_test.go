@@ -163,6 +163,31 @@ func TestLastReply(t *testing.T) {
 	}
 }
 
+func TestSessionCommands(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "commands.json"), []byte(`{"agy":[{"name":"compact","description":"Compact the conversation"},{"name":"guide","description":"Read the guide","_meta":{"skill":true}}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sessions := filepath.Join(dir, "sessions")
+	if err := os.Mkdir(sessions, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sessions, "index.json"), []byte(`[{"id":"s1","agent":"agy"}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h, err := hub.New(hub.Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := (workHost{s: &Server{Hub: h}}).Session("s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := view["commands"]; !reflect.DeepEqual(got, []string{"compact"}) {
+		t.Fatalf("commands = %v, want [compact]", got)
+	}
+}
+
 // What a panel reads of a conversation (ctx.sessions.read): the person's words and the agent's, tool calls splitting
 // the agent's text into paragraphs, subagents left out, the last N kept.
 func TestConversation(t *testing.T) {

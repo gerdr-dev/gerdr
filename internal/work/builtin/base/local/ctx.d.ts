@@ -532,6 +532,8 @@ interface Session {
    * has reported it. Sending `/compact` (claude, codex, native) shrinks it.
    */
   context?: { tokens: number; window: number };
+  /** Slash commands advertised by the agent, without the leading slash. Skills are excluded. Available through sessions.get. */
+  commands?: string[];
   /**
    * The last turn came from the user typing in this conversation (not from code or another agent): they've read
    * its reply. E.g. a board shouldn't ask them to "come and look" at an answer to their own question.
